@@ -55,6 +55,9 @@ contract BicoForwarder is EIP712 {
     // unbounding period
     uint256 public withdrawDelay;
 
+    // random number of realyers selected per window
+    uint256 public realyersPerWindow;
+
     /// tx nonces
     mapping(address => uint256) private _nonces;
 
@@ -72,11 +75,12 @@ contract BicoForwarder is EIP712 {
     // Emitted on valid withdrawal
     event Withdraw(address indexed relayer, uint256 amount);
 
-    constructor(uint256 blocksPerNode_, uint256 withdrawDelay_)
+    constructor(uint256 blocksPerNode_, uint256 withdrawDelay_, uint256 realyersPerWindow_)
         EIP712("BicoForwarder", "0.0.1")
     {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
+        realyersPerWindow = realyersPerWindow_;
     }
 
     /// @notice register a relayer
@@ -194,23 +198,43 @@ contract BicoForwarder is EIP712 {
 
     /// @notice determine what transactions can be relayed by the sender
     /// @param txnCalldata list with all transactions calldata
-    function transactionAllocator(bytes32[] calldata txnCalldata)
+    function allocateTransaction(bytes32[] memory txnCalldata)
         public
-        returns (bytes32[] txnAllocated)
+        returns (bytes32[] memory)
     {
         RelayerInfo storage node = relayerInfo[msg.sender];
         require(relayers[node.index] == msg.sender, "Invalid user");
 
+        
+        uint256 txnNumber;
         for (uint256 i = 0; i < txnCalldata.length; ) {
-            bytes relayerIndex = keccak256(txnCalldata[i]) % relayers.length;
+            uint256  relayerIndex = uint(keccak256(abi.encodePacked(txnCalldata[i]))) % realyersPerWindow;
             address relayerAddress = relayers[relayerIndex];
             RelayerInfo storage node = relayerInfo[relayerAddress];
             if (node.isAccount[msg.sender]) {
-                txnAllocated.push(txnCalldata[i]);
+                txnNumber++;
             }
             unchecked {
                 i++;
             }
         }
+
+        bytes32[] memory txnAllocated = new bytes32[](txnNumber);
+        uint256 j;
+
+        for (uint256 i = 0; i < txnCalldata.length; ) {
+            uint256  relayerIndex = uint(keccak256(abi.encodePacked(txnCalldata[i]))) % realyersPerWindow;
+            address relayerAddress = relayers[relayerIndex];
+            RelayerInfo storage node = relayerInfo[relayerAddress];
+            if (node.isAccount[msg.sender]) {
+                txnAllocated[j]= txnCalldata[i];
+                j++;
+            }
+            unchecked {
+                i++;
+            }
+        }
+
+        return txnAllocated;
     }
 }
