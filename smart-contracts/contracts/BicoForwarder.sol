@@ -7,7 +7,7 @@ pragma solidity ^0.8.9;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
-contract BicoForwarder is EIP712 {
+contract BicoForwarderOld is EIP712 {
     using ECDSA for bytes32;
 
     /// typehash

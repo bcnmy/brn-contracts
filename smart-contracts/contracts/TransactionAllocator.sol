@@ -197,11 +197,10 @@ contract BicoForwarder is EIP712 {
     /// @param req requested tx to be forwarded
     /// @param signature clien signature
     /// @return true if the tx parameters are correct
-    function verify(ForwardRequest calldata req, bytes calldata signature)
-        public
-        view
-        returns (bool)
-    {
+    function verify(
+        ForwardRequest calldata req,
+        bytes calldata signature
+    ) public view returns (bool) {
         address signer = _hashTypedDataV4(
             keccak256(
                 abi.encode(
@@ -221,11 +220,10 @@ contract BicoForwarder is EIP712 {
     /// @notice allows relayer to execute a tx on behalf of a client
     /// @param req requested tx to be forwarded
     /// @param signature clien signature
-    function execute(ForwardRequest calldata req, bytes calldata signature)
-        public
-        payable
-        returns (bool, bytes memory)
-    {
+    function execute(
+        ForwardRequest calldata req,
+        bytes calldata signature
+    ) public payable returns (bool, bytes memory) {
         require(verifyRelayerWindow(), "invalid relayer window");
         require(verify(req, signature), "signature does not match request");
         _nonces[req.from] = req.nonce + 1;
@@ -247,11 +245,10 @@ contract BicoForwarder is EIP712 {
 
     // note: binary search becomes more efficient than linear search only after a certain length threshold,
     // in future a crossover point may be found and implemented for better performance
-    function _lowerBound(uint256[] storage arr, uint256 target)
-        internal
-        view
-        returns (uint256)
-    {
+    function _lowerBound(
+        uint256[] storage arr,
+        uint256 target
+    ) internal view returns (uint256) {
         uint256 low = 0;
         uint256 high = arr.length;
         unchecked {
@@ -267,11 +264,13 @@ contract BicoForwarder is EIP712 {
         return low;
     }
 
-    function allocateRelayers(uint256 blockNumber)
-        public
-        view
-        returns (address[] memory)
-    {
+    function allocateRelayers(
+        uint256 blockNumber
+    ) public view returns (address[] memory) {
+        require(
+            relayers.length >= relayersPerWindow,
+            "Insufficient relayers registered"
+        );
         if (blockNumber == 0) {
             blockNumber = block.number;
         }
@@ -292,6 +291,7 @@ contract BicoForwarder is EIP712 {
         uint256 relayerStakeSum = relayerStakePrefixSum[
             relayerStakePrefixSum.length - 1
         ];
+        require(relayerStakeSum > 0, "No relayers registered");
         for (uint256 i = 0; i < relayersPerWindow; ) {
             RelayerInfo storage relayer = relayerInfo[
                 relayerStakePrefixSumIndexToRelayer[
@@ -316,11 +316,9 @@ contract BicoForwarder is EIP712 {
 
     /// @notice determine what transactions can be relayed by the sender
     /// @param txnCalldata list with all transactions calldata
-    function allocateTransaction(bytes[] memory txnCalldata)
-        public
-        view
-        returns (bytes[] memory)
-    {
+    function allocateTransaction(
+        bytes[] memory txnCalldata
+    ) public view returns (bytes[] memory) {
         //check if msg.sender is a part of the selected realyersPerWindow
         RelayerInfo storage node = relayerInfo[msg.sender];
         // require(relayers[node.index] == msg.sender, "Invalid user");
