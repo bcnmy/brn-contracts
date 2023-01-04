@@ -2,36 +2,24 @@ import { time, loadFixture } from "@nomicfoundation/hardhat-network-helpers";
 import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { expect } from "chai";
 import { ethers } from "hardhat";
+import { Interface } from "ethers/lib/utils";
 
-describe("Lock", function () {
-  // We define a fixture to reuse the same setup in every test.
-  // We use loadFixture to run this setup once, snapshot that state,
-  // and reset Hardhat Network to that snapshot in every test.
+describe("BRN", function () {
   async function deployTxnAllocator() {
-    // const ONE_YEAR_IN_SECS = 365 * 24 * 60 * 60;
-    // const ONE_GWEI = 1_000_000_000;
 
-    // const lockedAmount = ONE_GWEI;
-    // const unlockTime = (await time.latest()) + ONE_YEAR_IN_SECS;
-
-    // // Contracts are deployed using the first signer/account by default
-    // const [owner, otherAccount] = await ethers.getSigners();
-
-    // const Lock = await ethers.getContractFactory("Lock");
-    // const lock = await Lock.deploy(unlockTime, { value: lockedAmount });
-
-    // return { lock, unlockTime, lockedAmount, owner, otherAccount };
+    const [deployer, relayer1, relayer1Acc1, relayer1Acc2, relayer2, relayer2Acc1, relayer2Acc2, relayer3, relayer3Acc1, relayer3Acc2] = await ethers.getSigners();
+    
     const blocksWindow = 10
     const withdrawDelay = 1
-    const realyersPerWindow = 2
+    const relayersPerWindow = 2
 
     const TxnAllocator = await ethers.getContractFactory("BicoForwarder")
-    const txnAllocator = await TxnAllocator.deploy(blocksWindow, withdrawDelay, realyersPerWindow);
+    const txnAllocator = await TxnAllocator.deploy(blocksWindow, withdrawDelay, relayersPerWindow);
 
     const TransactionMock = await ethers.getContractFactory("TransactionMock")
     const transactionMock = await TransactionMock.deploy();
 
-    return { blocksWindow, withdrawDelay, realyersPerWindow, txnAllocator, transactionMock }
+    return { relayer1, relayer1Acc1, relayer1Acc2, relayer2, relayer2Acc1, relayer2Acc2, relayer3, relayer3Acc1, relayer3Acc2, blocksWindow, withdrawDelay, relayersPerWindow, TxnAllocator, txnAllocator, TransactionMock, transactionMock }
 
   }
 
@@ -49,75 +37,69 @@ describe("Lock", function () {
     });
 
     it("Should set the right realyersPerWindow", async function () {
-      const { realyersPerWindow, txnAllocator } = await loadFixture(deployTxnAllocator);
+      const { relayersPerWindow, txnAllocator } = await loadFixture(deployTxnAllocator);
 
-      expect(await txnAllocator.realyersPerWindow()).to.equal(realyersPerWindow);
+      expect(await txnAllocator.relayersPerWindow()).to.equal(relayersPerWindow);
     });
   });
 
-  // describe("Withdrawals", function () {
-  //   describe("Validations", function () {
-  //     it("Should revert with the right error if called too soon", async function () {
-  //       const { lock } = await loadFixture(deployOneYearLockFixture);
+  describe("Registration", function () {
+    it("Should register a realyer", async function() {
+      
+      const { relayer1, relayer1Acc1, relayer1Acc2, TransactionMock ,txnAllocator, transactionMock } = await loadFixture(deployTxnAllocator);
+      const txn = await txnAllocator.connect(relayer1).register(ethers.utils.parseEther("1"), [relayer1Acc1.address, relayer1Acc2.address], "endpoint")
+      const rc = await txn.wait()
+      const filter = txnAllocator.filters.RelayerRegistered()
+      //@ts-ignore
+      const fromBlock = await ethers.provider.getBlock()
+      const events = await txnAllocator.queryFilter(filter, fromBlock.number)
+      
+      expect(events[0].args.stake).to.be.equal(ethers.utils.parseEther("1"))
+      expect(events[0].args.accounts[0]).to.be.equal(relayer1Acc1.address)
+      expect(events[0].args.accounts[1]).to.be.equal(relayer1Acc2.address)
+      expect(events[0].args.endpoint).to.be.equal("endpoint")
 
-  //       await expect(lock.withdraw()).to.be.revertedWith(
-  //         "You can't withdraw yet"
-  //       );
-  //     });
+    });
+  });
 
-  //     it("Should revert with the right error if called from another account", async function () {
-  //       const { lock, unlockTime, otherAccount } = await loadFixture(
-  //         deployOneYearLockFixture
-  //       );
+  describe("Relayer Selection", function () {
+    it("Should select random relayers", async function() {
+      
+      const { relayer1, relayer1Acc1, relayer1Acc2, relayer2,relayer2Acc1, relayer2Acc2, relayer3, relayer3Acc1, relayer3Acc2, relayersPerWindow, txnAllocator } = await loadFixture(deployTxnAllocator);
+      await txnAllocator.connect(relayer1).register(ethers.utils.parseEther("1"), [relayer1Acc1.address, relayer1Acc2.address], "endpoint")
+      await txnAllocator.connect(relayer2).register(ethers.utils.parseEther("2"), [relayer2Acc1.address, relayer2Acc2.address], "endpoint")
+      await txnAllocator.connect(relayer3).register(ethers.utils.parseEther("2"), [relayer3Acc1.address, relayer3Acc2.address], "endpoint")
+      //TODO: should add set to particular block
+      const selectedRelayers = await txnAllocator.allocateRelayers(0);
+      expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
+      expect(selectedRelayers[0]).to.be.equal(relayer3.address);
+      expect(selectedRelayers[1]).to.be.equal(relayer2.address);
+    });
+  });
 
-  //       // We can increase the time in Hardhat Network
-  //       await time.increaseTo(unlockTime);
+  describe("Transaction Allocation", function () {
+    it("Should allocate transaction", async function() {
+      const { relayer1, relayer1Acc1, relayer1Acc2, TransactionMock, relayer2,relayer2Acc1, relayer2Acc2, relayer3, relayer3Acc1, relayer3Acc2, txnAllocator, transactionMock } = await loadFixture(deployTxnAllocator);
+      await txnAllocator.connect(relayer1).register(ethers.utils.parseEther("1"), [relayer1Acc1.address, relayer1Acc2.address], "endpoint")
+      await txnAllocator.connect(relayer2).register(ethers.utils.parseEther("2"), [relayer2Acc1.address, relayer2Acc2.address], "endpoint")
+      await txnAllocator.connect(relayer3).register(ethers.utils.parseEther("2"), [relayer3Acc1.address, relayer3Acc2.address], "endpoint")
 
-  //       // We use lock.connect() to send a transaction from another account
-  //       await expect(lock.connect(otherAccount).withdraw()).to.be.revertedWith(
-  //         "You aren't the owner"
-  //       );
-  //     });
+      const calldataAdd = TransactionMock.interface.encodeFunctionData('mockAdd', ["1", "2"]);
+      const calldataSub = TransactionMock.interface.encodeFunctionData('mockSubtract', ["12", "2"]);
+      const calldataUpd = TransactionMock.interface.encodeFunctionData('mockUpdate', ["12"]);
 
-  //     it("Shouldn't fail if the unlockTime has arrived and the owner calls it", async function () {
-  //       const { lock, unlockTime } = await loadFixture(
-  //         deployOneYearLockFixture
-  //       );
+      const txnAllocated1 = await txnAllocator.connect(relayer1Acc2).allocateTransaction([calldataAdd, calldataSub, calldataUpd])      
+      const txnAllocated2 = await txnAllocator.connect(relayer2Acc1).allocateTransaction([calldataAdd, calldataSub, calldataUpd])
+      const txnAllocated3 = await txnAllocator.connect(relayer3Acc1).allocateTransaction([calldataAdd, calldataSub, calldataUpd])
 
-  //       // Transactions are sent using the first signer by default
-  //       await time.increaseTo(unlockTime);
+      expect(txnAllocated1.length).to.be.equal(0);
+      expect(txnAllocated2.length).to.be.equal(2);
+      expect(txnAllocated2[0]).to.be.equal(calldataSub);
+      expect(txnAllocated2[1]).to.be.equal(calldataUpd);
+      expect(txnAllocated3.length).to.be.equal(1);
+      expect(txnAllocated3[0]).to.be.equal(calldataAdd);
+      
+    });
+  });
 
-  //       await expect(lock.withdraw()).not.to.be.reverted;
-  //     });
-  //   });
-
-  //   describe("Events", function () {
-  //     it("Should emit an event on withdrawals", async function () {
-  //       const { lock, unlockTime, lockedAmount } = await loadFixture(
-  //         deployOneYearLockFixture
-  //       );
-
-  //       await time.increaseTo(unlockTime);
-
-  //       await expect(lock.withdraw())
-  //         .to.emit(lock, "Withdrawal")
-  //         .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
-  //     });
-  //   });
-
-  //   describe("Transfers", function () {
-  //     it("Should transfer the funds to the owner", async function () {
-  //       const { lock, unlockTime, lockedAmount, owner } = await loadFixture(
-  //         deployOneYearLockFixture
-  //       );
-
-  //       await time.increaseTo(unlockTime);
-
-  //       await expect(lock.withdraw()).to.changeEtherBalances(
-  //         [owner, lock],
-  //         [lockedAmount, -lockedAmount]
-  //       );
-  //     });
-  //   });
-  // });
 });
