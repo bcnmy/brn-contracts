@@ -2,12 +2,13 @@
 
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 pragma solidity ^0.8.9;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
-contract BicoForwarder is EIP712 {
+contract BicoForwarder is EIP712, Ownable {
     using ECDSA for bytes32;
 
     /// typehash
@@ -24,6 +25,20 @@ contract BicoForwarder is EIP712 {
         uint256 gas;
         uint256 nonce;
         bytes data;
+    }
+
+    struct SelectionProofEntry {
+        uint256 iteration;
+    }
+
+    struct DuplicatesProofEntry {
+        address relayer;
+        uint256[] iterations;
+    }
+
+    struct SelectionProof {
+        SelectionProofEntry relayerProof;
+        DuplicatesProofEntry[] duplicatesProof;
     }
 
     // relayer information
@@ -49,6 +64,7 @@ contract BicoForwarder is EIP712 {
 
     /// list of nodes
     address[] public relayers;
+    uint256 public relayerCount;
 
     /// blocks per node
     uint256 public blocksWindow;
@@ -88,7 +104,7 @@ contract BicoForwarder is EIP712 {
         uint256 blocksPerNode_,
         uint256 withdrawDelay_,
         uint256 relayersPerWindow_
-    ) EIP712("BicoForwarder", "0.0.1") {
+    ) EIP712("BicoForwarder", "0.0.1") Ownable() {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
         relayersPerWindow = relayersPerWindow_;
@@ -131,6 +147,8 @@ contract BicoForwarder is EIP712 {
         }
         relayers.push(msg.sender);
 
+        ++relayerCount;
+
         // todo: trasnfer stake amount to be stored in a vault.
         emit RelayerRegistered(
             msg.sender,
@@ -149,6 +167,7 @@ contract BicoForwarder is EIP712 {
         uint256 stake = node.stake;
         if (node.index != n) relayers[node.index] = relayers[n];
         relayers.pop();
+        --relayerCount;
 
         // Update the prefix sum array for stake
         for (
@@ -199,7 +218,8 @@ contract BicoForwarder is EIP712 {
     /// @return true if the tx parameters are correct
     function verify(
         ForwardRequest calldata req,
-        bytes calldata signature
+        bytes calldata signature,
+        SelectionProof calldata proof
     ) public view returns (bool) {
         address signer = _hashTypedDataV4(
             keccak256(
@@ -222,10 +242,14 @@ contract BicoForwarder is EIP712 {
     /// @param signature clien signature
     function execute(
         ForwardRequest calldata req,
-        bytes calldata signature
+        bytes calldata signature,
+        SelectionProof calldata proof
     ) public payable returns (bool, bytes memory) {
         require(verifyRelayerWindow(), "invalid relayer window");
-        require(verify(req, signature), "signature does not match request");
+        require(
+            verify(req, signature, proof),
+            "signature does not match request"
+        );
         _nonces[req.from] = req.nonce + 1;
 
         (bool success, bytes memory returndata) = req.to.call{
@@ -274,11 +298,10 @@ contract BicoForwarder is EIP712 {
         if (blockNumber == 0) {
             blockNumber = block.number;
         }
-        // Calculate window period
-        uint256 windowStartBlock = blockNumber - (blockNumber % blocksWindow);
-        uint256 windowEndBlock = windowStartBlock + blocksWindow - 1;
-        uint256 seed = uint256(
-            keccak256(abi.encodePacked(windowStartBlock, windowEndBlock))
+
+        // Generate seed based on current window index
+        uint256 baseSeed = uint256(
+            keccak256(abi.encodePacked(blockNumber / blocksWindow))
         );
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
@@ -286,30 +309,45 @@ contract BicoForwarder is EIP712 {
 
         // bitmask representing if a relayer is selected, used as a substitute for an in memory mapping (not possible in solidity)
         // assumes that the number of relayers is less than 256
+        // TODO: account for relayer count >= 256, make generic
         uint256 relayerSelected;
 
         uint256 relayerStakeSum = relayerStakePrefixSum[
             relayerStakePrefixSum.length - 1
         ];
         require(relayerStakeSum > 0, "No relayers registered");
+        uint256 iterations = 0;
+
+        address[] memory iterationLog;
+        uint256[] memory relayerStakePrefixSumIndicesLog;
+
         for (uint256 i = 0; i < relayersPerWindow; ) {
+            // The seed for jth iteration is a function of the base seed and j
+            baseSeed = uint256(
+                keccak256(abi.encodePacked(baseSeed, iterations))
+            );
+
+            uint256 relayerStakePrefixSumIndex = _lowerBound(
+                relayerStakePrefixSum,
+                baseSeed % relayerStakeSum
+            );
             RelayerInfo storage relayer = relayerInfo[
-                relayerStakePrefixSumIndexToRelayer[
-                    _lowerBound(relayerStakePrefixSum, seed % relayerStakeSum)
-                ]
+                relayerStakePrefixSumIndexToRelayer[relayerStakePrefixSumIndex]
             ];
             uint256 relayerIndex = relayer.index;
             address relayerAddress = relayers[relayerIndex];
-            // // If relayer is not selected
+
             if ((relayerSelected & (1 << relayerIndex)) == 0) {
+                // If relayer is not selected
+
                 selectedRelayers[i] = relayerAddress;
                 // Select the relayer
                 relayerSelected |= (1 << relayerIndex);
-                unchecked {
-                    ++i;
-                }
             }
-            seed = uint256(keccak256(abi.encodePacked(seed)));
+
+            unchecked {
+                ++iterations;
+            }
         }
         return selectedRelayers;
     }
@@ -360,5 +398,11 @@ contract BicoForwarder is EIP712 {
         }
 
         return txnAllocated;
+    }
+
+    function setRelayersPerWindow(
+        uint256 _newRelayersPerWindow
+    ) external onlyOwner {
+        relayersPerWindow = _newRelayersPerWindow;
     }
 }
