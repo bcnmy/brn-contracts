@@ -1,8 +1,6 @@
-import { time, loadFixture } from '@nomicfoundation/hardhat-network-helpers';
-import { anyValue } from '@nomicfoundation/hardhat-chai-matchers/withArgs';
+import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { Interface } from 'ethers/lib/utils';
 
 describe('BRN', function () {
   const blocksWindow = 10;
@@ -136,10 +134,10 @@ describe('BRN', function () {
           'endpoint'
         );
       //TODO: should add set to particular block
-      const selectedRelayers = await txnAllocator.allocateRelayers(0);
+      const [selectedRelayers] = await txnAllocator.allocateRelayers(0);
       expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-      expect(selectedRelayers[0]).to.be.equal(relayer3.address);
-      expect(selectedRelayers[1]).to.be.equal(relayer2.address);
+      expect(selectedRelayers[0]).to.be.equal(relayer2.address);
+      expect(selectedRelayers[1]).to.be.equal(relayer3.address);
     });
 
     it('Should select random relayers deterministically', async function () {
@@ -178,10 +176,10 @@ describe('BRN', function () {
           'endpoint'
         );
       for (let i = 0; i < 10; i++) {
-        const selectedRelayers = await txnAllocator.allocateRelayers(0);
+        const [selectedRelayers] = await txnAllocator.allocateRelayers(0);
         expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-        expect(selectedRelayers[0]).to.be.equal(relayer3.address);
-        expect(selectedRelayers[1]).to.be.equal(relayer2.address);
+        expect(selectedRelayers[0]).to.be.equal(relayer2.address);
+        expect(selectedRelayers[1]).to.be.equal(relayer3.address);
       }
     });
 
@@ -225,9 +223,9 @@ describe('BRN', function () {
       const end = start + relayersPerWindow - 1;
 
       for (let i = start; i <= end; i++) {
-        const selectedRelayers = await txnAllocator.allocateRelayers(i);
+        const [selectedRelayers] = await txnAllocator.allocateRelayers(i);
         expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-        expect(selectedRelayers[0]).to.be.equal(relayer2.address);
+        expect(selectedRelayers[0]).to.be.equal(relayer1.address);
         expect(selectedRelayers[1]).to.be.equal(relayer3.address);
       }
     });
@@ -275,22 +273,28 @@ describe('BRN', function () {
       const calldataSub = TransactionMock.interface.encodeFunctionData('mockSubtract', ['12', '2']);
       const calldataUpd = TransactionMock.interface.encodeFunctionData('mockUpdate', ['12']);
 
-      const txnAllocated1 = await txnAllocator
-        .connect(relayer1Acc2)
-        .allocateTransaction([calldataAdd, calldataSub, calldataUpd]);
-      const txnAllocated2 = await txnAllocator
-        .connect(relayer2Acc1)
-        .allocateTransaction([calldataAdd, calldataSub, calldataUpd]);
-      const txnAllocated3 = await txnAllocator
-        .connect(relayer3Acc1)
-        .allocateTransaction([calldataAdd, calldataSub, calldataUpd]);
+      const [txnAllocated1] = await txnAllocator.allocateTransaction(relayer1Acc1.address, [
+        calldataAdd,
+        calldataSub,
+        calldataUpd,
+      ]);
+      const [txnAllocated2] = await txnAllocator.allocateTransaction(relayer2Acc1.address, [
+        calldataAdd,
+        calldataSub,
+        calldataUpd,
+      ]);
+      const [txnAllocated3] = await txnAllocator.allocateTransaction(relayer3Acc1.address, [
+        calldataAdd,
+        calldataSub,
+        calldataUpd,
+      ]);
 
       expect(txnAllocated1.length).to.be.equal(0);
-      expect(txnAllocated2.length).to.be.equal(2);
-      expect(txnAllocated2[0]).to.be.equal(calldataSub);
-      expect(txnAllocated2[1]).to.be.equal(calldataUpd);
-      expect(txnAllocated3.length).to.be.equal(1);
-      expect(txnAllocated3[0]).to.be.equal(calldataAdd);
+      expect(txnAllocated2.length).to.be.equal(1);
+      expect(txnAllocated3.length).to.be.equal(2);
+      expect(txnAllocated2[0]).to.be.equal(calldataAdd);
+      expect(txnAllocated3[0]).to.be.equal(calldataSub);
+      expect(txnAllocated3[1]).to.be.equal(calldataUpd);
     });
   });
 });

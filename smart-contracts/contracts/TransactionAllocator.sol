@@ -391,20 +391,19 @@ contract BicoForwarder is EIP712, Ownable {
         // Filter the transactions
         bytes[] memory txnAllocated = new bytes[](_txnCalldata.length);
         uint256[] memory selectedRelayerStakePrefixSumIndex = new uint256[](
-            relayersPerWindow
+            _txnCalldata.length
         );
         uint256 j;
 
         for (uint256 i = 0; i < _txnCalldata.length; ) {
-            address relayerAddress = relayersAllocated[
-                _assignRelayer(_txnCalldata[i])
-            ];
+            uint256 relayerIndex = _assignRelayer(_txnCalldata[i]);
+            address relayerAddress = relayersAllocated[relayerIndex];
             RelayerInfo storage node = relayerInfo[relayerAddress];
-            if (node.isAccount[msg.sender] || relayerAddress == _relayer) {
+            if (node.isAccount[_relayer] || relayerAddress == _relayer) {
                 txnAllocated[j] = _txnCalldata[i];
                 selectedRelayerStakePrefixSumIndex[
                     j
-                ] = relayerStakePrefixSumIndex[i];
+                ] = relayerStakePrefixSumIndex[relayerIndex];
                 unchecked {
                     ++j;
                 }
