@@ -27,20 +27,6 @@ contract BicoForwarder is EIP712, Ownable {
         bytes data;
     }
 
-    struct SelectionProofEntry {
-        uint256 iteration;
-    }
-
-    struct DuplicatesProofEntry {
-        address relayer;
-        uint256[] iterations;
-    }
-
-    struct SelectionProof {
-        SelectionProofEntry relayerProof;
-        DuplicatesProofEntry[] duplicatesProof;
-    }
-
     // relayer information
     struct RelayerInfo {
         uint256 stake;
@@ -198,12 +184,43 @@ contract BicoForwarder is EIP712, Ownable {
         emit Withdraw(relayer, w.amount);
     }
 
-    /// @notice returns true if the current sender is allowed to relay trasnaction in this block
-    function verifyRelayerWindow() internal view returns (bool) {
-        uint256 relayerIndex = (block.number / blocksWindow) % relayers.length;
-        address relayerAddress = relayers[relayerIndex];
+    /// @notice returns true if the current sender is allowed to relay transaction in this block
+    function _verifyTransactionAllocation(
+        uint256 _relayerStakePrefixSumIndex,
+        uint256 _relayerGenerationIteration,
+        bytes calldata _calldata
+    ) internal view returns (bool) {
+        // Verify Iteration
+        if (_relayerGenerationIteration >= relayersPerWindow) {
+            return false;
+        }
+
+        // Verify if correct stake prefix sum index has been provided
+        uint256 randomRelayerStake = _randomRelayerStake(
+            block.number,
+            _relayerGenerationIteration
+        );
+        if (
+            !(relayerStakePrefixSum[_relayerStakePrefixSumIndex - 1] <
+                randomRelayerStake &&
+                randomRelayerStake <=
+                relayerStakePrefixSum[_relayerStakePrefixSumIndex])
+        ) {
+            // The supplied index does not point to the correct interval
+            return false;
+        }
+
+        // Verify if the relayer selected is msg.sender
+        address relayerAddress = relayerStakePrefixSumIndexToRelayer[
+            _relayerStakePrefixSumIndex
+        ];
         RelayerInfo storage node = relayerInfo[relayerAddress];
-        return node.isAccount[msg.sender];
+        if (!node.isAccount[msg.sender]) {
+            return false;
+        }
+
+        // Verify if the transaction was alloted to the relayer
+        return _relayerGenerationIteration == _assignRelayer(_calldata);
     }
 
     /// @notice returns the nonce for a particular client
@@ -218,8 +235,7 @@ contract BicoForwarder is EIP712, Ownable {
     /// @return true if the tx parameters are correct
     function verify(
         ForwardRequest calldata req,
-        bytes calldata signature,
-        SelectionProof calldata proof
+        bytes calldata signature
     ) public view returns (bool) {
         address signer = _hashTypedDataV4(
             keccak256(
@@ -243,13 +259,18 @@ contract BicoForwarder is EIP712, Ownable {
     function execute(
         ForwardRequest calldata req,
         bytes calldata signature,
-        SelectionProof calldata proof
+        uint256 _relayerGenerationIteration,
+        uint256 _relayerStakePrefixSumIndex
     ) public payable returns (bool, bytes memory) {
-        require(verifyRelayerWindow(), "invalid relayer window");
         require(
-            verify(req, signature, proof),
-            "signature does not match request"
+            _verifyTransactionAllocation(
+                _relayerGenerationIteration,
+                _relayerStakePrefixSumIndex,
+                req.data
+            ),
+            "invalid relayer window"
         );
+        require(verify(req, signature), "signature does not match request");
         _nonces[req.from] = req.nonce + 1;
 
         (bool success, bytes memory returndata) = req.to.call{
@@ -265,6 +286,29 @@ contract BicoForwarder is EIP712, Ownable {
         }
 
         return (success, returndata);
+    }
+
+    function _randomRelayerStake(
+        uint256 _blockNumber,
+        uint256 _iter
+    ) internal view returns (uint256 index) {
+        // The seed for jth iteration is a function of the base seed and j
+        uint256 relayerStakeSum = relayerStakePrefixSum[
+            relayerStakePrefixSum.length - 1
+        ];
+        uint256 baseSeed = uint256(
+            keccak256(abi.encodePacked(_blockNumber / blocksWindow))
+        );
+        uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
+        return (seed % relayerStakeSum) + 1;
+    }
+
+    function _assignRelayer(
+        bytes calldata _calldata
+    ) internal view returns (uint256 relayerIndex) {
+        relayerIndex =
+            uint256(keccak256(abi.encodePacked(_calldata))) %
+            relayersPerWindow;
     }
 
     // note: binary search becomes more efficient than linear search only after a certain length threshold,
@@ -289,115 +333,98 @@ contract BicoForwarder is EIP712, Ownable {
     }
 
     function allocateRelayers(
-        uint256 blockNumber
-    ) public view returns (address[] memory) {
+        uint256 _blockNumber
+    ) public view returns (address[] memory, uint256[] memory) {
         require(
             relayers.length >= relayersPerWindow,
             "Insufficient relayers registered"
         );
-        if (blockNumber == 0) {
-            blockNumber = block.number;
+        if (_blockNumber == 0) {
+            _blockNumber = block.number;
         }
-
-        // Generate seed based on current window index
-        uint256 baseSeed = uint256(
-            keccak256(abi.encodePacked(blockNumber / blocksWindow))
-        );
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
         address[] memory selectedRelayers = new address[](relayersPerWindow);
-
-        // bitmask representing if a relayer is selected, used as a substitute for an in memory mapping (not possible in solidity)
-        // assumes that the number of relayers is less than 256
-        // TODO: account for relayer count >= 256, make generic
-        uint256 relayerSelected;
+        uint256[] memory relayerStakePrefixSumIndex = new uint256[](
+            relayersPerWindow
+        );
 
         uint256 relayerStakeSum = relayerStakePrefixSum[
             relayerStakePrefixSum.length - 1
         ];
         require(relayerStakeSum > 0, "No relayers registered");
-        uint256 iterations = 0;
-
-        address[] memory iterationLog;
-        uint256[] memory relayerStakePrefixSumIndicesLog;
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
-            // The seed for jth iteration is a function of the base seed and j
-            baseSeed = uint256(
-                keccak256(abi.encodePacked(baseSeed, iterations))
-            );
-
-            uint256 relayerStakePrefixSumIndex = _lowerBound(
+            relayerStakePrefixSumIndex[i] = _lowerBound(
                 relayerStakePrefixSum,
-                baseSeed % relayerStakeSum
+                _randomRelayerStake(_blockNumber, i)
             );
             RelayerInfo storage relayer = relayerInfo[
-                relayerStakePrefixSumIndexToRelayer[relayerStakePrefixSumIndex]
+                relayerStakePrefixSumIndexToRelayer[
+                    relayerStakePrefixSumIndex[i]
+                ]
             ];
             uint256 relayerIndex = relayer.index;
             address relayerAddress = relayers[relayerIndex];
-
-            if ((relayerSelected & (1 << relayerIndex)) == 0) {
-                // If relayer is not selected
-
-                selectedRelayers[i] = relayerAddress;
-                // Select the relayer
-                relayerSelected |= (1 << relayerIndex);
-            }
+            selectedRelayers[i] = relayerAddress;
 
             unchecked {
-                ++iterations;
+                ++i;
             }
         }
-        return selectedRelayers;
+        return (selectedRelayers, relayerStakePrefixSumIndex);
     }
 
     /// @notice determine what transactions can be relayed by the sender
-    /// @param txnCalldata list with all transactions calldata
+    /// @param _relayer Address of the relayer to allocate transactions for
+    /// @param _txnCalldata list with all transactions calldata
     function allocateTransaction(
-        bytes[] memory txnCalldata
-    ) public view returns (bytes[] memory) {
-        //check if msg.sender is a part of the selected realyersPerWindow
-        RelayerInfo storage node = relayerInfo[msg.sender];
-        // require(relayers[node.index] == msg.sender, "Invalid user");
-
-        address[] memory relayersAllocated = allocateRelayers(block.number);
+        address _relayer,
+        bytes[] calldata _txnCalldata
+    ) public view returns (bytes[] memory, uint256[] memory) {
+        (
+            address[] memory relayersAllocated,
+            uint256[] memory relayerStakePrefixSumIndex
+        ) = allocateRelayers(block.number);
         require(relayersAllocated.length == relayersPerWindow, "AT101");
 
-        uint256 txnNumber;
-        for (uint256 i = 0; i < txnCalldata.length; ) {
-            uint256 relayerIndex = uint256(
-                keccak256(abi.encodePacked(txnCalldata[i]))
-            ) % relayersPerWindow;
-            address relayerAddress = relayersAllocated[relayerIndex];
-            RelayerInfo storage node = relayerInfo[relayerAddress];
-            if (node.isAccount[msg.sender]) {
-                txnNumber++;
-            }
-            unchecked {
-                i++;
-            }
-        }
-
-        bytes[] memory txnAllocated = new bytes[](txnNumber);
+        // Filter the transactions
+        bytes[] memory txnAllocated = new bytes[](_txnCalldata.length);
+        uint256[] memory selectedRelayerStakePrefixSumIndex = new uint256[](
+            relayersPerWindow
+        );
         uint256 j;
 
-        for (uint256 i = 0; i < txnCalldata.length; ) {
-            uint256 relayerIndex = uint256(
-                keccak256(abi.encodePacked(txnCalldata[i]))
-            ) % relayersPerWindow;
-            address relayerAddress = relayersAllocated[relayerIndex];
+        for (uint256 i = 0; i < _txnCalldata.length; ) {
+            address relayerAddress = relayersAllocated[
+                _assignRelayer(_txnCalldata[i])
+            ];
             RelayerInfo storage node = relayerInfo[relayerAddress];
-            if (node.isAccount[msg.sender]) {
-                txnAllocated[j] = txnCalldata[i];
-                j++;
+            if (node.isAccount[msg.sender] || relayerAddress == _relayer) {
+                txnAllocated[j] = _txnCalldata[i];
+                selectedRelayerStakePrefixSumIndex[
+                    j
+                ] = relayerStakePrefixSumIndex[i];
+                unchecked {
+                    ++j;
+                }
             }
             unchecked {
-                i++;
+                ++i;
             }
         }
 
-        return txnAllocated;
+        // Reduce the array size if needed
+        uint256 extraLength = _txnCalldata.length - j;
+        assembly {
+            mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
+            mstore(
+                selectedRelayerStakePrefixSumIndex,
+                sub(mload(selectedRelayerStakePrefixSumIndex), extraLength)
+            )
+        }
+
+        return (txnAllocated, selectedRelayerStakePrefixSumIndex);
     }
 
     function setRelayersPerWindow(
