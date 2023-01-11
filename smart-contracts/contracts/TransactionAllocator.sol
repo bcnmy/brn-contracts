@@ -11,6 +11,8 @@ pragma solidity ^0.8.9;
 contract BicoForwarder is EIP712, Ownable {
     using ECDSA for bytes32;
 
+    event VerificationGasConsumed(uint256);
+
     /// typehash
     bytes32 private constant _TYPEHASH =
         keccak256(
@@ -262,6 +264,7 @@ contract BicoForwarder is EIP712, Ownable {
         uint256 _relayerGenerationIteration,
         uint256 _relayerStakePrefixSumIndex
     ) public payable returns (bool, bytes memory) {
+        uint256 gasLeft = gasleft();
         require(
             _verifyTransactionAllocation(
                 _relayerGenerationIteration,
@@ -271,6 +274,8 @@ contract BicoForwarder is EIP712, Ownable {
             "invalid relayer window"
         );
         require(verify(req, signature), "signature does not match request");
+        emit VerificationGasConsumed(gasLeft - gasleft());
+
         _nonces[req.from] = req.nonce + 1;
 
         (bool success, bytes memory returndata) = req.to.call{
@@ -332,6 +337,14 @@ contract BicoForwarder is EIP712, Ownable {
         return low;
     }
 
+    /// @notice Given a block number, the function generates a list of pseudo-random relayers
+    ///         for the window of which the block in a part of. The generated list of relayers
+    ///         is pseudo-random but deterministic
+    /// @param _blockNumber block number for which the relayers are to be generated
+    /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
+    ///                          there can be duplicates
+    /// @return relayerStakePrefixSumIndex list of indices of the selected relayers in the
+    ///                                    relayerStakePrefixSum array, used for verification
     function allocateRelayers(
         uint256 _blockNumber
     ) public view returns (address[] memory, uint256[] memory) {
@@ -377,15 +390,26 @@ contract BicoForwarder is EIP712, Ownable {
 
     /// @notice determine what transactions can be relayed by the sender
     /// @param _relayer Address of the relayer to allocate transactions for
-    /// @param _txnCalldata list with all transactions calldata
+    /// @param _blockNumber block number for which the relayers are to be generated
+    /// @param _txnCalldata list with all transactions calldata to be filtered
+    /// @return txnAllocated list of transactions that can be relayed by the relayer
+    /// @return selectedRelayerStakePrefixSumIndex list of indices of the selected
+    ///                                            relayers in the relayerStakePrefixSum array
+    /// @return relayerGenerationIteration list of iterations of the relayer generation corresponding
+    ///                                    to the selected transactions
     function allocateTransaction(
         address _relayer,
+        uint256 _blockNumber,
         bytes[] calldata _txnCalldata
-    ) public view returns (bytes[] memory, uint256[] memory) {
+    ) public view returns (bytes[] memory, uint256[] memory, uint256[] memory) {
+        if (_blockNumber == 0) {
+            _blockNumber = block.number;
+        }
+
         (
             address[] memory relayersAllocated,
             uint256[] memory relayerStakePrefixSumIndex
-        ) = allocateRelayers(block.number);
+        ) = allocateRelayers(_blockNumber);
         require(relayersAllocated.length == relayersPerWindow, "AT101");
 
         // Filter the transactions
@@ -393,13 +417,20 @@ contract BicoForwarder is EIP712, Ownable {
         uint256[] memory selectedRelayerStakePrefixSumIndex = new uint256[](
             _txnCalldata.length
         );
+        uint256[] memory relayerGenerationIteration = new uint256[](
+            _txnCalldata.length
+        );
         uint256 j;
 
+        // Filter the transactions
         for (uint256 i = 0; i < _txnCalldata.length; ) {
             uint256 relayerIndex = _assignRelayer(_txnCalldata[i]);
             address relayerAddress = relayersAllocated[relayerIndex];
             RelayerInfo storage node = relayerInfo[relayerAddress];
+
+            // If the transaction can be processed by this relayer, store it's info
             if (node.isAccount[_relayer] || relayerAddress == _relayer) {
+                relayerGenerationIteration[j] = relayerIndex;
                 txnAllocated[j] = _txnCalldata[i];
                 selectedRelayerStakePrefixSumIndex[
                     j
@@ -408,12 +439,13 @@ contract BicoForwarder is EIP712, Ownable {
                     ++j;
                 }
             }
+
             unchecked {
                 ++i;
             }
         }
 
-        // Reduce the array size if needed
+        // Reduce the array sizes if needed
         uint256 extraLength = _txnCalldata.length - j;
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
@@ -421,9 +453,17 @@ contract BicoForwarder is EIP712, Ownable {
                 selectedRelayerStakePrefixSumIndex,
                 sub(mload(selectedRelayerStakePrefixSumIndex), extraLength)
             )
+            mstore(
+                relayerGenerationIteration,
+                sub(mload(relayerGenerationIteration), extraLength)
+            )
         }
 
-        return (txnAllocated, selectedRelayerStakePrefixSumIndex);
+        return (
+            txnAllocated,
+            selectedRelayerStakePrefixSumIndex,
+            relayerGenerationIteration
+        );
     }
 
     function setRelayersPerWindow(
