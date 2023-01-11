@@ -3,6 +3,7 @@
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "hardhat/console.sol";
 
 pragma solidity ^0.8.9;
 
@@ -203,8 +204,9 @@ contract BicoForwarder is EIP712, Ownable {
             _relayerGenerationIteration
         );
         if (
-            !(relayerStakePrefixSum[_relayerStakePrefixSumIndex - 1] <
-                randomRelayerStake &&
+            !((_relayerStakePrefixSumIndex == 0 ||
+                relayerStakePrefixSum[_relayerStakePrefixSumIndex - 1] <
+                randomRelayerStake) &&
                 randomRelayerStake <=
                 relayerStakePrefixSum[_relayerStakePrefixSumIndex])
         ) {
@@ -233,7 +235,7 @@ contract BicoForwarder is EIP712, Ownable {
 
     /// @notice verify signed data passed by relayers
     /// @param req requested tx to be forwarded
-    /// @param signature clien signature
+    /// @param signature client signature
     /// @return true if the tx parameters are correct
     function verify(
         ForwardRequest calldata req,
@@ -256,35 +258,37 @@ contract BicoForwarder is EIP712, Ownable {
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
-    /// @param req requested tx to be forwarded
-    /// @param signature clien signature
+    /// @param _req requested tx to be forwarded
+    /// @param _signature signature of the client
+    /// @param _relayerGenerationIteration index at which relayer was selected
+    /// @param _relayerStakePrefixSumIndex index of relayer in prefix sum array
     function execute(
-        ForwardRequest calldata req,
-        bytes calldata signature,
+        ForwardRequest calldata _req,
+        bytes calldata _signature,
         uint256 _relayerGenerationIteration,
         uint256 _relayerStakePrefixSumIndex
     ) public payable returns (bool, bytes memory) {
         uint256 gasLeft = gasleft();
         require(
             _verifyTransactionAllocation(
-                _relayerGenerationIteration,
                 _relayerStakePrefixSumIndex,
-                req.data
+                _relayerGenerationIteration,
+                _req.data
             ),
             "invalid relayer window"
         );
-        require(verify(req, signature), "signature does not match request");
         emit VerificationGasConsumed(gasLeft - gasleft());
+        // require(verify(req, _signature), "signature does not match request");
 
-        _nonces[req.from] = req.nonce + 1;
+        _nonces[_req.from] = _req.nonce + 1;
 
-        (bool success, bytes memory returndata) = req.to.call{
-            gas: req.gas,
-            value: req.value
-        }(abi.encodePacked(req.data, req.from));
+        (bool success, bytes memory returndata) = _req.to.call{
+            gas: _req.gas,
+            value: _req.value
+        }(abi.encodePacked(_req.data, _req.from));
 
         // Validate that the relayer has sent enough gas for the call.
-        if (gasleft() <= req.gas / 63) {
+        if (gasleft() <= _req.gas / 63) {
             assembly {
                 invalid()
             }

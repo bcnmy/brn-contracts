@@ -1,5 +1,6 @@
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
 import { expect } from 'chai';
+import { AbiCoder } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
 
 describe('BRN', function () {
@@ -494,7 +495,7 @@ describe('BRN', function () {
       await txnAllocator
         .connect(relayer1)
         .register(
-          ethers.utils.parseEther('1'),
+          ethers.utils.parseEther('2'),
           [relayer1Acc1.address, relayer1Acc2.address],
           'endpoint'
         );
@@ -513,18 +514,95 @@ describe('BRN', function () {
           'endpoint'
         );
 
-      const calldataArray = new Array(100)
+      const calldataArray = new Array(10)
         .fill(1)
         .map((_, n) => TransactionMock.interface.encodeFunctionData('mockUpdate', [n]));
-      const blockNumber = 101;
+      const blockNumber = 0;
 
       const [txnAllocated, selectedRelayerStakePrefixSumIndex, relayerGenerationIteration] =
         await txnAllocator.allocateTransaction(relayer1Acc1.address, blockNumber, calldataArray);
 
-      const [relayers] = await txnAllocator.allocateRelayers(blockNumber);
-      console.log(relayer1.address, relayer2.address, relayer3.address);
-      console.log(relayers);
-      console.log(txnAllocated);
+      for (let i = 0; i < txnAllocated.length; i++) {
+        await expect(
+          txnAllocator.connect(relayer1Acc1).execute(
+            {
+              from: relayer1Acc1.address,
+              to: transactionMock.address,
+              value: 0,
+              gas: 100000,
+              nonce: 0,
+              data: txnAllocated[i],
+            },
+            new AbiCoder().encode(['uint256'], [0]),
+            relayerGenerationIteration[i],
+            selectedRelayerStakePrefixSumIndex[i]
+          )
+        ).to.not.be.reverted;
+      }
+    });
+
+    it('Should revert if non-selected relayer tries to submit transaction', async function () {
+      const {
+        relayer1,
+        relayer1Acc1,
+        relayer1Acc2,
+        TransactionMock,
+        relayer2,
+        relayer2Acc1,
+        relayer2Acc2,
+        relayer3,
+        relayer3Acc1,
+        relayer3Acc2,
+        txnAllocator,
+        transactionMock,
+      } = await loadFixture(deployTxnAllocator);
+      await txnAllocator
+        .connect(relayer1)
+        .register(
+          ethers.utils.parseEther('2'),
+          [relayer1Acc1.address, relayer1Acc2.address],
+          'endpoint'
+        );
+      await txnAllocator
+        .connect(relayer2)
+        .register(
+          ethers.utils.parseEther('2'),
+          [relayer2Acc1.address, relayer2Acc2.address],
+          'endpoint'
+        );
+      await txnAllocator
+        .connect(relayer3)
+        .register(
+          ethers.utils.parseEther('2'),
+          [relayer3Acc1.address, relayer3Acc2.address],
+          'endpoint'
+        );
+
+      const calldataArray = new Array(10)
+        .fill(1)
+        .map((_, n) => TransactionMock.interface.encodeFunctionData('mockUpdate', [n]));
+      const blockNumber = 0;
+
+      const [txnAllocated, selectedRelayerStakePrefixSumIndex, relayerGenerationIteration] =
+        await txnAllocator.allocateTransaction(relayer1Acc1.address, blockNumber, calldataArray);
+
+      for (let i = 0; i < txnAllocated.length; i++) {
+        await expect(
+          txnAllocator.connect(relayer2Acc1).execute(
+            {
+              from: relayer1Acc1.address,
+              to: transactionMock.address,
+              value: 0,
+              gas: 100000,
+              nonce: 0,
+              data: txnAllocated[i],
+            },
+            new AbiCoder().encode(['uint256'], [0]),
+            relayerGenerationIteration[i],
+            selectedRelayerStakePrefixSumIndex[i]
+          )
+        ).to.be.revertedWith('invalid relayer window');
+      }
     });
   });
 });
