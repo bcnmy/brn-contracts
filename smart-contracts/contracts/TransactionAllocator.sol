@@ -14,7 +14,7 @@ contract BicoForwarder is EIP712, Ownable {
     using ECDSA for bytes32;
     using SafeCast for uint256;
 
-    event ExecutionGasConsumed(uint256);
+    event ExecutionGasConsumed(uint256 gasConsumed);
 
     /// typehash
     bytes32 private constant _TYPEHASH =
@@ -96,7 +96,7 @@ contract BicoForwarder is EIP712, Ownable {
 
     // StakeArrayUpdated
     event StakePercArrayUpdated(
-        uint8[] indexed stakePercArray,
+        uint8[] stakePercArray,
         bytes32 indexed stakePercArrayHash
     );
 
@@ -273,8 +273,20 @@ contract BicoForwarder is EIP712, Ownable {
         // Verify if correct stake prefix sum index has been provided
         uint256 randomRelayerStake = _randomPdfNumber(
             block.number,
-            _relayerGenerationIteration
+            _relayerGenerationIteration,
+            _pdf[_pdf.length - 1]
         );
+
+        // console.log("Before pdf index verification");
+        // console.log(_pdf.length, _pdfIndex);
+        // if (_pdfIndex != 0) {
+        //     console.log("pdf at index-1", _pdf[_pdfIndex - 1]);
+        // }
+        // console.log(
+        //     "stake and pdf at index",
+        //     randomRelayerStake,
+        //     _pdf[_pdfIndex]
+        // );
         if (
             !((_pdfIndex == 0 || _pdf[_pdfIndex - 1] < randomRelayerStake) &&
                 randomRelayerStake <= _pdf[_pdfIndex])
@@ -283,6 +295,7 @@ contract BicoForwarder is EIP712, Ownable {
             return false;
         }
 
+        // console.log("Before relayer address verification");
         // Verify if the relayer selected is msg.sender
         address relayerAddress = relayerIndexToRelayer[_pdfIndex];
         RelayerInfo storage node = relayerInfo[relayerAddress];
@@ -290,6 +303,7 @@ contract BicoForwarder is EIP712, Ownable {
             return false;
         }
 
+        // console.log("Before transaction index verification");
         // Verify if the transaction was alloted to the relayer
         return _relayerGenerationIteration == _assignRelayer(_calldata);
     }
@@ -372,14 +386,15 @@ contract BicoForwarder is EIP712, Ownable {
 
     function _randomPdfNumber(
         uint256 _blockNumber,
-        uint256 _iter
+        uint256 _iter,
+        uint256 _max
     ) internal view returns (uint256 index) {
         // The seed for jth iteration is a function of the base seed and j
         uint256 baseSeed = uint256(
             keccak256(abi.encodePacked(_blockNumber / blocksWindow))
         );
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % 100);
+        return (seed % _max);
     }
 
     function _assignRelayer(
@@ -443,10 +458,13 @@ contract BicoForwarder is EIP712, Ownable {
         require(totalStake > 0, "No relayers registered");
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
-            pdfIndex[i] = _lowerBound(
-                _stakeArrayToPdf(_stakePercArray),
-                _randomPdfNumber(_blockNumber, i)
+            uint256[] memory pdf = _stakeArrayToPdf(_stakePercArray);
+            uint256 randomPdfNumber = _randomPdfNumber(
+                _blockNumber,
+                i,
+                pdf[pdf.length - 1]
             );
+            pdfIndex[i] = _lowerBound(pdf, randomPdfNumber);
             RelayerInfo storage relayer = relayerInfo[
                 relayerIndexToRelayer[pdfIndex[i]]
             ];
