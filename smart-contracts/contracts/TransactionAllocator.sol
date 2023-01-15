@@ -271,7 +271,7 @@ contract BicoForwarder is EIP712, Ownable {
         }
 
         // Verify if correct stake prefix sum index has been provided
-        uint256 randomRelayerStake = _randomRelayerStake(
+        uint256 randomRelayerStake = _randomPdfNumber(
             block.number,
             _relayerGenerationIteration
         );
@@ -370,7 +370,7 @@ contract BicoForwarder is EIP712, Ownable {
         return (success, returndata);
     }
 
-    function _randomRelayerStake(
+    function _randomPdfNumber(
         uint256 _blockNumber,
         uint256 _iter
     ) internal view returns (uint256 index) {
@@ -379,7 +379,7 @@ contract BicoForwarder is EIP712, Ownable {
             keccak256(abi.encodePacked(_blockNumber / blocksWindow))
         );
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % totalStake) + 1;
+        return (seed % 100);
     }
 
     function _assignRelayer(
@@ -438,19 +438,17 @@ contract BicoForwarder is EIP712, Ownable {
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
         address[] memory selectedRelayers = new address[](relayersPerWindow);
-        uint256[] memory relayerStakePrefixSumIndex = new uint256[](
-            relayersPerWindow
-        );
+        uint256[] memory pdfIndex = new uint256[](relayersPerWindow);
 
         require(totalStake > 0, "No relayers registered");
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
-            relayerStakePrefixSumIndex[i] = _lowerBound(
+            pdfIndex[i] = _lowerBound(
                 _stakeArrayToPdf(_stakePercArray),
-                _randomRelayerStake(_blockNumber, i)
+                _randomPdfNumber(_blockNumber, i)
             );
             RelayerInfo storage relayer = relayerInfo[
-                relayerIndexToRelayer[relayerStakePrefixSumIndex[i]]
+                relayerIndexToRelayer[pdfIndex[i]]
             ];
             uint256 relayerIndex = relayer.index;
             address relayerAddress = relayers[relayerIndex];
@@ -460,7 +458,7 @@ contract BicoForwarder is EIP712, Ownable {
                 ++i;
             }
         }
-        return (selectedRelayers, relayerStakePrefixSumIndex);
+        return (selectedRelayers, pdfIndex);
     }
 
     /// @notice determine what transactions can be relayed by the sender
@@ -468,8 +466,7 @@ contract BicoForwarder is EIP712, Ownable {
     /// @param _blockNumber block number for which the relayers are to be generated
     /// @param _txnCalldata list with all transactions calldata to be filtered
     /// @return txnAllocated list of transactions that can be relayed by the relayer
-    /// @return selectedRelayerStakePrefixSumIndex list of indices of the selected
-    ///                                            relayers in the relayerStakePrefixSum array
+    /// @return selectedRelayersPdfIndex list of indices of the selected relayers in the pdf
     /// @return relayerGenerationIteration list of iterations of the relayer generation corresponding
     ///                                    to the selected transactions
     function allocateTransaction(
@@ -495,7 +492,7 @@ contract BicoForwarder is EIP712, Ownable {
 
         // Filter the transactions
         bytes[] memory txnAllocated = new bytes[](_txnCalldata.length);
-        uint256[] memory selectedRelayerStakePrefixSumIndex = new uint256[](
+        uint256[] memory selectedRelayerPdfIndex = new uint256[](
             _txnCalldata.length
         );
         uint256[] memory relayerGenerationIteration = new uint256[](
@@ -513,9 +510,9 @@ contract BicoForwarder is EIP712, Ownable {
             if (node.isAccount[_relayer] || relayerAddress == _relayer) {
                 relayerGenerationIteration[j] = relayerIndex;
                 txnAllocated[j] = _txnCalldata[i];
-                selectedRelayerStakePrefixSumIndex[
-                    j
-                ] = relayerStakePrefixSumIndex[relayerIndex];
+                selectedRelayerPdfIndex[j] = relayerStakePrefixSumIndex[
+                    relayerIndex
+                ];
                 unchecked {
                     ++j;
                 }
@@ -531,8 +528,8 @@ contract BicoForwarder is EIP712, Ownable {
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
             mstore(
-                selectedRelayerStakePrefixSumIndex,
-                sub(mload(selectedRelayerStakePrefixSumIndex), extraLength)
+                selectedRelayerPdfIndex,
+                sub(mload(selectedRelayerPdfIndex), extraLength)
             )
             mstore(
                 relayerGenerationIteration,
@@ -542,7 +539,7 @@ contract BicoForwarder is EIP712, Ownable {
 
         return (
             txnAllocated,
-            selectedRelayerStakePrefixSumIndex,
+            selectedRelayerPdfIndex,
             relayerGenerationIteration
         );
     }
