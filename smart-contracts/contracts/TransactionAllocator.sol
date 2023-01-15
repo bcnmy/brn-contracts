@@ -3,6 +3,7 @@
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "hardhat/console.sol";
 
 pragma solidity ^0.8.9;
@@ -11,8 +12,9 @@ pragma solidity ^0.8.9;
 // preventing gas wars to submit user transactions ahead of the other relayers
 contract BicoForwarder is EIP712, Ownable {
     using ECDSA for bytes32;
+    using SafeCast for uint256;
 
-    event VerificationGasConsumed(uint256);
+    event ExecutionGasConsumed(uint256);
 
     /// typehash
     bytes32 private constant _TYPEHASH =
@@ -36,7 +38,6 @@ contract BicoForwarder is EIP712, Ownable {
         mapping(address => bool) isAccount;
         string endpoint;
         uint256 index;
-        uint256 relayerStakePrefixArrayIndex;
     }
 
     // relayer information
@@ -67,20 +68,24 @@ contract BicoForwarder is EIP712, Ownable {
     // minimum amount stake required by the replayer
     uint256 MINIMUM_STAKE_AMOUNT = 1e17;
 
+    // totalStake
+    uint256 public totalStake;
+
+    // stake array hash
+    bytes32 public stakeArrayHash;
+
+    // Relayer Index to Relayer
+    mapping(uint256 => address) public relayerIndexToRelayer;
+
     /// tx nonces
     mapping(address => uint256) private _nonces;
-
-    /// relayer stake prefix sum, used as probability distribution
-    uint256[] public relayerStakePrefixSum;
-    mapping(uint256 => address) public relayerStakePrefixSumIndexToRelayer;
 
     // Emitted when a new relayer is registered
     event RelayerRegistered(
         address indexed relayer,
         string endpoint,
         address[] accounts,
-        uint256 stake,
-        uint256 relayerStakePrefixArrayIndex
+        uint256 stake
     );
 
     // Emitted when a relayer is unregistered
@@ -88,6 +93,12 @@ contract BicoForwarder is EIP712, Ownable {
 
     // Emitted on valid withdrawal
     event Withdraw(address indexed relayer, uint256 amount);
+
+    // StakeArrayUpdated
+    event StakePercArrayUpdated(
+        uint8[] indexed stakePercArray,
+        bytes32 indexed stakePercArrayHash
+    );
 
     constructor(
         uint256 blocksPerNode_,
@@ -97,7 +108,46 @@ contract BicoForwarder is EIP712, Ownable {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
         relayersPerWindow = relayersPerWindow_;
-        relayerStakePrefixSum.push(0);
+        stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
+    }
+
+    function _calculateStakeArrayHashMemory(
+        uint8[] memory _stakeArray
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_stakeArray));
+    }
+
+    function _calculateStakeArrayHash(
+        uint8[] calldata _stakeArray
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_stakeArray));
+    }
+
+    function _verifyStakeArrayHash(
+        uint8[] calldata _stakeArray
+    ) internal view returns (bool) {
+        return stakeArrayHash == _calculateStakeArrayHash(_stakeArray);
+    }
+
+    modifier verifyStakeArrayHash(uint8[] calldata _stakeArray) {
+        require(_verifyStakeArrayHash(_stakeArray), "Invalid stake array hash");
+        _;
+    }
+
+    function _stakeArrayToPdf(
+        uint8[] calldata _stakeArray
+    ) internal pure returns (uint256[] memory) {
+        uint256[] memory pdf = new uint256[](_stakeArray.length);
+        uint256 length = _stakeArray.length;
+        uint256 sum = 0;
+        for (uint256 i = 0; i < length; ) {
+            sum += _stakeArray[i];
+            pdf[i] = sum;
+            unchecked {
+                ++i;
+            }
+        }
+        return pdf;
     }
 
     /// @notice register a relayer
@@ -105,12 +155,14 @@ contract BicoForwarder is EIP712, Ownable {
     /// @param accounts list of accounts that the relayer will use for forwarding tx
     /// @param endpoint that can be used by any app to send transactions to this relayer
     function register(
+        uint8[] calldata _previousStakePercArray,
         uint256 stake,
         address[] calldata accounts,
         string memory endpoint
-    ) external {
+    ) external verifyStakeArrayHash(_previousStakePercArray) {
         require(accounts.length > 0, "No accounts");
         require(stake >= MINIMUM_STAKE_AMOUNT);
+
         RelayerInfo storage node = relayerInfo[msg.sender];
         node.stake += stake;
         node.endpoint = endpoint;
@@ -118,62 +170,81 @@ contract BicoForwarder is EIP712, Ownable {
         for (uint256 i = 0; i < accounts.length; i++) {
             node.isAccount[accounts[i]] = true;
         }
+        relayers.push(msg.sender);
+        relayerIndexToRelayer[node.index] = msg.sender;
 
-        // Update the prefix sum array for stake
-        uint256 length = relayerStakePrefixSum.length;
-        if (node.relayerStakePrefixArrayIndex == 0) {
-            node.relayerStakePrefixArrayIndex = length;
-            relayerStakePrefixSumIndexToRelayer[length] = msg.sender;
-        }
-        for (uint256 i = node.relayerStakePrefixArrayIndex; i <= length; ) {
-            if (i == length) {
-                relayerStakePrefixSum.push(relayerStakePrefixSum[i - 1]);
-            }
-            relayerStakePrefixSum[i] += stake;
+        // Update stake percentages array and hash
+        uint256 newStakePercArrayLength = _previousStakePercArray.length + 1;
+        uint8[] memory newStakePercArray = new uint8[](newStakePercArrayLength);
+        for (uint256 i = 0; i < newStakePercArrayLength - 1; ) {
+            // Potential Issue: This will cause loss of precision and drift over time
+            newStakePercArray[i] = ((_previousStakePercArray[i] * totalStake) /
+                (totalStake + stake)).toUint8();
             unchecked {
                 ++i;
             }
         }
-        relayers.push(msg.sender);
+        newStakePercArray[newStakePercArrayLength - 1] = uint8(
+            (stake * 100) / (totalStake + stake)
+        );
+        stakeArrayHash = _calculateStakeArrayHashMemory(newStakePercArray);
 
+        // Update total stake
+        totalStake += stake;
         ++relayerCount;
 
         // todo: trasnfer stake amount to be stored in a vault.
-        emit RelayerRegistered(
-            msg.sender,
-            endpoint,
-            accounts,
-            stake,
-            node.relayerStakePrefixArrayIndex
-        );
+        emit StakePercArrayUpdated(newStakePercArray, stakeArrayHash);
+        emit RelayerRegistered(msg.sender, endpoint, accounts, stake);
     }
 
-    /// @notice a relayer vn unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
-    function unRegister() external {
+    /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
+    function unRegister(
+        uint8[] calldata _previousStakePercArray
+    ) external verifyStakeArrayHash(_previousStakePercArray) {
         RelayerInfo storage node = relayerInfo[msg.sender];
         require(relayers[node.index] == msg.sender, "Invalid user");
+
         uint256 n = relayers.length - 1;
         uint256 stake = node.stake;
-        if (node.index != n) relayers[node.index] = relayers[n];
+        uint256 nodeIndex = node.index;
+
+        if (nodeIndex != n) {
+            relayers[nodeIndex] = relayers[n];
+            relayerIndexToRelayer[nodeIndex] = relayerIndexToRelayer[n];
+            relayerIndexToRelayer[n] = address(0);
+        }
+
         relayers.pop();
         --relayerCount;
-
-        // Update the prefix sum array for stake
-        for (
-            uint256 i = node.relayerStakePrefixArrayIndex;
-            i < relayerStakePrefixSum.length;
-
-        ) {
-            relayerStakePrefixSum[i] -= stake;
-            unchecked {
-                ++i;
-            }
-        }
 
         withdrawalInfo[msg.sender] = WithdrawalInfo(
             stake,
             block.timestamp + withdrawDelay
         );
+
+        // Update stake percentages array and hash
+        uint8[] memory newStakePercArray = new uint8[](n);
+        for (uint256 i = 0; i < n; ) {
+            // Potential Issue: This will cause loss of precision and drift over time
+            if (i == nodeIndex) {
+                // Remove the node's stake from the array by substituting it with the last element
+                newStakePercArray[i] = ((_previousStakePercArray[n] *
+                    totalStake) / (totalStake - stake)).toUint8();
+            } else {
+                newStakePercArray[i] = ((_previousStakePercArray[i] *
+                    totalStake) / (totalStake - stake)).toUint8();
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        stakeArrayHash = _calculateStakeArrayHashMemory(newStakePercArray);
+        emit StakePercArrayUpdated(newStakePercArray, stakeArrayHash);
+
+        // Update total stake
+        totalStake -= stake;
+
         emit RelayerUnRegistered(msg.sender);
     }
 
@@ -189,7 +260,8 @@ contract BicoForwarder is EIP712, Ownable {
 
     /// @notice returns true if the current sender is allowed to relay transaction in this block
     function _verifyTransactionAllocation(
-        uint256 _relayerStakePrefixSumIndex,
+        uint256[] memory _pdf,
+        uint256 _pdfIndex,
         uint256 _relayerGenerationIteration,
         bytes calldata _calldata
     ) internal view returns (bool) {
@@ -204,20 +276,15 @@ contract BicoForwarder is EIP712, Ownable {
             _relayerGenerationIteration
         );
         if (
-            !((_relayerStakePrefixSumIndex == 0 ||
-                relayerStakePrefixSum[_relayerStakePrefixSumIndex - 1] <
-                randomRelayerStake) &&
-                randomRelayerStake <=
-                relayerStakePrefixSum[_relayerStakePrefixSumIndex])
+            !((_pdfIndex == 0 || _pdf[_pdfIndex - 1] < randomRelayerStake) &&
+                randomRelayerStake <= _pdf[_pdfIndex])
         ) {
             // The supplied index does not point to the correct interval
             return false;
         }
 
         // Verify if the relayer selected is msg.sender
-        address relayerAddress = relayerStakePrefixSumIndexToRelayer[
-            _relayerStakePrefixSumIndex
-        ];
+        address relayerAddress = relayerIndexToRelayer[_pdfIndex];
         RelayerInfo storage node = relayerInfo[relayerAddress];
         if (!node.isAccount[msg.sender]) {
             return false;
@@ -261,31 +328,37 @@ contract BicoForwarder is EIP712, Ownable {
     /// @param _req requested tx to be forwarded
     /// @param _signature signature of the client
     /// @param _relayerGenerationIteration index at which relayer was selected
-    /// @param _relayerStakePrefixSumIndex index of relayer in prefix sum array
+    /// @param _pdfIndex index of relayer in pdf
     function execute(
         ForwardRequest calldata _req,
         bytes calldata _signature,
+        uint8[] calldata _stakePercArray,
         uint256 _relayerGenerationIteration,
-        uint256 _relayerStakePrefixSumIndex
-    ) public payable returns (bool, bytes memory) {
-        uint256 gasLeft = gasleft();
+        uint256 _pdfIndex
+    )
+        public
+        payable
+        verifyStakeArrayHash(_stakePercArray)
+        returns (bool, bytes memory)
+    {
         require(
             _verifyTransactionAllocation(
-                _relayerStakePrefixSumIndex,
+                _stakeArrayToPdf(_stakePercArray),
+                _pdfIndex,
                 _relayerGenerationIteration,
                 _req.data
             ),
             "invalid relayer window"
         );
-        emit VerificationGasConsumed(gasLeft - gasleft());
         // require(verify(req, _signature), "signature does not match request");
+        // _nonces[_req.from] = _req.nonce + 1;
 
-        _nonces[_req.from] = _req.nonce + 1;
-
+        uint256 gasLeft = gasleft();
         (bool success, bytes memory returndata) = _req.to.call{
             gas: _req.gas,
             value: _req.value
         }(abi.encodePacked(_req.data, _req.from));
+        emit ExecutionGasConsumed(gasLeft - gasleft());
 
         // Validate that the relayer has sent enough gas for the call.
         if (gasleft() <= _req.gas / 63) {
@@ -302,14 +375,11 @@ contract BicoForwarder is EIP712, Ownable {
         uint256 _iter
     ) internal view returns (uint256 index) {
         // The seed for jth iteration is a function of the base seed and j
-        uint256 relayerStakeSum = relayerStakePrefixSum[
-            relayerStakePrefixSum.length - 1
-        ];
         uint256 baseSeed = uint256(
             keccak256(abi.encodePacked(_blockNumber / blocksWindow))
         );
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % relayerStakeSum) + 1;
+        return (seed % totalStake) + 1;
     }
 
     function _assignRelayer(
@@ -323,9 +393,9 @@ contract BicoForwarder is EIP712, Ownable {
     // note: binary search becomes more efficient than linear search only after a certain length threshold,
     // in future a crossover point may be found and implemented for better performance
     function _lowerBound(
-        uint256[] storage arr,
+        uint256[] memory arr,
         uint256 target
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         uint256 low = 0;
         uint256 high = arr.length;
         unchecked {
@@ -350,8 +420,14 @@ contract BicoForwarder is EIP712, Ownable {
     /// @return relayerStakePrefixSumIndex list of indices of the selected relayers in the
     ///                                    relayerStakePrefixSum array, used for verification
     function allocateRelayers(
-        uint256 _blockNumber
-    ) public view returns (address[] memory, uint256[] memory) {
+        uint256 _blockNumber,
+        uint8[] calldata _stakePercArray
+    )
+        public
+        view
+        verifyStakeArrayHash(_stakePercArray)
+        returns (address[] memory, uint256[] memory)
+    {
         require(
             relayers.length >= relayersPerWindow,
             "Insufficient relayers registered"
@@ -366,20 +442,15 @@ contract BicoForwarder is EIP712, Ownable {
             relayersPerWindow
         );
 
-        uint256 relayerStakeSum = relayerStakePrefixSum[
-            relayerStakePrefixSum.length - 1
-        ];
-        require(relayerStakeSum > 0, "No relayers registered");
+        require(totalStake > 0, "No relayers registered");
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
             relayerStakePrefixSumIndex[i] = _lowerBound(
-                relayerStakePrefixSum,
+                _stakeArrayToPdf(_stakePercArray),
                 _randomRelayerStake(_blockNumber, i)
             );
             RelayerInfo storage relayer = relayerInfo[
-                relayerStakePrefixSumIndexToRelayer[
-                    relayerStakePrefixSumIndex[i]
-                ]
+                relayerIndexToRelayer[relayerStakePrefixSumIndex[i]]
             ];
             uint256 relayerIndex = relayer.index;
             address relayerAddress = relayers[relayerIndex];
@@ -404,8 +475,14 @@ contract BicoForwarder is EIP712, Ownable {
     function allocateTransaction(
         address _relayer,
         uint256 _blockNumber,
-        bytes[] calldata _txnCalldata
-    ) public view returns (bytes[] memory, uint256[] memory, uint256[] memory) {
+        bytes[] calldata _txnCalldata,
+        uint8[] calldata _stakePercArray
+    )
+        public
+        view
+        verifyStakeArrayHash(_stakePercArray)
+        returns (bytes[] memory, uint256[] memory, uint256[] memory)
+    {
         if (_blockNumber == 0) {
             _blockNumber = block.number;
         }
@@ -413,7 +490,7 @@ contract BicoForwarder is EIP712, Ownable {
         (
             address[] memory relayersAllocated,
             uint256[] memory relayerStakePrefixSumIndex
-        ) = allocateRelayers(_blockNumber);
+        ) = allocateRelayers(_blockNumber, _stakePercArray);
         require(relayersAllocated.length == relayersPerWindow, "AT101");
 
         // Filter the transactions

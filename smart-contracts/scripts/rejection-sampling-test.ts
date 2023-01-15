@@ -63,9 +63,20 @@ const selectionRandomValues = (iteration: number, selectionIndex: number, maxSta
     (acc as any)[val] = ((acc as any)[val] || 0) + 1;
     return acc;
   }, {});
+  const frequencyTablePercent = Object.keys(frequencyTable).reduce((acc, val) => {
+    (acc as any)[val] = `${((frequencyTable as any)[val] / selectionsCount.length) * 100}%`;
+    return acc;
+  }, {});
   console.log(
     JSON.stringify(
-      { maxSelections, minSelections, averageSelections, medianSelections, frequencyTable },
+      {
+        maxSelections,
+        minSelections,
+        averageSelections,
+        medianSelections,
+        frequencyTable,
+        frequencyTablePercent,
+      },
       null,
       2
     )
