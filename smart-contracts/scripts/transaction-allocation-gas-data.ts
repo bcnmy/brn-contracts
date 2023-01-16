@@ -1,6 +1,6 @@
 import { BigNumber, ContractReceipt, Wallet } from 'ethers';
 import { AbiCoder, hexValue, parseEther } from 'ethers/lib/utils';
-import { ethers, network, tenderly } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import {
   TransactionAllocator,
   TransactionMock,
@@ -15,6 +15,7 @@ const totalRelayers = 50;
 const relayersPerWindow = 5;
 
 let stakeArray: BigNumber[] = [];
+let cdfArray: BigNumber[] = [];
 
 const deploy = async () => {
   console.log('Deploying contract...');
@@ -39,9 +40,16 @@ const deploy = async () => {
 
 const getStakeArray = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-  const stakeArrayLog = logs.find((log) => log.name === 'StakePercArrayUpdated');
+  const stakeArrayLog = logs.find((log) => log.name === 'StakeArrayUpdated');
   if (!stakeArrayLog) throw new Error(`Stake array not found in logs:${logs}`);
   return stakeArrayLog.args.stakePercArray;
+};
+
+const getCdf = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
+  const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
+  const cdfArrayLog = logs.find((log) => log.name === 'CdfArrayUpdated');
+  if (!cdfArrayLog) throw new Error(`CDF array not found in logs:${logs}`);
+  return cdfArrayLog.args.cdfArray;
 };
 
 const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) => {
@@ -61,8 +69,12 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
         .register(stakeArray, amount.mul(multiplier), [randomWallet.address], 'test');
       const receipt = await wait();
       stakeArray = getStakeArray(txnAllocator, receipt);
+      cdfArray = getCdf(txnAllocator, receipt);
+
       console.log(`Relayer ${i} registered successfully with ${multiplier} ETH`);
       console.log(`Stake array: ${stakeArray}`);
+      console.log(`CDF array: ${cdfArray}`);
+
       wallets.push(randomWallet);
     } catch (e) {
       console.log(e);
@@ -124,7 +136,7 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
     const relayer = relayers[i];
     const blockNumber = await ethers.provider.getBlockNumber();
     const [txnAllocated, selectedRelayerPdfIndex, relayerGenerationIteration] =
-      await txnAllocator.allocateTransaction(relayer.address, blockNumber, txns, stakeArray);
+      await txnAllocator.allocateTransaction(relayer.address, blockNumber, txns, cdfArray);
     console.log(`Alloted ${txnAllocated.length} transactions to ${i}th relayer ${relayer.address}`);
     for (let j = 0; j < txnAllocated.length; j++) {
       const data = txnAllocated[j];
@@ -138,7 +150,7 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
           data,
         },
         new AbiCoder().encode(['uint256'], [0]),
-        stakeArray,
+        cdfArray,
         relayerGenerationIteration[j],
         selectedRelayerPdfIndex[j]
       );
