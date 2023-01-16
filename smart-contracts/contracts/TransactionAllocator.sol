@@ -14,9 +14,6 @@ contract TransactionAllocator is EIP712, Ownable {
     using ECDSA for bytes32;
     using SafeCast for uint256;
 
-    event ExecutionGasConsumed(uint256 gasConsumed);
-    event VerificationFunctionGasConsumed(uint256 gasConsumed);
-
     /// typehash
     bytes32 private constant _TYPEHASH =
         keccak256(
@@ -47,6 +44,9 @@ contract TransactionAllocator is EIP712, Ownable {
         uint256 time;
     }
 
+    uint256 constant CDF_PRECISION_MULTIPLIER = 10 ** 4;
+    uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
+
     /// Maps relayer main address to info
     mapping(address => RelayerInfo) relayerInfo;
 
@@ -69,11 +69,11 @@ contract TransactionAllocator is EIP712, Ownable {
     // minimum amount stake required by the replayer
     uint256 MINIMUM_STAKE_AMOUNT = 1e17;
 
-    // totalStake
-    uint256 public totalStake;
-
     // stake array hash
     bytes32 public stakeArrayHash;
+
+    // cdf array hash
+    bytes32 public cdfArrayHash;
 
     // Relayer Index to Relayer
     mapping(uint256 => address) public relayerIndexToRelayer;
@@ -96,10 +96,14 @@ contract TransactionAllocator is EIP712, Ownable {
     event Withdraw(address indexed relayer, uint256 amount);
 
     // StakeArrayUpdated
-    event StakePercArrayUpdated(
-        uint8[] stakePercArray,
+    event StakeArrayUpdated(
+        uint32[] stakePercArray,
         bytes32 indexed stakePercArrayHash
     );
+    event CdfArrayUpdated(uint16[] cdfArray, bytes32 indexed cdfArrayHash);
+
+    event ExecutionGasConsumed(uint256 gasConsumed);
+    event VerificationFunctionGasConsumed(uint256 gasConsumed);
 
     constructor(
         uint256 blocksPerNode_,
@@ -112,97 +116,112 @@ contract TransactionAllocator is EIP712, Ownable {
         stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
     }
 
-    function _calculateStakeArrayHashMemory(
-        uint8[] memory _stakeArray
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_stakeArray));
-    }
-
-    function _calculateStakeArrayHash(
-        uint8[] calldata _stakeArray
-    ) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_stakeArray));
+    function _verifyCdfHash(
+        uint16[] calldata _array
+    ) internal view returns (bool) {
+        return cdfArrayHash == keccak256(abi.encodePacked(_array));
     }
 
     function _verifyStakeArrayHash(
-        uint8[] calldata _stakeArray
+        uint32[] calldata _array
     ) internal view returns (bool) {
-        return stakeArrayHash == _calculateStakeArrayHash(_stakeArray);
+        return stakeArrayHash == keccak256(abi.encodePacked((_array)));
     }
 
-    modifier verifyStakeArrayHash(uint8[] calldata _stakeArray) {
-        require(_verifyStakeArrayHash(_stakeArray), "Invalid stake array hash");
+    modifier verifyStakeArrayHash(uint32[] calldata _array) {
+        require(_verifyStakeArrayHash(_array), "Invalid stake array hash");
         _;
     }
 
-    function _stakeArrayToPdf(
-        uint8[] calldata _stakeArray
-    ) internal pure returns (uint256[] memory) {
-        uint256[] memory pdf = new uint256[](_stakeArray.length);
+    modifier verifyCdfHash(uint16[] calldata _array) {
+        require(_verifyCdfHash(_array), "Invalid cdf array hash");
+        _;
+    }
+
+    function _stakeArrayToCdf(
+        uint32[] memory _stakeArray
+    ) internal pure returns (uint16[] memory, bytes32 cdfHash) {
+        uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 length = _stakeArray.length;
         uint256 sum = 0;
+
+        // Calculate Sum
         for (uint256 i = 0; i < length; ) {
             sum += _stakeArray[i];
-            pdf[i] = sum;
             unchecked {
                 ++i;
             }
         }
-        return pdf;
+
+        // Scale the values to get the CDF
+        for (uint256 i = 0; i < length; ) {
+            cdf[i] = ((_stakeArray[i] * CDF_PRECISION_MULTIPLIER) / sum)
+                .toUint16();
+            unchecked {
+                ++i;
+            }
+        }
+
+        return (cdf, keccak256(abi.encodePacked(cdf)));
     }
 
     /// @notice register a relayer
-    /// @param stake amount to be staked
-    /// @param accounts list of accounts that the relayer will use for forwarding tx
-    /// @param endpoint that can be used by any app to send transactions to this relayer
+    /// @param _stake amount to be staked
+    /// @param _accounts list of accounts that the relayer will use for forwarding tx
+    /// @param _endpoint that can be used by any app to send transactions to this relayer
     function register(
-        uint8[] calldata _previousStakePercArray,
-        uint256 stake,
-        address[] calldata accounts,
-        string memory endpoint
-    ) external verifyStakeArrayHash(_previousStakePercArray) {
-        require(accounts.length > 0, "No accounts");
-        require(stake >= MINIMUM_STAKE_AMOUNT);
+        uint32[] calldata _previousStakeArray,
+        uint256 _stake,
+        address[] calldata _accounts,
+        string memory _endpoint
+    ) external verifyStakeArrayHash(_previousStakeArray) {
+        require(_accounts.length > 0, "No accounts");
+        require(_stake >= MINIMUM_STAKE_AMOUNT);
 
         RelayerInfo storage node = relayerInfo[msg.sender];
-        node.stake += stake;
-        node.endpoint = endpoint;
+        // TODO: Duplicate stake storage, can be removed
+        node.stake += _stake;
+        node.endpoint = _endpoint;
         node.index = relayers.length;
-        for (uint256 i = 0; i < accounts.length; i++) {
-            node.isAccount[accounts[i]] = true;
+        for (uint256 i = 0; i < _accounts.length; i++) {
+            node.isAccount[_accounts[i]] = true;
         }
         relayers.push(msg.sender);
         relayerIndexToRelayer[node.index] = msg.sender;
 
-        // Update stake percentages array and hash
-        uint256 newStakePercArrayLength = _previousStakePercArray.length + 1;
-        uint8[] memory newStakePercArray = new uint8[](newStakePercArrayLength);
-        for (uint256 i = 0; i < newStakePercArrayLength - 1; ) {
-            // Potential Issue: This will cause loss of precision and drift over time
-            newStakePercArray[i] = ((_previousStakePercArray[i] * totalStake) /
-                (totalStake + stake)).toUint8();
+        // Update stake array and hash
+        uint256 newStakeArrayLength = _previousStakeArray.length + 1;
+        uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
+        // TODO: can this be optimized using calldatacopy?
+        for (uint256 i = 0; i < newStakeArrayLength - 1; ) {
+            newStakeArray[i] = _previousStakeArray[i];
             unchecked {
                 ++i;
             }
         }
-        newStakePercArray[newStakePercArrayLength - 1] = uint8(
-            (stake * 100) / (totalStake + stake)
+        newStakeArray[newStakeArrayLength - 1] = (_stake / STAKE_SCALING_FACTOR)
+            .toUint32();
+        stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
+
+        // Update cdf hash
+        (uint16[] memory cdfArray, bytes32 cdfHash) = _stakeArrayToCdf(
+            newStakeArray
         );
-        stakeArrayHash = _calculateStakeArrayHashMemory(newStakePercArray);
+        cdfArrayHash = cdfHash;
 
         // Update total stake
-        totalStake += stake;
         ++relayerCount;
 
         // todo: trasnfer stake amount to be stored in a vault.
-        emit StakePercArrayUpdated(newStakePercArray, stakeArrayHash);
-        emit RelayerRegistered(msg.sender, endpoint, accounts, stake);
+        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
+        emit CdfArrayUpdated(cdfArray, cdfArrayHash);
+        emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
     function unRegister(
-        uint8[] calldata _previousStakePercArray
-    ) external verifyStakeArrayHash(_previousStakePercArray) {
+        uint32[] calldata _previousStakeArray
+    ) external verifyStakeArrayHash(_previousStakeArray) {
         RelayerInfo storage node = relayerInfo[msg.sender];
         require(relayers[node.index] == msg.sender, "Invalid user");
 
@@ -225,27 +244,30 @@ contract TransactionAllocator is EIP712, Ownable {
         );
 
         // Update stake percentages array and hash
-        uint8[] memory newStakePercArray = new uint8[](n);
+        // TODO: can this be optimized using calldatacopy?
+        uint32[] memory newStakeArray = new uint32[](n);
         for (uint256 i = 0; i < n; ) {
-            // Potential Issue: This will cause loss of precision and drift over time
             if (i == nodeIndex) {
                 // Remove the node's stake from the array by substituting it with the last element
-                newStakePercArray[i] = ((_previousStakePercArray[n] *
-                    totalStake) / (totalStake - stake)).toUint8();
+                newStakeArray[i] = _previousStakeArray[n];
             } else {
-                newStakePercArray[i] = ((_previousStakePercArray[i] *
-                    totalStake) / (totalStake - stake)).toUint8();
+                newStakeArray[i] = _previousStakeArray[i];
             }
             unchecked {
                 ++i;
             }
         }
-        stakeArrayHash = _calculateStakeArrayHashMemory(newStakePercArray);
-        emit StakePercArrayUpdated(newStakePercArray, stakeArrayHash);
+        stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
+        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
 
-        // Update total stake
-        totalStake -= stake;
+        // Update cdf hash
+        (uint16[] memory cdfArray, bytes32 cdfHash) = _stakeArrayToCdf(
+            newStakeArray
+        );
+        cdfArrayHash = cdfHash;
 
+        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
+        emit CdfArrayUpdated(cdfArray, cdfArrayHash);
         emit RelayerUnRegistered(msg.sender);
     }
 
@@ -261,8 +283,8 @@ contract TransactionAllocator is EIP712, Ownable {
 
     /// @notice returns true if the current sender is allowed to relay transaction in this block
     function _verifyTransactionAllocation(
-        uint256[] memory _pdf,
-        uint256 _pdfIndex,
+        uint16[] calldata _cdf,
+        uint256 _cdfIndex,
         uint256 _relayerGenerationIteration,
         bytes calldata _calldata
     ) internal view returns (bool) {
@@ -272,25 +294,25 @@ contract TransactionAllocator is EIP712, Ownable {
         }
 
         // Verify if correct stake prefix sum index has been provided
-        uint256 randomRelayerStake = _randomPdfNumber(
+        uint256 randomRelayerStake = _randomCdfNumber(
             block.number,
             _relayerGenerationIteration,
-            _pdf[_pdf.length - 1]
+            _cdf[_cdf.length - 1]
         );
 
-        // console.log("Before pdf index verification");
-        // console.log(_pdf.length, _pdfIndex);
-        // if (_pdfIndex != 0) {
-        //     console.log("pdf at index-1", _pdf[_pdfIndex - 1]);
+        // console.log("Before cdf index verification");
+        // console.log(_cdf.length, _cdfIndex);
+        // if (_cdfIndex != 0) {
+        //     console.log("cdf at index-1", _cdf[_cdfIndex - 1]);
         // }
         // console.log(
-        //     "stake and pdf at index",
+        //     "stake and cdf at index",
         //     randomRelayerStake,
-        //     _pdf[_pdfIndex]
+        //     _cdf[_cdfIndex]
         // );
         if (
-            !((_pdfIndex == 0 || _pdf[_pdfIndex - 1] < randomRelayerStake) &&
-                randomRelayerStake <= _pdf[_pdfIndex])
+            !((_cdfIndex == 0 || _cdf[_cdfIndex - 1] < randomRelayerStake) &&
+                randomRelayerStake <= _cdf[_cdfIndex])
         ) {
             // The supplied index does not point to the correct interval
             return false;
@@ -298,7 +320,7 @@ contract TransactionAllocator is EIP712, Ownable {
 
         // console.log("Before relayer address verification");
         // Verify if the relayer selected is msg.sender
-        address relayerAddress = relayerIndexToRelayer[_pdfIndex];
+        address relayerAddress = relayerIndexToRelayer[_cdfIndex];
         RelayerInfo storage node = relayerInfo[relayerAddress];
         if (!node.isAccount[msg.sender]) {
             return false;
@@ -343,25 +365,28 @@ contract TransactionAllocator is EIP712, Ownable {
     /// @param _req requested tx to be forwarded
     /// @param _signature signature of the client
     /// @param _relayerGenerationIteration index at which relayer was selected
-    /// @param _pdfIndex index of relayer in pdf
+    /// @param _cdfIndex index of relayer in cdf
     function execute(
         ForwardRequest calldata _req,
         bytes calldata _signature,
-        uint8[] calldata _stakePercArray,
+        uint16[] calldata _cdf,
         uint256 _relayerGenerationIteration,
-        uint256 _pdfIndex
+        uint256 _cdfIndex
     )
         public
         payable
-        // verifyStakeArrayHash(_stakePercArray)
-        returns (bool, bytes memory)
+        returns (
+            // verifyStakeArrayHash(_stakePercArray)
+            bool,
+            bytes memory
+        )
     {
         uint256 gasLeft = gasleft();
-        require(_verifyStakeArrayHash(_stakePercArray), "Invalid stake array hash");
+        require(_verifyCdfHash(_cdf), "Invalid cdf hash");
         require(
             _verifyTransactionAllocation(
-                _stakeArrayToPdf(_stakePercArray),
-                _pdfIndex,
+                _cdf,
+                _cdfIndex,
                 _relayerGenerationIteration,
                 _req.data
             ),
@@ -388,7 +413,7 @@ contract TransactionAllocator is EIP712, Ownable {
         return (success, returndata);
     }
 
-    function _randomPdfNumber(
+    function _randomCdfNumber(
         uint256 _blockNumber,
         uint256 _iter,
         uint256 _max
@@ -412,7 +437,7 @@ contract TransactionAllocator is EIP712, Ownable {
     // note: binary search becomes more efficient than linear search only after a certain length threshold,
     // in future a crossover point may be found and implemented for better performance
     function _lowerBound(
-        uint256[] memory arr,
+        uint16[] calldata arr,
         uint256 target
     ) internal pure returns (uint256) {
         uint256 low = 0;
@@ -440,13 +465,14 @@ contract TransactionAllocator is EIP712, Ownable {
     ///                                    relayerStakePrefixSum array, used for verification
     function allocateRelayers(
         uint256 _blockNumber,
-        uint8[] calldata _stakePercArray
+        uint16[] calldata _cdf
     )
         public
         view
-        verifyStakeArrayHash(_stakePercArray)
+        verifyCdfHash(_cdf)
         returns (address[] memory, uint256[] memory)
     {
+        require(_cdf.length > 0, "No relayers registered");
         require(
             relayers.length >= relayersPerWindow,
             "Insufficient relayers registered"
@@ -457,20 +483,20 @@ contract TransactionAllocator is EIP712, Ownable {
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
         address[] memory selectedRelayers = new address[](relayersPerWindow);
-        uint256[] memory pdfIndex = new uint256[](relayersPerWindow);
+        uint256[] memory cdfIndex = new uint256[](relayersPerWindow);
 
-        require(totalStake > 0, "No relayers registered");
+        uint256 cdfLength = _cdf.length;
+        require(_cdf[cdfLength - 1] > 0, "No relayers registered");
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
-            uint256[] memory pdf = _stakeArrayToPdf(_stakePercArray);
-            uint256 randomPdfNumber = _randomPdfNumber(
+            uint256 randomCdfNumber = _randomCdfNumber(
                 _blockNumber,
                 i,
-                pdf[pdf.length - 1]
+                _cdf[cdfLength - 1]
             );
-            pdfIndex[i] = _lowerBound(pdf, randomPdfNumber);
+            cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
             RelayerInfo storage relayer = relayerInfo[
-                relayerIndexToRelayer[pdfIndex[i]]
+                relayerIndexToRelayer[cdfIndex[i]]
             ];
             uint256 relayerIndex = relayer.index;
             address relayerAddress = relayers[relayerIndex];
@@ -480,7 +506,7 @@ contract TransactionAllocator is EIP712, Ownable {
                 ++i;
             }
         }
-        return (selectedRelayers, pdfIndex);
+        return (selectedRelayers, cdfIndex);
     }
 
     /// @notice determine what transactions can be relayed by the sender
@@ -488,18 +514,18 @@ contract TransactionAllocator is EIP712, Ownable {
     /// @param _blockNumber block number for which the relayers are to be generated
     /// @param _txnCalldata list with all transactions calldata to be filtered
     /// @return txnAllocated list of transactions that can be relayed by the relayer
-    /// @return selectedRelayersPdfIndex list of indices of the selected relayers in the pdf
+    /// @return selectedRelayersCdfIndex list of indices of the selected relayers in the cdf
     /// @return relayerGenerationIteration list of iterations of the relayer generation corresponding
     ///                                    to the selected transactions
     function allocateTransaction(
         address _relayer,
         uint256 _blockNumber,
         bytes[] calldata _txnCalldata,
-        uint8[] calldata _stakePercArray
+        uint16[] calldata _cdf
     )
         public
         view
-        verifyStakeArrayHash(_stakePercArray)
+        verifyCdfHash(_cdf)
         returns (bytes[] memory, uint256[] memory, uint256[] memory)
     {
         if (_blockNumber == 0) {
@@ -509,12 +535,12 @@ contract TransactionAllocator is EIP712, Ownable {
         (
             address[] memory relayersAllocated,
             uint256[] memory relayerStakePrefixSumIndex
-        ) = allocateRelayers(_blockNumber, _stakePercArray);
+        ) = allocateRelayers(_blockNumber, _cdf);
         require(relayersAllocated.length == relayersPerWindow, "AT101");
 
         // Filter the transactions
         bytes[] memory txnAllocated = new bytes[](_txnCalldata.length);
-        uint256[] memory selectedRelayerPdfIndex = new uint256[](
+        uint256[] memory selectedRelayerCdfIndex = new uint256[](
             _txnCalldata.length
         );
         uint256[] memory relayerGenerationIteration = new uint256[](
@@ -532,7 +558,7 @@ contract TransactionAllocator is EIP712, Ownable {
             if (node.isAccount[_relayer] || relayerAddress == _relayer) {
                 relayerGenerationIteration[j] = relayerIndex;
                 txnAllocated[j] = _txnCalldata[i];
-                selectedRelayerPdfIndex[j] = relayerStakePrefixSumIndex[
+                selectedRelayerCdfIndex[j] = relayerStakePrefixSumIndex[
                     relayerIndex
                 ];
                 unchecked {
@@ -550,8 +576,8 @@ contract TransactionAllocator is EIP712, Ownable {
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
             mstore(
-                selectedRelayerPdfIndex,
-                sub(mload(selectedRelayerPdfIndex), extraLength)
+                selectedRelayerCdfIndex,
+                sub(mload(selectedRelayerCdfIndex), extraLength)
             )
             mstore(
                 relayerGenerationIteration,
@@ -561,7 +587,7 @@ contract TransactionAllocator is EIP712, Ownable {
 
         return (
             txnAllocated,
-            selectedRelayerPdfIndex,
+            selectedRelayerCdfIndex,
             relayerGenerationIteration
         );
     }
