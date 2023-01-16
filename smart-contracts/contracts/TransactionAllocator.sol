@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -6,15 +6,16 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "hardhat/console.sol";
 
-pragma solidity ^0.8.9;
+pragma solidity 0.8.13;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
-contract BicoForwarder is EIP712, Ownable {
+contract TransactionAllocator is EIP712, Ownable {
     using ECDSA for bytes32;
     using SafeCast for uint256;
 
     event ExecutionGasConsumed(uint256 gasConsumed);
+    event VerificationFunctionGasConsumed(uint256 gasConsumed);
 
     /// typehash
     bytes32 private constant _TYPEHASH =
@@ -104,7 +105,7 @@ contract BicoForwarder is EIP712, Ownable {
         uint256 blocksPerNode_,
         uint256 withdrawDelay_,
         uint256 relayersPerWindow_
-    ) EIP712("BicoForwarder", "0.0.1") Ownable() {
+    ) EIP712("TransactionAllocator", "0.0.1") Ownable() {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
         relayersPerWindow = relayersPerWindow_;
@@ -352,9 +353,11 @@ contract BicoForwarder is EIP712, Ownable {
     )
         public
         payable
-        verifyStakeArrayHash(_stakePercArray)
+        // verifyStakeArrayHash(_stakePercArray)
         returns (bool, bytes memory)
     {
+        uint256 gasLeft = gasleft();
+        require(_verifyStakeArrayHash(_stakePercArray), "Invalid stake array hash");
         require(
             _verifyTransactionAllocation(
                 _stakeArrayToPdf(_stakePercArray),
@@ -366,13 +369,13 @@ contract BicoForwarder is EIP712, Ownable {
         );
         // require(verify(req, _signature), "signature does not match request");
         // _nonces[_req.from] = _req.nonce + 1;
+        emit VerificationFunctionGasConsumed(gasLeft - gasleft());
 
-        uint256 gasLeft = gasleft();
+        gasLeft = gasleft();
         (bool success, bytes memory returndata) = _req.to.call{
             gas: _req.gas,
             value: _req.value
         }(abi.encodePacked(_req.data, _req.from));
-        emit ExecutionGasConsumed(gasLeft - gasleft());
 
         // Validate that the relayer has sent enough gas for the call.
         if (gasleft() <= _req.gas / 63) {
@@ -380,6 +383,7 @@ contract BicoForwarder is EIP712, Ownable {
                 invalid()
             }
         }
+        emit ExecutionGasConsumed(gasLeft - gasleft());
 
         return (success, returndata);
     }

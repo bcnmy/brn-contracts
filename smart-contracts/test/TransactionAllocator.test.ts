@@ -22,7 +22,7 @@ describe('BRN', function () {
       relayer3Acc2,
     ] = await ethers.getSigners();
 
-    const TxnAllocator = await ethers.getContractFactory('BicoForwarder');
+    const TxnAllocator = await ethers.getContractFactory('TransactionAllocator');
     const txnAllocator = await TxnAllocator.deploy(blocksWindow, withdrawDelay, relayersPerWindow);
 
     const TransactionMock = await ethers.getContractFactory('TransactionMock');
