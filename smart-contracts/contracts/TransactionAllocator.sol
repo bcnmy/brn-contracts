@@ -138,25 +138,17 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     function _stakeArrayToCdf(
-        uint32[] memory _stakeArray
+        uint32[] memory _stakeArray,
+        uint256 _totalStakeSum
     ) internal pure returns (uint16[] memory, bytes32 cdfHash) {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 length = _stakeArray.length;
-        uint256 totalStakeSum = 0;
-
-        // Calculate Sum
-        for (uint256 i = 0; i < length; ) {
-            totalStakeSum += _stakeArray[i];
-            unchecked {
-                ++i;
-            }
-        }
 
         // Scale the values to get the CDF
         uint256 sum = 0;
         for (uint256 i = 0; i < length; ) {
             sum += _stakeArray[i];
-            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum)
+            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / _totalStakeSum)
                 .toUint16();
             unchecked {
                 ++i;
@@ -193,23 +185,31 @@ contract TransactionAllocator is EIP712, Ownable {
         ++relayerCount;
         emit GenericGasConsumed("registration", gas - gasleft());
 
-        gas = gasleft();
-        // Update stake array and hash
+        uint256 totalStakeSum = _stake / STAKE_SCALING_FACTOR;
+
         uint256 newStakeArrayLength = _previousStakeArray.length + 1;
         uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
+        gas = gasleft();
+        // Update stake array and hash
         // TODO: can this be optimized using calldatacopy?
+        uint256 internalGas = gasleft();
         for (uint256 i = 0; i < newStakeArrayLength - 1; ) {
             newStakeArray[i] = _previousStakeArray[i];
+            totalStakeSum += _previousStakeArray[i];
             unchecked {
                 ++i;
             }
         }
+        emit GenericGasConsumed("stakeArrayCopy", internalGas - gasleft());
+
         newStakeArray[newStakeArrayLength - 1] = (_stake / STAKE_SCALING_FACTOR)
             .toUint32();
         stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
 
         // Update cdf hash
-        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray);
+        internalGas = gasleft();
+        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray, totalStakeSum);
+        emit GenericGasConsumed("stakeArrayToCdf", internalGas - gasleft());
         cdfArrayHash = cdfHash;
         emit GenericGasConsumed("hashUpdation", gas - gasleft());
 
@@ -235,7 +235,19 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     function getCdf() public view returns (uint16[] memory) {
-        (uint16[] memory cdfArray, ) = _stakeArrayToCdf(getStakeArray());
+        uint32[] memory stakeArray = getStakeArray();
+        uint256 totalStakeSum = 0;
+        uint256 length = stakeArray.length;
+        for (uint256 i = 0; i < length; ) {
+            totalStakeSum += stakeArray[i];
+            unchecked {
+                ++i;
+            }
+        }
+        (uint16[] memory cdfArray, ) = _stakeArrayToCdf(
+            stakeArray,
+            totalStakeSum
+        );
         return cdfArray;
     }
 
@@ -268,6 +280,7 @@ contract TransactionAllocator is EIP712, Ownable {
         // Update stake percentages array and hash
         // TODO: can this be optimized using calldatacopy?
         uint32[] memory newStakeArray = new uint32[](n);
+        uint256 totalStakeSum = 0;
         for (uint256 i = 0; i < n; ) {
             if (i == nodeIndex) {
                 // Remove the node's stake from the array by substituting it with the last element
@@ -275,6 +288,7 @@ contract TransactionAllocator is EIP712, Ownable {
             } else {
                 newStakeArray[i] = _previousStakeArray[i];
             }
+            totalStakeSum += newStakeArray[i];
             unchecked {
                 ++i;
             }
@@ -283,7 +297,7 @@ contract TransactionAllocator is EIP712, Ownable {
         emit StakeArrayUpdated(stakeArrayHash);
 
         // Update cdf hash
-        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray);
+        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray, totalStakeSum);
         cdfArrayHash = cdfHash;
 
         emit StakeArrayUpdated(stakeArrayHash);

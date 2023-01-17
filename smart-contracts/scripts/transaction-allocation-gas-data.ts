@@ -55,7 +55,7 @@ const deploy = async () => {
 const getGenericGasConsumption = (
   txnAllocator: TransactionAllocator,
   transactionReceipt: ContractReceipt
-) => {
+): Record<string, string> => {
   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
   const gasLogs = logs.filter((log) => log.name === 'GenericGasConsumed');
   if (gasLogs.length == 0) throw new Error(`Gas Log array not found in logs:${logs}`);
@@ -84,6 +84,9 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
       stakeArray = await txnAllocator.getStakeArray();
       cdfArray = await txnAllocator.getCdf();
       const gasData = getGenericGasConsumption(txnAllocator, receipt);
+      const totalGasFromEvents = Object.values(gasData).reduce((a: string, b: string) =>
+        BigNumber.from(a).add(b).toString()
+      );
 
       console.log(`Relayer ${i} registered successfully with ${multiplier} ETH`);
       console.log(`Stake array: ${stakeArray}`);
@@ -91,7 +94,8 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
 
       gasConsumed.push({
         ...gasData,
-        totalGasUsed: receipt.gasUsed.toString(),
+        totalGas: receipt.gasUsed.toString(),
+        calldataGas: receipt.gasUsed.sub(totalGasFromEvents).toString(),
       });
       wallets.push(randomWallet);
     } catch (e) {
