@@ -143,19 +143,21 @@ contract TransactionAllocator is EIP712, Ownable {
     ) internal pure returns (uint16[] memory, bytes32 cdfHash) {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 length = _stakeArray.length;
-        uint256 sum = 0;
+        uint256 totalStakeSum = 0;
 
         // Calculate Sum
         for (uint256 i = 0; i < length; ) {
-            sum += _stakeArray[i];
+            totalStakeSum += _stakeArray[i];
             unchecked {
                 ++i;
             }
         }
 
         // Scale the values to get the CDF
+        uint256 sum = 0;
         for (uint256 i = 0; i < length; ) {
-            cdf[i] = ((_stakeArray[i] * CDF_PRECISION_MULTIPLIER) / sum)
+            sum += _stakeArray[i];
+            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum)
                 .toUint16();
             unchecked {
                 ++i;

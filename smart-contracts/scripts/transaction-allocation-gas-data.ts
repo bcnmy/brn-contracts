@@ -11,7 +11,7 @@ import { resolve } from 'path';
 
 const windowLength = 1000000;
 const totalTransactions = 20;
-const totalRelayers = 50;
+const totalRelayers = 100;
 const relayersPerWindow = 5;
 
 let stakeArray: BigNumber[] = [];
