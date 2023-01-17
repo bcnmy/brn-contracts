@@ -1,4 +1,4 @@
-import { BigNumber, ContractReceipt, Wallet } from 'ethers';
+import { BigNumber, BigNumberish, ContractReceipt, Wallet } from 'ethers';
 import { AbiCoder, hexValue, parseEther } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
 import {
@@ -14,8 +14,8 @@ const totalTransactions = 20;
 const totalRelayers = 100;
 const relayersPerWindow = 5;
 
-let stakeArray: BigNumber[] = [];
-let cdfArray: BigNumber[] = [];
+let stakeArray: BigNumberish[] = [];
+let cdfArray: BigNumberish[] = [];
 
 const deploy = async () => {
   console.log('Deploying contract...');
@@ -38,24 +38,37 @@ const deploy = async () => {
   return { txnAllocator, txMock };
 };
 
-const getStakeArray = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
-  const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-  const stakeArrayLog = logs.find((log) => log.name === 'StakeArrayUpdated');
-  if (!stakeArrayLog) throw new Error(`Stake array not found in logs:${logs}`);
-  return stakeArrayLog.args.stakePercArray;
-};
+// const getStakeArray = (txnAllocator: TransactionAllocator) => {
+//   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
+//   const stakeArrayLog = logs.find((log) => log.name === 'StakeArrayUpdated');
+//   if (!stakeArrayLog) throw new Error(`Stake array not found in logs:${logs}`);
+//   return stakeArrayLog.args.stakePercArray;
+// };
 
-const getCdf = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
+// const getCdf = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
+//   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
+//   const cdfArrayLog = logs.find((log) => log.name === 'CdfArrayUpdated');
+//   if (!cdfArrayLog) throw new Error(`CDF array not found in logs:${logs}`);
+//   return cdfArrayLog.args.cdfArray;
+// };
+
+const getGenericGasConsumption = (
+  txnAllocator: TransactionAllocator,
+  transactionReceipt: ContractReceipt
+) => {
   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-  const cdfArrayLog = logs.find((log) => log.name === 'CdfArrayUpdated');
-  if (!cdfArrayLog) throw new Error(`CDF array not found in logs:${logs}`);
-  return cdfArrayLog.args.cdfArray;
+  const gasLogs = logs.filter((log) => log.name === 'GenericGasConsumed');
+  if (gasLogs.length == 0) throw new Error(`Gas Log array not found in logs:${logs}`);
+  return Object.fromEntries(
+    gasLogs.map((log) => [log.args.label, log.args.gasConsumed.toString()])
+  );
 };
 
 const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) => {
   console.log('Setting up relayers...');
   const amount = ethers.utils.parseEther('1');
   const wallets = [];
+  const gasConsumed = [];
   for (let i = 0; i < count; i++) {
     try {
       const multiplier = Math.floor(Math.random() * 10) + 1;
@@ -68,19 +81,24 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
         .connect(randomWallet)
         .register(stakeArray, amount.mul(multiplier), [randomWallet.address], 'test');
       const receipt = await wait();
-      stakeArray = getStakeArray(txnAllocator, receipt);
-      cdfArray = getCdf(txnAllocator, receipt);
+      stakeArray = await txnAllocator.getStakeArray();
+      cdfArray = await txnAllocator.getCdf();
+      const gasData = getGenericGasConsumption(txnAllocator, receipt);
 
       console.log(`Relayer ${i} registered successfully with ${multiplier} ETH`);
       console.log(`Stake array: ${stakeArray}`);
       console.log(`CDF array: ${cdfArray}`);
 
+      gasConsumed.push({
+        ...gasData,
+        totalGasUsed: receipt.gasUsed.toString(),
+      });
       wallets.push(randomWallet);
     } catch (e) {
       console.log(e);
     }
   }
-  return wallets;
+  return { wallets, gasConsumed };
 };
 
 const getVerificationGasConsumed = async (
@@ -123,13 +141,27 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
 };
 
 (async () => {
-  const csvData: any[] = [];
+  const allocationCsvData: any[] = [];
 
   const { txnAllocator, txMock } = await deploy();
   console.log('Generating transactions...');
   const txns = await generateTransactions(txMock, totalTransactions);
   console.log('Transactions generated');
-  const relayers = await setupRelayers(txnAllocator, totalRelayers);
+  const { wallets: relayers, gasConsumed: registrationGasConsumed } = await setupRelayers(
+    txnAllocator,
+    totalRelayers
+  );
+
+  const gasConsumedCsvData = registrationGasConsumed.map((gas, index) => ({
+    index,
+    relayerCount: index + 1,
+    ...gas,
+  }));
+
+  await createObjectCsvWriter({
+    path: resolve(__dirname, `registration-stats-${totalRelayers}.csv`),
+    header: Object.keys(gasConsumedCsvData[0]).map((key) => ({ id: key, title: key })),
+  }).writeRecords(gasConsumedCsvData);
 
   console.log('Executing transactions...');
   for (let i = 0; i < relayers.length; i++) {
@@ -164,7 +196,7 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
           .toString()}. Tx Hash: ${hash}`
       );
 
-      csvData.push({
+      allocationCsvData.push({
         relayerCount: totalRelayers,
         totalGas: totalGas.toString(),
         executionGas: executionGas.toString(),
@@ -176,6 +208,6 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
 
   await createObjectCsvWriter({
     path: resolve(__dirname, `allocation-stats-${totalRelayers}.csv`),
-    header: Object.keys(csvData[0]).map((key) => ({ id: key, title: key })),
-  }).writeRecords(csvData);
+    header: Object.keys(allocationCsvData[0]).map((key) => ({ id: key, title: key })),
+  }).writeRecords(allocationCsvData);
 })();

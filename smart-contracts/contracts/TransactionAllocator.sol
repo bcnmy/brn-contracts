@@ -96,14 +96,13 @@ contract TransactionAllocator is EIP712, Ownable {
     event Withdraw(address indexed relayer, uint256 amount);
 
     // StakeArrayUpdated
-    event StakeArrayUpdated(
-        uint32[] stakePercArray,
-        bytes32 indexed stakePercArrayHash
-    );
-    event CdfArrayUpdated(uint16[] cdfArray, bytes32 indexed cdfArrayHash);
+    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
+    event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
 
     event ExecutionGasConsumed(uint256 gasConsumed);
     event VerificationFunctionGasConsumed(uint256 gasConsumed);
+
+    event GenericGasConsumed(string label, uint256 gasConsumed);
 
     constructor(
         uint256 blocksPerNode_,
@@ -168,6 +167,7 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     /// @notice register a relayer
+    /// @param _previousStakeArray current stake array for verification
     /// @param _stake amount to be staked
     /// @param _accounts list of accounts that the relayer will use for forwarding tx
     /// @param _endpoint that can be used by any app to send transactions to this relayer
@@ -177,11 +177,11 @@ contract TransactionAllocator is EIP712, Ownable {
         address[] calldata _accounts,
         string memory _endpoint
     ) external verifyStakeArrayHash(_previousStakeArray) {
+        uint256 gas = gasleft();
         require(_accounts.length > 0, "No accounts");
         require(_stake >= MINIMUM_STAKE_AMOUNT);
 
         RelayerInfo storage node = relayerInfo[msg.sender];
-        // TODO: Duplicate stake storage, can be removed
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.index = relayers.length;
@@ -190,7 +190,10 @@ contract TransactionAllocator is EIP712, Ownable {
         }
         relayers.push(msg.sender);
         relayerIndexToRelayer[node.index] = msg.sender;
+        ++relayerCount;
+        emit GenericGasConsumed("registration", gas - gasleft());
 
+        gas = gasleft();
         // Update stake array and hash
         uint256 newStakeArrayLength = _previousStakeArray.length + 1;
         uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
@@ -206,21 +209,38 @@ contract TransactionAllocator is EIP712, Ownable {
         stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
 
         // Update cdf hash
-        (uint16[] memory cdfArray, bytes32 cdfHash) = _stakeArrayToCdf(
-            newStakeArray
-        );
+        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray);
         cdfArrayHash = cdfHash;
-
-        // Update total stake
-        ++relayerCount;
+        emit GenericGasConsumed("hashUpdation", gas - gasleft());
 
         // todo: trasnfer stake amount to be stored in a vault.
-        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
-        emit CdfArrayUpdated(cdfArray, cdfArrayHash);
+        gas = gasleft();
+        emit StakeArrayUpdated(stakeArrayHash);
+        emit CdfArrayUpdated(cdfArrayHash);
         emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
+        emit GenericGasConsumed("events", gas - gasleft());
+    }
+
+    function getStakeArray() public view returns (uint32[] memory) {
+        uint256 length = relayers.length;
+        uint32[] memory stakeArray = new uint32[](length);
+        for (uint256 i = 0; i < length; ) {
+            stakeArray[i] = (relayerInfo[relayers[i]].stake /
+                STAKE_SCALING_FACTOR).toUint32();
+            unchecked {
+                ++i;
+            }
+        }
+        return stakeArray;
+    }
+
+    function getCdf() public view returns (uint16[] memory) {
+        (uint16[] memory cdfArray, ) = _stakeArrayToCdf(getStakeArray());
+        return cdfArray;
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
+    /// @param _previousStakeArray current stake array for verification
     function unRegister(
         uint32[] calldata _previousStakeArray
     ) external verifyStakeArrayHash(_previousStakeArray) {
@@ -260,16 +280,14 @@ contract TransactionAllocator is EIP712, Ownable {
             }
         }
         stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
-        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
+        emit StakeArrayUpdated(stakeArrayHash);
 
         // Update cdf hash
-        (uint16[] memory cdfArray, bytes32 cdfHash) = _stakeArrayToCdf(
-            newStakeArray
-        );
+        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray);
         cdfArrayHash = cdfHash;
 
-        emit StakeArrayUpdated(newStakeArray, stakeArrayHash);
-        emit CdfArrayUpdated(cdfArray, cdfArrayHash);
+        emit StakeArrayUpdated(stakeArrayHash);
+        emit CdfArrayUpdated(cdfArrayHash);
         emit RelayerUnRegistered(msg.sender);
     }
 
