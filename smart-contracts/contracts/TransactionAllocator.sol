@@ -6,12 +6,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "hardhat/console.sol";
 
+import "./interfaces/ITransactionAlloctor.sol";
+
 pragma solidity 0.8.17;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
 
-contract TransactionAllocator is EIP712, Ownable {
+contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     using ECDSA for bytes32;
     using SafeCast for uint256;
 
@@ -155,12 +157,16 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     modifier verifyStakeArrayHash(uint32[] calldata _array) {
-        require(_verifyStakeArrayHash(_array), "Invalid stake array hash");
+        if (!_verifyStakeArrayHash(_array)) {
+            revert InvalidStakeArrayHash();
+        }
         _;
     }
 
     modifier verifyCdfHash(uint16[] calldata _array) {
-        require(_verifyLatestCdfHash(_array), "Invalid cdf array hash");
+        if (!_verifyLatestCdfHash(_array)) {
+            revert InvalidCdfArrayHash();
+        }
         _;
     }
 
@@ -301,8 +307,12 @@ contract TransactionAllocator is EIP712, Ownable {
         address[] calldata _accounts,
         string memory _endpoint
     ) external verifyStakeArrayHash(_previousStakeArray) {
-        require(_accounts.length > 0, "No accounts");
-        require(_stake >= MINIMUM_STAKE_AMOUNT);
+        if (_accounts.length == 0) {
+            revert NoAccountsProvided();
+        }
+        if (_stake < MINIMUM_STAKE_AMOUNT) {
+            revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
+        }
 
         RelayerInfo storage node = relayerInfo[msg.sender];
         node.stake += _stake;
@@ -360,7 +370,9 @@ contract TransactionAllocator is EIP712, Ownable {
 
     function withdraw(address relayer) external {
         WithdrawalInfo memory w = withdrawalInfo[relayer];
-        require(w.amount > 0 && w.time < block.timestamp, "invalid withdrawal");
+        if (!(w.amount > 0 && w.time < block.timestamp)) {
+            revert InvalidWithdrawal(w.amount, w.time, 0, block.timestamp);
+        }
         withdrawalInfo[relayer] = WithdrawalInfo(0, 0);
 
         // todo: send w.amount to relayer
@@ -517,17 +529,20 @@ contract TransactionAllocator is EIP712, Ownable {
         )
     {
         uint256 gasLeft = gasleft();
-        require(_verifyLatestCdfHash(_cdf), "Invalid cdf hash");
-        require(
-            _verifyTransactionAllocation(
+        if (!_verifyLatestCdfHash(_cdf)) {
+            revert InvalidCdfArrayHash();
+        }
+        if (
+            !_verifyTransactionAllocation(
                 _cdf,
                 _cdfIndex,
                 _relayerGenerationIterations,
                 block.number,
                 _reqs
-            ),
-            "invalid relayer window"
-        );
+            )
+        ) {
+            revert InvalidRelayerWindow();
+        }
         // require(verify(req, _signature), "signature does not match request");
         // _nonces[_req.from] = _req.nonce + 1;
         emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
@@ -600,16 +615,15 @@ contract TransactionAllocator is EIP712, Ownable {
                 block.number
             )
         ) {
-            revert("Reporter not selected");
+            revert InvalidRelayerWindowForReporter();
         }
 
         // The Absentee block must not be in the current window
         uint256 currentWindowStartBlock = block.number -
             (block.number % blocksWindow);
-        require(
-            _absentee_blockNumber < currentWindowStartBlock,
-            "Invalid Absentee Block Number"
-        );
+        if (_absentee_blockNumber >= currentWindowStartBlock) {
+            revert InvalidAbsenteeBlockNumber();
+        }
 
         // Verify CDF hash of the Absentee Window
         uint256 absentee_windowId = _windowIdentifier(_absentee_blockNumber);
@@ -620,7 +634,7 @@ contract TransactionAllocator is EIP712, Ownable {
                 _absentee_latestStakeUpdationCdfLogIndex
             )
         ) {
-            revert("Invalid CDF hash");
+            revert InvalidAbsenteeCdfArrayHash();
         }
 
         // Verify Relayer Selection in Absentee Window
@@ -632,7 +646,7 @@ contract TransactionAllocator is EIP712, Ownable {
                 _absentee_blockNumber
             )
         ) {
-            revert("Absentee not selected");
+            revert InvalidRelayeWindowForAbsentee();
         }
 
         // Verify Absence of the relayer
@@ -640,7 +654,7 @@ contract TransactionAllocator is EIP712, Ownable {
             _absentee_cdfIndex
         ];
         if (attendance[absentee_windowId][absentee_relayerAddress]) {
-            revert("Absentee already present");
+            revert AbsenteeWasPresent(absentee_windowId);
         }
 
         // Process penalty
@@ -721,11 +735,12 @@ contract TransactionAllocator is EIP712, Ownable {
         verifyCdfHash(_cdf)
         returns (address[] memory, uint256[] memory)
     {
-        require(_cdf.length > 0, "No relayers registered");
-        require(
-            relayerCount >= relayersPerWindow,
-            "Insufficient relayers registered"
-        );
+        if (_cdf.length == 0) {
+            revert NoRelayersRegistered();
+        }
+        if (relayerCount < relayersPerWindow) {
+            revert InsufficientRelayersRegistered();
+        }
         if (_blockNumber == 0) {
             _blockNumber = block.number;
         }
@@ -735,7 +750,9 @@ contract TransactionAllocator is EIP712, Ownable {
         uint256[] memory cdfIndex = new uint256[](relayersPerWindow);
 
         uint256 cdfLength = _cdf.length;
-        require(_cdf[cdfLength - 1] > 0, "No relayers registered");
+        if (_cdf[cdfLength - 1] == 0) {
+            revert NoRelayersRegistered();
+        }
 
         for (uint256 i = 0; i < relayersPerWindow; ) {
             uint256 randomCdfNumber = _randomCdfNumber(
@@ -785,7 +802,12 @@ contract TransactionAllocator is EIP712, Ownable {
             address[] memory relayersAllocated,
             uint256[] memory relayerStakePrefixSumIndex
         ) = allocateRelayers(_blockNumber, _cdf);
-        require(relayersAllocated.length == relayersPerWindow, "AT101");
+        if (relayersAllocated.length != relayersPerWindow) {
+            revert RelayerAllocationResultLengthMismatch(
+                relayersPerWindow,
+                relayersAllocated.length
+            );
+        }
 
         // Filter the transactions
         uint256 selectedRelayerCdfIndex;
