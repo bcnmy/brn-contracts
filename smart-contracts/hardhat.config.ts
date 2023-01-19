@@ -1,6 +1,6 @@
 import { HardhatUserConfig } from 'hardhat/config';
 import '@nomicfoundation/hardhat-toolbox';
-// import '@tenderly/hardhat-tenderly';
+import '@tenderly/hardhat-tenderly';
 import 'hardhat-contract-sizer';
 import * as dotenv from 'dotenv';
 

@@ -1,6 +1,6 @@
 import { BigNumber, BigNumberish, ContractReceipt, Wallet } from 'ethers';
 import { AbiCoder, hexValue, parseEther } from 'ethers/lib/utils';
-import { ethers, network } from 'hardhat';
+import { ethers, network, tenderly } from 'hardhat';
 import {
   TransactionAllocator,
   TransactionMock,
@@ -38,29 +38,21 @@ const deploy = async () => {
   return { txnAllocator, txMock };
 };
 
-// const getStakeArray = (txnAllocator: TransactionAllocator) => {
-//   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-//   const stakeArrayLog = logs.find((log) => log.name === 'StakeArrayUpdated');
-//   if (!stakeArrayLog) throw new Error(`Stake array not found in logs:${logs}`);
-//   return stakeArrayLog.args.stakePercArray;
-// };
-
-// const getCdf = (txnAllocator: TransactionAllocator, transactionReceipt: ContractReceipt) => {
-//   const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-//   const cdfArrayLog = logs.find((log) => log.name === 'CdfArrayUpdated');
-//   if (!cdfArrayLog) throw new Error(`CDF array not found in logs:${logs}`);
-//   return cdfArrayLog.args.cdfArray;
-// };
-
 const getGenericGasConsumption = (
   txnAllocator: TransactionAllocator,
   transactionReceipt: ContractReceipt
 ): Record<string, string> => {
-  const logs = transactionReceipt.logs.map((log) => txnAllocator.interface.parseLog(log));
-  const gasLogs = logs.filter((log) => log.name === 'GenericGasConsumed');
+  const logs = transactionReceipt.logs
+    .map((log) => {
+      try {
+        return txnAllocator.interface.parseLog(log);
+      } catch (e) {}
+    })
+    .filter((log) => log);
+  const gasLogs = logs.filter((log) => log!.name === 'GenericGasConsumed');
   if (gasLogs.length == 0) throw new Error(`Gas Log array not found in logs:${logs}`);
   return Object.fromEntries(
-    gasLogs.map((log) => [log.args.label, log.args.gasConsumed.toString()])
+    gasLogs.map((log) => [log!.args.label, log!.args.gasConsumed.toString()])
   );
 };
 
@@ -105,10 +97,10 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
   return { wallets, gasConsumed };
 };
 
-const getVerificationGasConsumed = async (
+const getVerificationGasConsumed = (
   txnAllocator: TransactionAllocator,
   transactionReceipt: ContractReceipt
-) => {
+): Record<string, BigNumberish> => {
   const totalGas = transactionReceipt.gasUsed;
   const logs = transactionReceipt.logs
     .map((log) => {
@@ -117,23 +109,9 @@ const getVerificationGasConsumed = async (
       } catch (e) {}
     })
     .filter((log) => log);
-  const executionGasLog = logs.find((log) => log!.name === 'ExecutionGasConsumed');
-  const verificationFunctionGasConsumedLog = logs.find(
-    (log) => log!.name === 'VerificationFunctionGasConsumed'
-  );
-  if (!executionGasLog) throw new Error(`Execution gas log not found in logs:${logs}`);
-  if (!verificationFunctionGasConsumedLog)
-    throw new Error(`Verification function gas log not found in logs:${logs}`);
-  const executionGas = executionGasLog.args.gasConsumed;
-  const verificationFunctionGas = verificationFunctionGasConsumedLog.args.gasConsumed;
-  const calldataGas = totalGas.sub(executionGas).sub(verificationFunctionGas).sub(21000);
-  console.log(
-    `Total Gas: ${totalGas.toString()}, Execution gas: ${executionGas.toString()}, Verification gas: ${verificationFunctionGas.toString()}`
-  );
+  const genericGasConsumedData = getGenericGasConsumption(txnAllocator, transactionReceipt);
   return {
-    calldataGas,
-    verificationFunctionGas,
-    executionGas,
+    ...genericGasConsumedData,
     totalGas,
   };
 };
@@ -209,14 +187,12 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
       );
     const receipt = await wait();
     if (receipt.status === 0) throw new Error(`Transaction failed: ${receipt}`);
-    const { totalGas, executionGas, verificationFunctionGas, calldataGas } =
+    const { totalGas, VerificationGas, ExecutionGas, OtherOverhead } =
       await getVerificationGasConsumed(txnAllocator, receipt);
     console.log(
       `Verification Gas used for transaction batch of length ${
         txnRequests.length
-      } for ${i}th relayer: ${verificationFunctionGas
-        .add(calldataGas)
-        .toString()}. Tx Hash: ${hash}`
+      } for ${i}th relayer: ${VerificationGas.toString()}. Tx Hash: ${hash}`
     );
 
     allocationCsvData.push({
@@ -224,10 +200,15 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
       generationIterationCount: relayerGenerationIterationDeduplicated.length,
       txCount: txnRequests.length,
       totalGas: totalGas.toString(),
-      executionGas: executionGas.toString(),
-      verificationGas: verificationFunctionGas.toString(),
-      verificationGasPerTx: verificationFunctionGas.div(txnRequests.length).toString(),
-      calldataGas: calldataGas.toString(),
+      executionGas: ExecutionGas.toString(),
+      verificationGas: VerificationGas.toString(),
+      verificationGasPerTx: BigNumber.from(VerificationGas).div(txnRequests.length).toString(),
+      otherOverhead: OtherOverhead.toString(),
+      totalOverhead: BigNumber.from(VerificationGas).add(OtherOverhead).toString(),
+      totalOverheadPerTx: BigNumber.from(VerificationGas)
+        .add(OtherOverhead)
+        .div(txnRequests.length)
+        .toString(),
     });
   }
 

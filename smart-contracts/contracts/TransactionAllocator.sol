@@ -106,9 +106,6 @@ contract TransactionAllocator is EIP712, Ownable {
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
     event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
 
-    event ExecutionGasConsumed(uint256 gasConsumed);
-    event VerificationFunctionGasConsumed(uint256 gasConsumed);
-
     event GenericGasConsumed(string label, uint256 gasConsumed);
 
     constructor(
@@ -489,7 +486,10 @@ contract TransactionAllocator is EIP712, Ownable {
         );
         // require(verify(req, _signature), "signature does not match request");
         // _nonces[_req.from] = _req.nonce + 1;
-        emit VerificationFunctionGasConsumed(gasLeft - gasleft());
+        emit GenericGasConsumed(
+            "VerificationGas",
+            gasLeft - gasleft()
+        );
 
         gasLeft = gasleft();
         uint256 length = _reqs.length;
@@ -520,11 +520,13 @@ contract TransactionAllocator is EIP712, Ownable {
                 invalid()
             }
         }
-        emit ExecutionGasConsumed(gasLeft - gasleft());
+        emit GenericGasConsumed("ExecutionGas", gasLeft - gasleft());
 
+        gasLeft = gasleft();
         attendance[_windowIdentifier(block.number)][
             relayerIndexToRelayer[_cdfIndex]
         ] = true;
+        emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         return (successes, returndatas);
     }
