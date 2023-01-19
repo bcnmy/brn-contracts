@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "hardhat/console.sol";
 
-pragma solidity 0.8.13;
+pragma solidity 0.8.17;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
@@ -52,6 +52,8 @@ contract TransactionAllocator is EIP712, Ownable {
 
     uint256 constant CDF_PRECISION_MULTIPLIER = 10 ** 4;
     uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
+    // % * 100
+    uint256 constant ABSENCE_PENATLY = 250;
 
     /// Maps relayer main address to info
     mapping(address => RelayerInfo) relayerInfo;
@@ -119,11 +121,30 @@ contract TransactionAllocator is EIP712, Ownable {
         stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
     }
 
-    function _verifyCdfHash(
+    function _verifyLatestCdfHash(
         uint16[] calldata _array
     ) internal view returns (bool) {
         return
             cdfHashUpdateLog[cdfHashUpdateLog.length - 1].cdfHash ==
+            keccak256(abi.encodePacked(_array));
+    }
+
+    function _verifyPrevCdfHash(
+        uint16[] calldata _array,
+        uint256 _windowId,
+        uint256 _cdfLogIndex
+    ) internal view returns (bool) {
+        // Validate _cdfLogIndex
+        if (
+            !(cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId &&
+                (_cdfLogIndex == cdfHashUpdateLog.length - 1 ||
+                    cdfHashUpdateLog[_cdfLogIndex + 1].windowId > _windowId))
+        ) {
+            return false;
+        }
+
+        return
+            cdfHashUpdateLog[_cdfLogIndex].cdfHash ==
             keccak256(abi.encodePacked(_array));
     }
 
@@ -139,22 +160,29 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     modifier verifyCdfHash(uint16[] calldata _array) {
-        require(_verifyCdfHash(_array), "Invalid cdf array hash");
+        require(_verifyLatestCdfHash(_array), "Invalid cdf array hash");
         _;
     }
 
     function _stakeArrayToCdf(
-        uint32[] memory _stakeArray,
-        uint256 _totalStakeSum
+        uint32[] memory _stakeArray
     ) internal pure returns (uint16[] memory, bytes32 cdfHash) {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
+        uint256 totalStakeSum = 0;
         uint256 length = _stakeArray.length;
+
+        for (uint256 i = 0; i < length; ) {
+            totalStakeSum += _stakeArray[i];
+            unchecked {
+                ++i;
+            }
+        }
 
         // Scale the values to get the CDF
         uint256 sum = 0;
         for (uint256 i = 0; i < length; ) {
             sum += _stakeArray[i];
-            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / _totalStakeSum)
+            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum)
                 .toUint16();
             unchecked {
                 ++i;
@@ -164,71 +192,84 @@ contract TransactionAllocator is EIP712, Ownable {
         return (cdf, keccak256(abi.encodePacked(cdf)));
     }
 
-    /// @notice register a relayer
-    /// @param _previousStakeArray current stake array for verification
-    /// @param _stake amount to be staked
-    /// @param _accounts list of accounts that the relayer will use for forwarding tx
-    /// @param _endpoint that can be used by any app to send transactions to this relayer
-    function register(
-        uint32[] calldata _previousStakeArray,
-        uint256 _stake,
-        address[] calldata _accounts,
-        string memory _endpoint
-    ) external verifyStakeArrayHash(_previousStakeArray) {
-        uint256 gas = gasleft();
-        require(_accounts.length > 0, "No accounts");
-        require(_stake >= MINIMUM_STAKE_AMOUNT);
+    function _appendStake(
+        uint32[] calldata _stakeArray,
+        uint256 _stake
+    ) internal pure returns (uint32[] memory) {
+        uint256 stakeArrayLength = _stakeArray.length;
+        uint32[] memory newStakeArray = new uint32[](stakeArrayLength + 1);
 
-        RelayerInfo storage node = relayerInfo[msg.sender];
-        node.stake += _stake;
-        node.endpoint = _endpoint;
-        node.index = relayerCount;
-        for (uint256 i = 0; i < _accounts.length; i++) {
-            node.isAccount[_accounts[i]] = true;
-        }
-        relayerIndexToRelayer[node.index] = msg.sender;
-        ++relayerCount;
-        emit GenericGasConsumed("registration", gas - gasleft());
-
-        uint256 totalStakeSum = _stake / STAKE_SCALING_FACTOR;
-
-        uint256 newStakeArrayLength = _previousStakeArray.length + 1;
-        uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
-        gas = gasleft();
-        // Update stake array and hash
         // TODO: can this be optimized using calldatacopy?
-        uint256 internalGas = gasleft();
-        for (uint256 i = 0; i < newStakeArrayLength - 1; ) {
-            newStakeArray[i] = _previousStakeArray[i];
-            totalStakeSum += _previousStakeArray[i];
+        for (uint256 i = 0; i < stakeArrayLength; ) {
+            newStakeArray[i] = _stakeArray[i];
             unchecked {
                 ++i;
             }
         }
-        emit GenericGasConsumed("stakeArrayCopy", internalGas - gasleft());
-
-        newStakeArray[newStakeArrayLength - 1] = (_stake / STAKE_SCALING_FACTOR)
+        newStakeArray[stakeArrayLength] = (_stake / STAKE_SCALING_FACTOR)
             .toUint32();
-        stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
+
+        return newStakeArray;
+    }
+
+    function _removeStake(
+        uint32[] calldata _stakeArray,
+        uint256 _index
+    ) internal pure returns (uint32[] memory) {
+        uint256 newStakeArrayLength = _stakeArray.length - 1;
+        uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
+
+        // TODO: can this be optimized using calldatacopy?
+        for (uint256 i = 0; i < newStakeArrayLength; ) {
+            if (i == _index) {
+                // Remove the node's stake from the array by substituting it with the last element
+                newStakeArray[i] = _stakeArray[newStakeArrayLength];
+            } else {
+                newStakeArray[i] = _stakeArray[i];
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        return newStakeArray;
+    }
+
+    function _decreaseStake(
+        uint32[] calldata _stakeArray,
+        uint256 _index,
+        uint32 _scaledAmount
+    ) internal pure returns (uint32[] memory) {
+        // TODO: Is this optimal?
+        uint32[] memory newStakeArray = _stakeArray;
+        newStakeArray[_index] = newStakeArray[_index] - _scaledAmount;
+        return newStakeArray;
+    }
+
+    function _updateStakeAccounting(uint32[] memory _newStakeArray) internal {
+        // Update Stake Array Hash
+        stakeArrayHash = keccak256(abi.encodePacked(_newStakeArray));
 
         // Update cdf hash
-        internalGas = gasleft();
-        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray, totalStakeSum);
-        emit GenericGasConsumed("stakeArrayToCdf", internalGas - gasleft());
-        cdfHashUpdateLog.push(
-            CdfHashUpdateInfo({
-                windowId: _windowIdentifier(block.number),
-                cdfHash: cdfHash
-            })
-        );
-        emit GenericGasConsumed("hashUpdation", gas - gasleft());
+        (, bytes32 cdfHash) = _stakeArrayToCdf(_newStakeArray);
+        uint256 currentWindowId = _windowIdentifier(block.number);
+        if (
+            cdfHashUpdateLog.length == 0 ||
+            cdfHashUpdateLog[cdfHashUpdateLog.length - 1].windowId !=
+            currentWindowId
+        ) {
+            cdfHashUpdateLog.push(
+                CdfHashUpdateInfo({
+                    windowId: _windowIdentifier(block.number),
+                    cdfHash: cdfHash
+                })
+            );
+        } else {
+            cdfHashUpdateLog[cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
+        }
 
-        // todo: trasnfer stake amount to be stored in a vault.
-        gas = gasleft();
         emit StakeArrayUpdated(stakeArrayHash);
         emit CdfArrayUpdated(cdfHash);
-        emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
-        emit GenericGasConsumed("events", gas - gasleft());
     }
 
     function getStakeArray() public view returns (uint32[] memory) {
@@ -245,20 +286,43 @@ contract TransactionAllocator is EIP712, Ownable {
     }
 
     function getCdf() public view returns (uint16[] memory) {
-        uint32[] memory stakeArray = getStakeArray();
-        uint256 totalStakeSum = 0;
-        uint256 length = stakeArray.length;
-        for (uint256 i = 0; i < length; ) {
-            totalStakeSum += stakeArray[i];
-            unchecked {
-                ++i;
-            }
-        }
-        (uint16[] memory cdfArray, ) = _stakeArrayToCdf(
-            stakeArray,
-            totalStakeSum
-        );
+        (uint16[] memory cdfArray, ) = _stakeArrayToCdf(getStakeArray());
         return cdfArray;
+    }
+
+    /// @notice register a relayer
+    /// @param _previousStakeArray current stake array for verification
+    /// @param _stake amount to be staked
+    /// @param _accounts list of accounts that the relayer will use for forwarding tx
+    /// @param _endpoint that can be used by any app to send transactions to this relayer
+    function register(
+        uint32[] calldata _previousStakeArray,
+        uint256 _stake,
+        address[] calldata _accounts,
+        string memory _endpoint
+    ) external verifyStakeArrayHash(_previousStakeArray) {
+        require(_accounts.length > 0, "No accounts");
+        require(_stake >= MINIMUM_STAKE_AMOUNT);
+
+        RelayerInfo storage node = relayerInfo[msg.sender];
+        node.stake += _stake;
+        node.endpoint = _endpoint;
+        node.index = relayerCount;
+        for (uint256 i = 0; i < _accounts.length; i++) {
+            node.isAccount[_accounts[i]] = true;
+        }
+        relayerIndexToRelayer[node.index] = msg.sender;
+        ++relayerCount;
+
+        // Update stake array and hash
+        uint32[] memory newStakeArray = _appendStake(
+            _previousStakeArray,
+            _stake
+        );
+        _updateStakeAccounting(newStakeArray);
+
+        // TODO: trasnfer stake amount to be stored in a vault.
+        emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
@@ -286,35 +350,11 @@ contract TransactionAllocator is EIP712, Ownable {
         );
 
         // Update stake percentages array and hash
-        // TODO: can this be optimized using calldatacopy?
-        uint32[] memory newStakeArray = new uint32[](n);
-        uint256 totalStakeSum = 0;
-        for (uint256 i = 0; i < n; ) {
-            if (i == nodeIndex) {
-                // Remove the node's stake from the array by substituting it with the last element
-                newStakeArray[i] = _previousStakeArray[n];
-            } else {
-                newStakeArray[i] = _previousStakeArray[i];
-            }
-            totalStakeSum += newStakeArray[i];
-            unchecked {
-                ++i;
-            }
-        }
-        stakeArrayHash = keccak256(abi.encodePacked(newStakeArray));
-        emit StakeArrayUpdated(stakeArrayHash);
-
-        // Update cdf hash
-        (, bytes32 cdfHash) = _stakeArrayToCdf(newStakeArray, totalStakeSum);
-        cdfHashUpdateLog.push(
-            CdfHashUpdateInfo({
-                windowId: _windowIdentifier(block.number),
-                cdfHash: cdfHash
-            })
+        uint32[] memory newStakeArray = _removeStake(
+            _previousStakeArray,
+            nodeIndex
         );
-
-        emit StakeArrayUpdated(stakeArrayHash);
-        emit CdfArrayUpdated(cdfHash);
+        _updateStakeAccounting(newStakeArray);
         emit RelayerUnRegistered(msg.sender);
     }
 
@@ -331,7 +371,8 @@ contract TransactionAllocator is EIP712, Ownable {
     function _verifyRelayerSelection(
         uint16[] calldata _cdf,
         uint256 _cdfIndex,
-        uint256[] calldata _relayerGenerationIterations
+        uint256[] calldata _relayerGenerationIterations,
+        uint256 _blockNumber
     ) internal view returns (bool) {
         uint256 iterationCount = _relayerGenerationIterations.length;
         uint256 stakeSum = _cdf[_cdf.length - 1];
@@ -348,7 +389,7 @@ contract TransactionAllocator is EIP712, Ownable {
 
             // Verify if correct stake prefix sum index has been provided
             uint256 randomRelayerStake = _randomCdfNumber(
-                block.number,
+                _blockNumber,
                 relayerGenerationIteration,
                 stakeSum
             );
@@ -382,13 +423,15 @@ contract TransactionAllocator is EIP712, Ownable {
         uint16[] calldata _cdf,
         uint256 _cdfIndex,
         uint256[] calldata _relayerGenerationIteration,
+        uint256 _blockNumber,
         ForwardRequest[] calldata _txs
     ) internal view returns (bool) {
         if (
             !_verifyRelayerSelection(
                 _cdf,
                 _cdfIndex,
-                _relayerGenerationIteration
+                _relayerGenerationIteration,
+                _blockNumber
             )
         ) {
             return false;
@@ -474,22 +517,20 @@ contract TransactionAllocator is EIP712, Ownable {
         )
     {
         uint256 gasLeft = gasleft();
-        require(_verifyCdfHash(_cdf), "Invalid cdf hash");
+        require(_verifyLatestCdfHash(_cdf), "Invalid cdf hash");
         require(
             _verifyTransactionAllocation(
                 _cdf,
                 _cdfIndex,
                 _relayerGenerationIterations,
+                block.number,
                 _reqs
             ),
             "invalid relayer window"
         );
         // require(verify(req, _signature), "signature does not match request");
         // _nonces[_req.from] = _req.nonce + 1;
-        emit GenericGasConsumed(
-            "VerificationGas",
-            gasLeft - gasleft()
-        );
+        emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
 
         gasLeft = gasleft();
         uint256 length = _reqs.length;
@@ -500,6 +541,7 @@ contract TransactionAllocator is EIP712, Ownable {
         for (uint256 i = 0; i < length; ) {
             ForwardRequest calldata _req = _reqs[i];
 
+            // TODO: Check for success
             (bool success, bytes memory returndata) = _req.to.call{
                 gas: _req.gas,
                 value: _req.value
@@ -531,11 +573,88 @@ contract TransactionAllocator is EIP712, Ownable {
         return (successes, returndatas);
     }
 
-    function _processAbsenceProof(
-        uint16[] calldata _cdf,
-        uint256 _relayerGenerationIteration,
-        uint256 _cdfIndex
-    ) internal {}
+    function processAbsenceProof(
+        // Reporter selection proof in current window
+        uint16[] calldata _reporter_cdf,
+        uint256[] calldata _reporter_relayerGenerationIterations,
+        uint256 _reporter_cdfIndex,
+        // Absentee selection proof in arbitrary past window
+        uint256 _absentee_blockNumber,
+        uint256 _absentee_latestStakeUpdationCdfLogIndex,
+        uint16[] calldata _absentee_cdf,
+        uint256[] calldata _absentee_relayerGenerationIterations,
+        uint256 _absentee_cdfIndex,
+        // Other stuff
+        uint32[] calldata _currentStakeArray
+    )
+        public
+        verifyCdfHash(_reporter_cdf)
+        verifyStakeArrayHash(_currentStakeArray)
+    {
+        // Verify Reporter Selection in Current Window
+        if (
+            !_verifyRelayerSelection(
+                _reporter_cdf,
+                _reporter_cdfIndex,
+                _reporter_relayerGenerationIterations,
+                block.number
+            )
+        ) {
+            revert("Reporter not selected");
+        }
+
+        // The Absentee block must not be in the current window
+        uint256 currentWindowStartBlock = block.number -
+            (block.number % blocksWindow);
+        require(
+            _absentee_blockNumber < currentWindowStartBlock,
+            "Invalid Absentee Block Number"
+        );
+
+        // Verify CDF hash of the Absentee Window
+        uint256 absentee_windowId = _windowIdentifier(_absentee_blockNumber);
+        if (
+            !_verifyPrevCdfHash(
+                _absentee_cdf,
+                absentee_windowId,
+                _absentee_latestStakeUpdationCdfLogIndex
+            )
+        ) {
+            revert("Invalid CDF hash");
+        }
+
+        // Verify Relayer Selection in Absentee Window
+        if (
+            !_verifyRelayerSelection(
+                _absentee_cdf,
+                _absentee_cdfIndex,
+                _absentee_relayerGenerationIterations,
+                _absentee_blockNumber
+            )
+        ) {
+            revert("Absentee not selected");
+        }
+
+        // Verify Absence of the relayer
+        address absentee_relayerAddress = relayerIndexToRelayer[
+            _absentee_cdfIndex
+        ];
+        if (attendance[absentee_windowId][absentee_relayerAddress]) {
+            revert("Absentee already present");
+        }
+
+        // Process penalty
+        uint32 penalty = ((_currentStakeArray[_absentee_cdfIndex] *
+            ABSENCE_PENATLY) / 10000).toUint32();
+        uint32[] memory newStakeArray = _decreaseStake(
+            _currentStakeArray,
+            _absentee_cdfIndex,
+            penalty
+        );
+        _updateStakeAccounting(newStakeArray);
+
+        // TODO: Sent reporter the penalty as reward
+    }
 
     function _windowIdentifier(
         uint256 _blockNumber

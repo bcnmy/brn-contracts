@@ -75,7 +75,7 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
       const receipt = await wait();
       stakeArray = await txnAllocator.getStakeArray();
       cdfArray = await txnAllocator.getCdf();
-      const gasData = getGenericGasConsumption(txnAllocator, receipt);
+      // const gasData = getGenericGasConsumption(txnAllocator, receipt);
       // const totalGasFromEvents = Object.values(gasData).reduce((a: string, b: string) =>
       //   BigNumber.from(a).add(b).toString()
       // );
@@ -85,7 +85,7 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
       console.log(`CDF array: ${cdfArray}`);
 
       gasConsumed.push({
-        ...gasData,
+        // ...gasData,
         totalGas: receipt.gasUsed.toString(),
         // calldataGas: receipt.gasUsed.sub(totalGasFromEvents).toString(),
       });
