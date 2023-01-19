@@ -36,6 +36,9 @@ const config: HardhatUserConfig = {
       url: process.env.GOERLI_URL || '',
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
+    hardhat: {
+      blockGasLimit: 100000000,
+    }
   },
   gasReporter: {
     enabled: true,

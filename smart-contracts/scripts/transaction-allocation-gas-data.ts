@@ -10,9 +10,9 @@ import { createObjectCsvWriter } from 'csv-writer';
 import { resolve } from 'path';
 
 const windowLength = 1000000;
-const totalTransactions = 20;
+const totalTransactions = 100;
 const totalRelayers = 100;
-const relayersPerWindow = 5;
+const relayersPerWindow = 10;
 
 let stakeArray: BigNumberish[] = [];
 let cdfArray: BigNumberish[] = [];
@@ -171,43 +171,64 @@ const generateTransactions = async (txMock: TransactionMock, count: number) => {
   for (let i = 0; i < relayers.length; i++) {
     const relayer = relayers[i];
     const blockNumber = await ethers.provider.getBlockNumber();
-    const [txnAllocated, selectedRelayerPdfIndex, relayerGenerationIteration] =
+    const [txnAllocated, relayerGenerationIteration, selectedRelayerCdfIndex] =
       await txnAllocator.allocateTransaction(relayer.address, blockNumber, txns, cdfArray);
+
     console.log(`Alloted ${txnAllocated.length} transactions to ${i}th relayer ${relayer.address}`);
-    for (let j = 0; j < txnAllocated.length; j++) {
-      const data = txnAllocated[j];
-      const { wait, hash } = await txnAllocator.connect(relayer).execute(
-        {
-          from: relayer.address,
-          to: txMock.address,
-          value: 0,
-          gas: 1000000,
-          nonce: 0,
-          data,
-        },
+
+    if (txnAllocated.length === 0) {
+      continue;
+    }
+
+    const txnRequests = txnAllocated.map((txn) => ({
+      from: relayer.address,
+      to: txMock.address,
+      value: 0,
+      gas: 1000000,
+      nonce: 0,
+      data: txn,
+    }));
+
+    const relayerGenerationIterationDeduplicated = relayerGenerationIteration
+      .map((x) => x.toNumber())
+      .filter((value, index, self) => self.indexOf(value) === index);
+
+    console.log(
+      `Relayer generation iteration for ${i}th relayer: ${relayerGenerationIterationDeduplicated}`
+    );
+    console.log(`Transaction batch of length ${txnRequests.length} for ${i}th relayer`);
+
+    const { wait, hash } = await txnAllocator
+      .connect(relayer)
+      .execute(
+        txnRequests,
         new AbiCoder().encode(['uint256'], [0]),
         cdfArray,
-        relayerGenerationIteration[j],
-        selectedRelayerPdfIndex[j]
+        relayerGenerationIterationDeduplicated,
+        selectedRelayerCdfIndex
       );
-      const receipt = await wait();
-      if (receipt.status === 0) throw new Error(`Transaction failed: ${receipt}`);
-      const { totalGas, executionGas, verificationFunctionGas, calldataGas } =
-        await getVerificationGasConsumed(txnAllocator, receipt);
-      console.log(
-        `Verification Gas used for ${j}th transaction for ${i}th relayer: ${verificationFunctionGas
-          .add(calldataGas)
-          .toString()}. Tx Hash: ${hash}`
-      );
+    const receipt = await wait();
+    if (receipt.status === 0) throw new Error(`Transaction failed: ${receipt}`);
+    const { totalGas, executionGas, verificationFunctionGas, calldataGas } =
+      await getVerificationGasConsumed(txnAllocator, receipt);
+    console.log(
+      `Verification Gas used for transaction batch of length ${
+        txnRequests.length
+      } for ${i}th relayer: ${verificationFunctionGas
+        .add(calldataGas)
+        .toString()}. Tx Hash: ${hash}`
+    );
 
-      allocationCsvData.push({
-        relayerCount: totalRelayers,
-        totalGas: totalGas.toString(),
-        executionGas: executionGas.toString(),
-        verificationFunctionGasConsumed: verificationFunctionGas.toString(),
-        calldataGas: calldataGas.toString(),
-      });
-    }
+    allocationCsvData.push({
+      relayerCount: totalRelayers,
+      generationIterationCount: relayerGenerationIterationDeduplicated.length,
+      txCount: txnRequests.length,
+      totalGas: totalGas.toString(),
+      executionGas: executionGas.toString(),
+      verificationGas: verificationFunctionGas.toString(),
+      verificationGasPerTx: verificationFunctionGas.div(txnRequests.length).toString(),
+      calldataGas: calldataGas.toString(),
+    });
   }
 
   await createObjectCsvWriter({
