@@ -84,9 +84,9 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
       stakeArray = await txnAllocator.getStakeArray();
       cdfArray = await txnAllocator.getCdf();
       const gasData = getGenericGasConsumption(txnAllocator, receipt);
-      const totalGasFromEvents = Object.values(gasData).reduce((a: string, b: string) =>
-        BigNumber.from(a).add(b).toString()
-      );
+      // const totalGasFromEvents = Object.values(gasData).reduce((a: string, b: string) =>
+      //   BigNumber.from(a).add(b).toString()
+      // );
 
       console.log(`Relayer ${i} registered successfully with ${multiplier} ETH`);
       console.log(`Stake array: ${stakeArray}`);
@@ -95,7 +95,7 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
       gasConsumed.push({
         ...gasData,
         totalGas: receipt.gasUsed.toString(),
-        calldataGas: receipt.gasUsed.sub(totalGasFromEvents).toString(),
+        // calldataGas: receipt.gasUsed.sub(totalGasFromEvents).toString(),
       });
       wallets.push(randomWallet);
     } catch (e) {
