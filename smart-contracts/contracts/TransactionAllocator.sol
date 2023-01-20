@@ -658,6 +658,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         }
 
         // Process penalty
+        // TODO: Use absolute value
         uint32 penalty = ((_currentStakeArray[_absentee_cdfIndex] *
             ABSENCE_PENATLY) / 10000).toUint32();
         uint32[] memory newStakeArray = _decreaseStake(
