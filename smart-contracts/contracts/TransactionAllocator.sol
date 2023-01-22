@@ -56,6 +56,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
     // % * 100
     uint256 constant ABSENCE_PENATLY = 250;
+    uint256 constant ABSENTEE_PROOF_REPORTER_CDF_INDEX = 0;
 
     /// Maps relayer main address to info
     mapping(address => RelayerInfo) relayerInfo;
@@ -449,8 +450,6 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
             return false;
         }
 
-        console.log("Relayer selected is correct");
-
         // Store all relayerGenerationIterations in a bitmap to efficiently check for existence in _relayerGenerationIteration
         // ASSUMPTION: Max no. of iterations required to generate 'relayersPerWindow' unique relayers <= 256
         uint256 bitmap = 0;
@@ -592,7 +591,6 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         // Reporter selection proof in current window
         uint16[] calldata _reporter_cdf,
         uint256[] calldata _reporter_relayerGenerationIterations,
-        uint256 _reporter_cdfIndex,
         // Absentee selection proof in arbitrary past window
         uint256 _absentee_blockNumber,
         uint256 _absentee_latestStakeUpdationCdfLogIndex,
@@ -610,7 +608,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         if (
             !_verifyRelayerSelection(
                 _reporter_cdf,
-                _reporter_cdfIndex,
+                ABSENTEE_PROOF_REPORTER_CDF_INDEX,
                 _reporter_relayerGenerationIterations,
                 block.number
             )
@@ -658,9 +656,8 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         }
 
         // Process penalty
-        // TODO: Use absolute value
-        uint32 penalty = ((_currentStakeArray[_absentee_cdfIndex] *
-            ABSENCE_PENATLY) / 10000).toUint32();
+        uint32 penalty = ((relayerInfo[absentee_relayerAddress].stake *
+            ABSENCE_PENATLY) / (10000 * STAKE_SCALING_FACTOR)).toUint32();
         uint32[] memory newStakeArray = _decreaseStake(
             _currentStakeArray,
             _absentee_cdfIndex,
@@ -668,7 +665,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         );
         _updateStakeAccounting(newStakeArray);
 
-        // TODO: Sent reporter the penalty as reward
+        // TODO: Send reporter the penalty as reward
     }
 
     function _windowIdentifier(

@@ -1,14 +1,22 @@
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
+import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { AbiCoder } from 'ethers/lib/utils';
+import { BigNumber, BigNumberish } from 'ethers';
+import { AbiCoder, keccak256, parseEther, solidityPack } from 'ethers/lib/utils';
 import { ethers } from 'hardhat';
+import { TransactionAllocator__factory, TransactionMock__factory } from '../typechain-types';
+
+const IRelayer = {
+  main: SignerWithAddress,
+  relayers: Array<SignerWithAddress>,
+};
 
 describe('BRN', function () {
   const blocksWindow = 10;
   const withdrawDelay = 1;
   const relayersPerWindow = 2;
 
-  async function deployTxnAllocator() {
+  async function deploy() {
     const [
       deployer,
       relayer1,
@@ -22,47 +30,66 @@ describe('BRN', function () {
       relayer3Acc2,
     ] = await ethers.getSigners();
 
-    const TxnAllocator = await ethers.getContractFactory('TransactionAllocator');
-    const txnAllocator = await TxnAllocator.deploy(blocksWindow, withdrawDelay, relayersPerWindow);
+    const txnAllocator = await new TransactionAllocator__factory(deployer).deploy(
+      blocksWindow,
+      withdrawDelay,
+      relayersPerWindow
+    );
 
-    const TransactionMock = await ethers.getContractFactory('TransactionMock');
-    const transactionMock = await TransactionMock.deploy();
+    const transactionMock = await new TransactionMock__factory(deployer).deploy();
 
     return {
-      relayer1,
-      relayer1Acc1,
-      relayer1Acc2,
-      relayer2,
-      relayer2Acc1,
-      relayer2Acc2,
-      relayer3,
-      relayer3Acc1,
-      relayer3Acc2,
+      relayers: [
+        {
+          main: relayer1,
+          accounts: [relayer1Acc1, relayer1Acc2],
+        },
+        {
+          main: relayer2,
+          accounts: [relayer2Acc1, relayer2Acc2],
+        },
+        {
+          main: relayer3,
+          accounts: [relayer3Acc1, relayer3Acc2],
+        },
+      ],
       blocksWindow,
       withdrawDelay,
       relayersPerWindow,
-      TxnAllocator,
       txnAllocator,
-      TransactionMock,
       transactionMock,
     };
   }
 
+  async function deployAndConfigure(relayerStake: BigNumberish[]) {
+    const deployData = await loadFixture(deploy);
+    let i = 0;
+    for (const relayer of deployData.relayers) {
+      await deployData.txnAllocator.connect(relayer.main).register(
+        await deployData.txnAllocator.getStakeArray(),
+        relayerStake[i++],
+        relayer.accounts.map((acc) => acc.address),
+        'test-endpoint'
+      );
+    }
+    return deployData;
+  }
+
   describe('Deployment', function () {
     it('Should set the right blocksWindow', async function () {
-      const { blocksWindow, txnAllocator } = await loadFixture(deployTxnAllocator);
+      const { blocksWindow, txnAllocator } = await loadFixture(deploy);
 
       expect(await txnAllocator.blocksWindow()).to.equal(blocksWindow);
     });
 
     it('Should set the right withdrawDelay', async function () {
-      const { withdrawDelay, txnAllocator } = await loadFixture(deployTxnAllocator);
+      const { withdrawDelay, txnAllocator } = await loadFixture(deploy);
 
       expect(await txnAllocator.withdrawDelay()).to.equal(withdrawDelay);
     });
 
     it('Should set the right realyersPerWindow', async function () {
-      const { relayersPerWindow, txnAllocator } = await loadFixture(deployTxnAllocator);
+      const { relayersPerWindow, txnAllocator } = await loadFixture(deploy);
 
       expect(await txnAllocator.relayersPerWindow()).to.equal(relayersPerWindow);
     });
@@ -70,22 +97,11 @@ describe('BRN', function () {
 
   describe('Registration', function () {
     it('Should register a relayer', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
+      const { relayers, txnAllocator } = await loadFixture(deploy);
+      const relayerAccounts = relayers[0].accounts.map((acc) => acc.address);
       const txn = await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
+        .connect(relayers[0].main)
+        .register([], ethers.utils.parseEther('1'), relayerAccounts, 'endpoint');
       const rc = await txn.wait();
       const filter = txnAllocator.filters.RelayerRegistered();
       //@ts-ignore
@@ -93,559 +109,230 @@ describe('BRN', function () {
       const events = await txnAllocator.queryFilter(filter, fromBlock.number);
 
       expect(events[0].args.stake).to.be.equal(ethers.utils.parseEther('1'));
-      expect(events[0].args.accounts[0]).to.be.equal(relayer1Acc1.address);
-      expect(events[0].args.accounts[1]).to.be.equal(relayer1Acc2.address);
+      expect(events[0].args.accounts[0]).to.be.equal(relayerAccounts[0]);
+      expect(events[0].args.accounts[1]).to.be.equal(relayerAccounts[1]);
       expect(events[0].args.endpoint).to.be.equal('endpoint');
     });
   });
 
   describe('Relayer Selection', function () {
     it('Should select random relayers', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        relayersPerWindow,
-        txnAllocator,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
-      //TODO: should add set to particular block
-      const [selectedRelayers] = await txnAllocator.allocateRelayers(123, [19, 39, 40]);
+      const { relayers, relayersPerWindow, txnAllocator, transactionMock } =
+        await deployAndConfigure([parseEther('1'), parseEther('2'), parseEther('2')]);
+      const blockNumber = await ethers.provider.getBlockNumber();
+      const [selectedRelayers] = await txnAllocator.allocateRelayers(
+        blockNumber,
+        await txnAllocator.getCdf()
+      );
       expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-      expect(selectedRelayers[0]).to.be.equal(relayer1.address);
-      expect(selectedRelayers[1]).to.be.equal(relayer3.address);
+      const relayerAddresses = relayers.map((r) => r.main.address);
+      expect(relayerAddresses.includes(selectedRelayers[0])).to.be.true;
+      expect(relayerAddresses.includes(selectedRelayers[1])).to.be.true;
     });
 
     it('Should select random relayers deterministically', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        relayersPerWindow,
-        txnAllocator,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
+      const { relayers, relayersPerWindow, txnAllocator, transactionMock } =
+        await deployAndConfigure([parseEther('1'), parseEther('2'), parseEther('2')]);
+      const blockNumber = await ethers.provider.getBlockNumber();
+
+      const [selectedRelayersMain] = await txnAllocator.allocateRelayers(
+        blockNumber,
+        await txnAllocator.getCdf()
+      );
+
       for (let i = 0; i < 10; i++) {
-        const [selectedRelayers] = await txnAllocator.allocateRelayers(123, [19, 39, 40]);
-        expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-        expect(selectedRelayers[0]).to.be.equal(relayer1.address);
-        expect(selectedRelayers[1]).to.be.equal(relayer3.address);
+        const [selectedRelayers] = await txnAllocator.allocateRelayers(
+          blockNumber,
+          await txnAllocator.getCdf()
+        );
+        expect(selectedRelayers).to.deep.equal(selectedRelayersMain);
       }
     });
 
     it('Should return the same set of relayers for the same window', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        relayersPerWindow,
-        txnAllocator,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
-      const block = 123;
-      const start = block - (block % relayersPerWindow);
+      const { relayers, relayersPerWindow, txnAllocator, transactionMock } =
+        await deployAndConfigure([parseEther('1'), parseEther('2'), parseEther('2')]);
+      const blockNumber = await ethers.provider.getBlockNumber();
+      const start = blockNumber - (blockNumber % relayersPerWindow);
       const end = start + relayersPerWindow - 1;
 
+      const [selectedRelayersMain] = await txnAllocator.allocateRelayers(
+        blockNumber,
+        await txnAllocator.getCdf()
+      );
+
       for (let i = start; i <= end; i++) {
-        const [selectedRelayers] = await txnAllocator.allocateRelayers(i, [19, 39, 40]);
-        expect(selectedRelayers.length).to.be.equal(relayersPerWindow);
-        expect(selectedRelayers[0]).to.be.equal(relayer1.address);
-        expect(selectedRelayers[1]).to.be.equal(relayer3.address);
+        const [selectedRelayers] = await txnAllocator.allocateRelayers(
+          i,
+          await txnAllocator.getCdf()
+        );
+        expect(selectedRelayers).to.deep.equal(selectedRelayersMain);
       }
     });
 
-    it('Should return correct pdf index for selected relayers', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        relayersPerWindow,
-        txnAllocator,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
+    it('Should return correct cdf index for selected relayers', async function () {
+      const { relayersPerWindow, txnAllocator, blocksWindow } = await deployAndConfigure([
+        parseEther('1'),
+        parseEther('2'),
+        parseEther('2'),
+      ]);
+      const blockNumber = await ethers.provider.getBlockNumber();
+      const cdf = await txnAllocator.getCdf();
+      const [, cdfIndex] = await txnAllocator.allocateRelayers(blockNumber, cdf);
 
-      const block = 123;
-      const [, pdfIndex] = await txnAllocator.allocateRelayers(block, [19, 39, 40]);
-      expect(pdfIndex.length).equal(relayersPerWindow);
-      expect(pdfIndex[0]).equal(0);
-      expect(pdfIndex[1]).equal(2);
+      const isCdfIndexCorrect = (cdfIndex: number, iteration: number) => {
+        const baseSeed = keccak256(
+          solidityPack(['uint256'], [BigNumber.from(blockNumber).div(blocksWindow)])
+        );
+        const randomStake = BigNumber.from(
+          keccak256(solidityPack(['bytes32', 'uint256'], [baseSeed, iteration]))
+        ).mod(cdf[cdf.length - 1]);
+
+        return (
+          (cdfIndex === 0 || randomStake.gt(cdf[cdfIndex - 1])) && randomStake.lte(cdf[cdfIndex])
+        );
+      };
+
+      expect(cdfIndex.length).equal(relayersPerWindow);
+      expect(isCdfIndexCorrect(cdfIndex[0].toNumber(), 0)).to.be.true;
+      expect(isCdfIndexCorrect(cdfIndex[1].toNumber(), 1)).to.be.true;
     });
   });
 
   describe('Transaction Allocation', function () {
-    it('Should allocate transaction', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
+    const inclusionCount = <T>(item: T, arrs: T[][]) =>
+      arrs.filter((arr) => arr.includes(item)).length;
 
-      const calldataAdd = TransactionMock.interface.encodeFunctionData('mockAdd', ['1', '2']);
-      const calldataSub = TransactionMock.interface.encodeFunctionData('mockSubtract', ['12', '2']);
-      const calldataUpd = TransactionMock.interface.encodeFunctionData('mockUpdate', ['12']);
+    it('Should allocate transaction', async function () {
+      const { relayers, txnAllocator, transactionMock } = await deployAndConfigure([
+        parseEther('1'),
+        parseEther('2'),
+        parseEther('2'),
+      ]);
+
+      const calldataAdd = transactionMock.interface.encodeFunctionData('mockAdd', ['1', '2']);
+      const calldataSub = transactionMock.interface.encodeFunctionData('mockSubtract', ['12', '2']);
+      const calldataUpd = transactionMock.interface.encodeFunctionData('mockUpdate', ['12']);
 
       const blockNumber = 123;
       const [txnAllocated1] = await txnAllocator.allocateTransaction(
-        relayer1Acc1.address,
+        relayers[0].accounts[0].address,
         blockNumber,
         [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
+        await txnAllocator.getCdf()
       );
       const [txnAllocated2] = await txnAllocator.allocateTransaction(
-        relayer2Acc1.address,
+        relayers[1].accounts[0].address,
         blockNumber,
         [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
+        await txnAllocator.getCdf()
       );
       const [txnAllocated3] = await txnAllocator.allocateTransaction(
-        relayer3Acc1.address,
+        relayers[2].accounts[0].address,
         blockNumber,
         [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
+        await txnAllocator.getCdf()
       );
 
-      expect(txnAllocated1.length).to.be.equal(1);
-      expect(txnAllocated2.length).to.be.equal(0);
-      expect(txnAllocated3.length).to.be.equal(2);
-    });
-
-    it('Should return correct relayer stake prefix sum with alloted transaction', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
-
-      const calldataAdd = TransactionMock.interface.encodeFunctionData('mockAdd', ['1', '2']);
-      const calldataSub = TransactionMock.interface.encodeFunctionData('mockSubtract', ['12', '2']);
-      const calldataUpd = TransactionMock.interface.encodeFunctionData('mockUpdate', ['12']);
-
-      const blockNumber = 123;
-      const [, stakePrefixSumIndex1] = await txnAllocator.allocateTransaction(
-        relayer1Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-      const [, stakePrefixSumIndex2] = await txnAllocator.allocateTransaction(
-        relayer2Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-      const [, stakePrefixSumIndex3] = await txnAllocator.allocateTransaction(
-        relayer3Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-
-      expect(stakePrefixSumIndex1.length).to.be.equal(1);
-      expect(stakePrefixSumIndex2.length).to.be.equal(0);
-      expect(stakePrefixSumIndex3.length).to.be.equal(2);
-    });
-
-    it('Should return correct relayer generation iteration with allotted transaction', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('1'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [33, 66],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
-
-      const calldataAdd = TransactionMock.interface.encodeFunctionData('mockAdd', ['1', '2']);
-      const calldataSub = TransactionMock.interface.encodeFunctionData('mockSubtract', ['12', '2']);
-      const calldataUpd = TransactionMock.interface.encodeFunctionData('mockUpdate', ['12']);
-
-      const blockNumber = 123;
-
-      const [, , relayerGenerationIter1] = await txnAllocator.allocateTransaction(
-        relayer1Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-      const [, , relayerGenerationIter2] = await txnAllocator.allocateTransaction(
-        relayer2Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-      const [, , relayerGenerationIter3] = await txnAllocator.allocateTransaction(
-        relayer3Acc1.address,
-        blockNumber,
-        [calldataAdd, calldataSub, calldataUpd],
-        [19, 39, 40]
-      );
-
-      expect(relayerGenerationIter1.length).to.be.equal(1);
-      expect(relayerGenerationIter2.length).to.be.equal(0);
-      expect(relayerGenerationIter3.length).to.be.equal(2);
+      expect(txnAllocated1.length + txnAllocated2.length + txnAllocated3.length).to.be.equal(3);
+      expect(
+        inclusionCount(calldataAdd, [txnAllocated1, txnAllocated2, txnAllocated3])
+      ).to.be.equal(1);
+      expect(
+        inclusionCount(calldataSub, [txnAllocated1, txnAllocated2, txnAllocated3])
+      ).to.be.equal(1);
+      expect(
+        inclusionCount(calldataUpd, [txnAllocated1, txnAllocated2, txnAllocated3])
+      ).to.be.equal(1);
     });
   });
 
   describe('Transaction Verification', async function () {
     it('Should allow relayer 1 to execute transaction', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('2'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [50, 50],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
+      const { relayers, txnAllocator, transactionMock } = await deployAndConfigure([
+        parseEther('2'),
+        parseEther('2'),
+        parseEther('2'),
+      ]);
 
       const calldataArray = new Array(10)
         .fill(1)
-        .map((_, n) => TransactionMock.interface.encodeFunctionData('mockUpdate', [n]));
+        .map((_, n) => transactionMock.interface.encodeFunctionData('mockUpdate', [n]));
       const blockNumber = 0;
 
-      const [txnAllocated, selectedpdfIndex, relayerGenerationIteration] =
+      const [txnAllocated, relayerGenerationIteration, selectedCdfIndex] =
         await txnAllocator.allocateTransaction(
-          relayer2Acc1.address,
+          relayers[1].accounts[0].address,
           blockNumber,
           calldataArray,
-          [33, 33, 33]
+          await txnAllocator.getCdf()
         );
 
       expect(txnAllocated.length).to.be.greaterThan(0);
 
       for (let i = 0; i < txnAllocated.length; i++) {
         await expect(
-          txnAllocator.connect(relayer2Acc1).execute(
-            {
-              from: relayer2Acc1.address,
-              to: transactionMock.address,
-              value: 0,
-              gas: 100000,
-              nonce: 0,
-              data: txnAllocated[i],
-            },
+          txnAllocator.connect(relayers[1].accounts[1]).execute(
+            [
+              {
+                from: relayers[1].accounts[0].address,
+                to: transactionMock.address,
+                value: 0,
+                gas: 100000,
+                nonce: 0,
+                data: txnAllocated[i],
+              },
+            ],
             new AbiCoder().encode(['uint256'], [0]),
-            [33, 33, 33],
-            relayerGenerationIteration[i],
-            selectedpdfIndex[i]
+            await txnAllocator.getCdf(),
+            relayerGenerationIteration,
+            selectedCdfIndex
           )
         ).to.not.be.reverted;
       }
     });
 
     it('Should revert if non-selected relayer tries to submit transaction', async function () {
-      const {
-        relayer1,
-        relayer1Acc1,
-        relayer1Acc2,
-        TransactionMock,
-        relayer2,
-        relayer2Acc1,
-        relayer2Acc2,
-        relayer3,
-        relayer3Acc1,
-        relayer3Acc2,
-        txnAllocator,
-        transactionMock,
-      } = await loadFixture(deployTxnAllocator);
-      await txnAllocator
-        .connect(relayer1)
-        .register(
-          [],
-          ethers.utils.parseEther('2'),
-          [relayer1Acc1.address, relayer1Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer2)
-        .register(
-          [100],
-          ethers.utils.parseEther('2'),
-          [relayer2Acc1.address, relayer2Acc2.address],
-          'endpoint'
-        );
-      await txnAllocator
-        .connect(relayer3)
-        .register(
-          [50, 50],
-          ethers.utils.parseEther('2'),
-          [relayer3Acc1.address, relayer3Acc2.address],
-          'endpoint'
-        );
+      const { relayers, txnAllocator, transactionMock } = await deployAndConfigure([
+        parseEther('2'),
+        parseEther('2'),
+        parseEther('2'),
+      ]);
 
       const calldataArray = new Array(10)
         .fill(1)
-        .map((_, n) => TransactionMock.interface.encodeFunctionData('mockUpdate', [n]));
+        .map((_, n) => transactionMock.interface.encodeFunctionData('mockUpdate', [n]));
       const blockNumber = 0;
 
-      const [txnAllocated, selectedpdfIndex, relayerGenerationIteration] =
+      const [txnAllocated, relayerGenerationIteration, selectedCdfIndex] =
         await txnAllocator.allocateTransaction(
-          relayer2Acc1.address,
+          relayers[1].accounts[0].address,
           blockNumber,
           calldataArray,
-          [33, 33, 33]
+          await txnAllocator.getCdf()
         );
 
       expect(txnAllocated.length).to.be.greaterThan(0);
 
       for (let i = 0; i < txnAllocated.length; i++) {
         await expect(
-          txnAllocator.connect(relayer1Acc1).execute(
-            {
-              from: relayer2Acc1.address,
-              to: transactionMock.address,
-              value: 0,
-              gas: 100000,
-              nonce: 0,
-              data: txnAllocated[i],
-            },
+          txnAllocator.connect(relayers[0].accounts[0]).execute(
+            [
+              {
+                from: relayers[1].accounts[0].address,
+                to: transactionMock.address,
+                value: 0,
+                gas: 100000,
+                nonce: 0,
+                data: txnAllocated[i],
+              },
+            ],
             new AbiCoder().encode(['uint256'], [0]),
-            [33, 33, 33],
-            relayerGenerationIteration[i],
-            selectedpdfIndex[i]
+            await txnAllocator.getCdf(),
+            relayerGenerationIteration,
+            selectedCdfIndex
           )
-        ).to.be.revertedWith('invalid relayer window');
+        ).to.be.revertedWithCustomError(txnAllocator, 'InvalidRelayerWindow');
       }
     });
   });
