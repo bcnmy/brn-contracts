@@ -56,7 +56,9 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
     // % * 100
     uint256 constant ABSENCE_PENATLY = 250;
-    uint256 constant ABSENTEE_PROOF_REPORTER_CDF_INDEX = 0;
+    uint256 constant ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION = 0;
+
+    uint256 immutable MIN_PENATLY_BLOCK_NUMBER;
 
     /// Maps relayer main address to info
     mapping(address => RelayerInfo) relayerInfo;
@@ -111,17 +113,28 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
     event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
 
+    // Absence Proof Processed
+    event AbsenceProofProcessed(
+        uint256 indexed windowId,
+        address indexed reporter,
+        address indexed absentRelayer,
+        uint256 absenceWindowId,
+        uint256 penalty
+    );
+
     event GenericGasConsumed(string label, uint256 gasConsumed);
 
     constructor(
         uint256 blocksPerNode_,
         uint256 withdrawDelay_,
-        uint256 relayersPerWindow_
+        uint256 relayersPerWindow_,
+        uint256 penaltyDelayBlocks_
     ) EIP712("TransactionAllocator", "0.0.1") Ownable() {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
         relayersPerWindow = relayersPerWindow_;
         stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
+        MIN_PENATLY_BLOCK_NUMBER = block.number + penaltyDelayBlocks_;
     }
 
     function _verifyLatestCdfHash(
@@ -382,6 +395,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     }
 
     function _verifyRelayerSelection(
+        address _relayer,
         uint16[] calldata _cdf,
         uint256 _cdfIndex,
         uint256[] calldata _relayerGenerationIterations,
@@ -424,7 +438,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         // Verify if the relayer selected is msg.sender
         address relayerAddress = relayerIndexToRelayer[_cdfIndex];
         RelayerInfo storage node = relayerInfo[relayerAddress];
-        if (!node.isAccount[msg.sender]) {
+        if (!node.isAccount[_relayer] && relayerAddress != _relayer) {
             return false;
         }
 
@@ -441,6 +455,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     ) internal view returns (bool) {
         if (
             !_verifyRelayerSelection(
+                msg.sender,
                 _cdf,
                 _cdfIndex,
                 _relayerGenerationIteration,
@@ -590,8 +605,10 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     function processAbsenceProof(
         // Reporter selection proof in current window
         uint16[] calldata _reporter_cdf,
+        uint256 _reporter_cdfIndex,
         uint256[] calldata _reporter_relayerGenerationIterations,
         // Absentee selection proof in arbitrary past window
+        address _absentee_relayerAddress,
         uint256 _absentee_blockNumber,
         uint256 _absentee_latestStakeUpdationCdfLogIndex,
         uint16[] calldata _absentee_cdf,
@@ -604,16 +621,30 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         verifyCdfHash(_reporter_cdf)
         verifyStakeArrayHash(_currentStakeArray)
     {
+        if (
+            !(_reporter_relayerGenerationIterations.length == 1) ||
+            !(_reporter_relayerGenerationIterations[0] ==
+                ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION)
+        ) {
+            revert InvalidRelayerWindowForReporter();
+        }
+
         // Verify Reporter Selection in Current Window
         if (
             !_verifyRelayerSelection(
+                msg.sender,
                 _reporter_cdf,
-                ABSENTEE_PROOF_REPORTER_CDF_INDEX,
+                _reporter_cdfIndex,
                 _reporter_relayerGenerationIterations,
                 block.number
             )
         ) {
             revert InvalidRelayerWindowForReporter();
+        }
+
+        // Absentee block must not be in a point before the contract was deployed
+        if (_absentee_blockNumber < MIN_PENATLY_BLOCK_NUMBER) {
+            revert InvalidAbsenteeBlockNumber();
         }
 
         // The Absentee block must not be in the current window
@@ -638,6 +669,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         // Verify Relayer Selection in Absentee Window
         if (
             !_verifyRelayerSelection(
+                _absentee_relayerAddress,
                 _absentee_cdf,
                 _absentee_cdfIndex,
                 _absentee_relayerGenerationIterations,
@@ -648,24 +680,28 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         }
 
         // Verify Absence of the relayer
-        address absentee_relayerAddress = relayerIndexToRelayer[
-            _absentee_cdfIndex
-        ];
-        if (attendance[absentee_windowId][absentee_relayerAddress]) {
+        if (attendance[absentee_windowId][_absentee_relayerAddress]) {
             revert AbsenteeWasPresent(absentee_windowId);
         }
 
         // Process penalty
-        uint32 penalty = ((relayerInfo[absentee_relayerAddress].stake *
-            ABSENCE_PENATLY) / (10000 * STAKE_SCALING_FACTOR)).toUint32();
+        uint256 penalty = (relayerInfo[_absentee_relayerAddress].stake *
+            ABSENCE_PENATLY) / 10000;
         uint32[] memory newStakeArray = _decreaseStake(
             _currentStakeArray,
             _absentee_cdfIndex,
-            penalty
+            (penalty / STAKE_SCALING_FACTOR).toUint32()
         );
         _updateStakeAccounting(newStakeArray);
 
         // TODO: Send reporter the penalty as reward
+        emit AbsenceProofProcessed(
+            _windowIdentifier(block.number),
+            msg.sender,
+            _absentee_relayerAddress,
+            _windowIdentifier(_absentee_blockNumber),
+            penalty
+        );
     }
 
     function _windowIdentifier(
@@ -722,8 +758,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     /// @param _blockNumber block number for which the relayers are to be generated
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
-    /// @return relayerStakePrefixSumIndex list of indices of the selected relayers in the
-    ///                                    relayerStakePrefixSum array, used for verification
+    /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
     function allocateRelayers(
         uint256 _blockNumber,
         uint16[] calldata _cdf

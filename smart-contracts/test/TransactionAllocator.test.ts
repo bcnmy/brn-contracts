@@ -1,20 +1,15 @@
 import { loadFixture } from '@nomicfoundation/hardhat-network-helpers';
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber, BigNumberish } from 'ethers';
 import { AbiCoder, keccak256, parseEther, solidityPack } from 'ethers/lib/utils';
-import { ethers } from 'hardhat';
+import { ethers, network } from 'hardhat';
 import { TransactionAllocator__factory, TransactionMock__factory } from '../typechain-types';
-
-const IRelayer = {
-  main: SignerWithAddress,
-  relayers: Array<SignerWithAddress>,
-};
 
 describe('BRN', function () {
   const blocksWindow = 10;
   const withdrawDelay = 1;
   const relayersPerWindow = 2;
+  const penaltyDelayBlocks = 0;
 
   async function deploy() {
     const [
@@ -33,7 +28,8 @@ describe('BRN', function () {
     const txnAllocator = await new TransactionAllocator__factory(deployer).deploy(
       blocksWindow,
       withdrawDelay,
-      relayersPerWindow
+      relayersPerWindow,
+      penaltyDelayBlocks
     );
 
     const transactionMock = await new TransactionMock__factory(deployer).deploy();
@@ -334,6 +330,74 @@ describe('BRN', function () {
           )
         ).to.be.revertedWithCustomError(txnAllocator, 'InvalidRelayerWindow');
       }
+    });
+  });
+
+  describe('Absence Proofs', async function () {
+    it("Should penalize relayer if it's absent in it's selected window", async function () {
+      const { relayers, txnAllocator, transactionMock, blocksWindow } = await deployAndConfigure([
+        parseEther('2'),
+        parseEther('2'),
+        parseEther('2'),
+      ]);
+
+      const prevWindowBlockNumber = await ethers.provider.getBlockNumber();
+
+      const relayersAllocatedPrevWindow = await txnAllocator.allocateRelayers(
+        prevWindowBlockNumber,
+        await txnAllocator.getCdf()
+      );
+      const relayerToPenalize = relayersAllocatedPrevWindow[0][0];
+      const relayerToPenalizeCdfIndex = relayersAllocatedPrevWindow[1][0];
+
+      await Promise.all(
+        new Array(blocksWindow).fill(1).map(async (_) => {
+          await network.provider.request({
+            method: 'evm_mine',
+            params: [],
+          });
+        })
+      );
+
+      const currentWindowBlockNumber = await ethers.provider.getBlockNumber();
+
+      const relayersAllocatedCurrWindow = await txnAllocator.allocateRelayers(
+        currentWindowBlockNumber,
+        await txnAllocator.getCdf()
+      );
+      const reporterRelayer = relayers.find(
+        (r) => r.main.address === relayersAllocatedCurrWindow[0][0]
+      );
+      const reporterRelayerCdfIndex = relayersAllocatedCurrWindow[1][0];
+
+      if (!reporterRelayer) {
+        throw new Error('Reporter relayer not found');
+      }
+
+      await expect(
+        txnAllocator
+          .connect(reporterRelayer.main)
+          .processAbsenceProof(
+            await txnAllocator.getCdf(),
+            reporterRelayerCdfIndex,
+            [0],
+            relayerToPenalize,
+            prevWindowBlockNumber,
+            0,
+            await txnAllocator.getCdf(),
+            [0],
+            relayerToPenalizeCdfIndex,
+            await txnAllocator.getStakeArray()
+          )
+      )
+        .to.emit(txnAllocator, 'AbsenceProofProcessed')
+        .withArgs(
+          BigNumber.from(currentWindowBlockNumber).div(blocksWindow),
+          reporterRelayer.main.address,
+          relayerToPenalize,
+          BigNumber.from(prevWindowBlockNumber).div(blocksWindow),
+          parseEther('0.05')
+        );
     });
   });
 });
