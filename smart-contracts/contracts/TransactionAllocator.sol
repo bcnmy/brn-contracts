@@ -621,6 +621,8 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         verifyCdfHash(_reporter_cdf)
         verifyStakeArrayHash(_currentStakeArray)
     {
+        uint256 gas = gasleft();
+
         if (
             !(_reporter_relayerGenerationIterations.length == 1) ||
             !(_reporter_relayerGenerationIterations[0] ==
@@ -684,6 +686,9 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
             revert AbsenteeWasPresent(absentee_windowId);
         }
 
+        emit GenericGasConsumed("Verification", gas - gasleft());
+        gas = gasleft();
+
         // Process penalty
         uint256 penalty = (relayerInfo[_absentee_relayerAddress].stake *
             ABSENCE_PENATLY) / 10000;
@@ -702,6 +707,8 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
             _windowIdentifier(_absentee_blockNumber),
             penalty
         );
+
+        emit GenericGasConsumed("Process Penalty", gas - gasleft());
     }
 
     function _windowIdentifier(
