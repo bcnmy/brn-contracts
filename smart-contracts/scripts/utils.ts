@@ -1,15 +1,12 @@
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import {
-  ISmartWallet__factory,
-  SmartWallet__factory,
-  TransactionAllocator,
-} from '../typechain-types';
+import { Wallet } from 'ethers';
+import { TransactionAllocator } from '../typechain-types';
 import type { ForwardRequestStruct } from '../typechain-types/contracts/SmartWallet';
 
 export const signTransaction = async (
   tx: ForwardRequestStruct,
   chainId: number,
-  wallet: SignerWithAddress,
+  wallet: SignerWithAddress | Wallet,
   txnAllocator: TransactionAllocator
 ): Promise<ForwardRequestStruct> => {
   const scwAddress = await txnAllocator.predictSmartContractWalletAddress(wallet.address);
