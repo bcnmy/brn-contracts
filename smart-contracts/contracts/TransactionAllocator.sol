@@ -1,62 +1,30 @@
 // SPDX-License-Identifier: MIT
 
-import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import "hardhat/console.sol";
 
-import "./interfaces/ITransactionAlloctor.sol";
+import "./interfaces/ITransactionAllocator.sol";
+import "./interfaces/ISmartWallet.sol";
+import "./library/SmartWalletFactory.sol";
+import "./structs/TransactionAllocatorStructs.sol";
+import "./structs/WalletStructs.sol";
 
 pragma solidity 0.8.17;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
 
-contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
-    using ECDSA for bytes32;
+contract TransactionAllocator is Ownable, ITransactionAllocator {
     using SafeCast for uint256;
-
-    /// typehash
-    bytes32 private constant _TYPEHASH =
-        keccak256(
-            "ForwardRequest(address from,address to,uint256 value,uint256 gas,uint256 nonce,bytes data)"
-        );
-
-    // Forward request structure
-    struct ForwardRequest {
-        address from;
-        address to;
-        uint256 value;
-        uint256 gas;
-        uint256 nonce;
-        bytes data;
-    }
-
-    // relayer information
-    struct RelayerInfo {
-        uint256 stake;
-        mapping(address => bool) isAccount;
-        string endpoint;
-        uint256 index;
-    }
-
-    // relayer information
-    struct WithdrawalInfo {
-        uint256 amount;
-        uint256 time;
-    }
-
-    struct CdfHashUpdateInfo {
-        uint256 windowId;
-        bytes32 cdfHash;
-    }
 
     uint256 constant CDF_PRECISION_MULTIPLIER = 10 ** 4;
     uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
     // % * 100
     uint256 constant ABSENCE_PENATLY = 250;
     uint256 constant ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION = 0;
+    // minimum amount stake required by the replayer
+    uint256 constant MINIMUM_STAKE_AMOUNT = 1e17;
 
     uint256 immutable MIN_PENATLY_BLOCK_NUMBER;
 
@@ -77,9 +45,6 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     // random number of realyers selected per window
     uint256 public relayersPerWindow;
 
-    // minimum amount stake required by the replayer
-    uint256 MINIMUM_STAKE_AMOUNT = 1e17;
-
     // stake array hash
     bytes32 public stakeArrayHash;
 
@@ -89,52 +54,38 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
     // Relayer Index to Relayer
     mapping(uint256 => address) public relayerIndexToRelayer;
 
-    /// tx nonces
-    mapping(address => uint256) private _nonces;
-
     // attendance: windowIndex -> relayer -> wasPresent?
     mapping(uint256 => mapping(address => bool)) public attendance;
 
-    // Emitted when a new relayer is registered
-    event RelayerRegistered(
-        address indexed relayer,
-        string endpoint,
-        address[] accounts,
-        uint256 stake
-    );
+    address smartWalletImplementation;
 
-    // Emitted when a relayer is unregistered
-    event RelayerUnRegistered(address indexed relayer);
+    modifier verifyStakeArrayHash(uint32[] calldata _array) {
+        if (!_verifyStakeArrayHash(_array)) {
+            revert InvalidStakeArrayHash();
+        }
+        _;
+    }
 
-    // Emitted on valid withdrawal
-    event Withdraw(address indexed relayer, uint256 amount);
-
-    // StakeArrayUpdated
-    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
-    event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
-
-    // Absence Proof Processed
-    event AbsenceProofProcessed(
-        uint256 indexed windowId,
-        address indexed reporter,
-        address indexed absentRelayer,
-        uint256 absenceWindowId,
-        uint256 penalty
-    );
-
-    event GenericGasConsumed(string label, uint256 gasConsumed);
+    modifier verifyCdfHash(uint16[] calldata _array) {
+        if (!_verifyLatestCdfHash(_array)) {
+            revert InvalidCdfArrayHash();
+        }
+        _;
+    }
 
     constructor(
         uint256 blocksPerNode_,
         uint256 withdrawDelay_,
         uint256 relayersPerWindow_,
-        uint256 penaltyDelayBlocks_
-    ) EIP712("TransactionAllocator", "0.0.1") Ownable() {
+        uint256 penaltyDelayBlocks_,
+        address smartWalletImplementation_
+    ) Ownable() {
         blocksWindow = blocksPerNode_;
         withdrawDelay = withdrawDelay_;
         relayersPerWindow = relayersPerWindow_;
         stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
         MIN_PENATLY_BLOCK_NUMBER = block.number + penaltyDelayBlocks_;
+        smartWalletImplementation = smartWalletImplementation_;
     }
 
     function _verifyLatestCdfHash(
@@ -170,27 +121,12 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         return stakeArrayHash == keccak256(abi.encodePacked((_array)));
     }
 
-    modifier verifyStakeArrayHash(uint32[] calldata _array) {
-        if (!_verifyStakeArrayHash(_array)) {
-            revert InvalidStakeArrayHash();
-        }
-        _;
-    }
-
-    modifier verifyCdfHash(uint16[] calldata _array) {
-        if (!_verifyLatestCdfHash(_array)) {
-            revert InvalidCdfArrayHash();
-        }
-        _;
-    }
-
     function _stakeArrayToCdf(
         uint32[] memory _stakeArray
     ) internal pure returns (uint16[] memory, bytes32 cdfHash) {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 totalStakeSum = 0;
         uint256 length = _stakeArray.length;
-
         for (uint256 i = 0; i < length; ) {
             totalStakeSum += _stakeArray[i];
             unchecked {
@@ -345,7 +281,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         );
         _updateStakeAccounting(newStakeArray);
 
-        // TODO: trasnfer stake amount to be stored in a vault.
+        // TODO: transfer stake amount to be stored in a vault.
         emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
     }
 
@@ -491,57 +427,47 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         return true;
     }
 
-    /// @notice returns the nonce for a particular client
-    /// @param from client address
-    function getNonce(address from) public view returns (uint256) {
-        return _nonces[from];
-    }
+    function _executeTx(
+        ForwardRequest calldata _req
+    ) internal returns (bool, bytes memory, uint256) {
+        uint256 gas = gasleft();
+        bool success;
 
-    /// @notice verify signed data passed by relayers
-    /// @param req requested tx to be forwarded
-    /// @param signature client signature
-    /// @return true if the tx parameters are correct
-    function verify(
-        ForwardRequest calldata req,
-        bytes calldata signature
-    ) public view returns (bool) {
-        address signer = _hashTypedDataV4(
-            keccak256(
-                abi.encode(
-                    _TYPEHASH,
-                    req.from,
-                    req.to,
-                    req.value,
-                    req.gas,
-                    req.nonce,
-                    keccak256(req.data)
-                )
-            )
-        ).recover(signature);
-        return _nonces[req.from] == req.nonce && signer == req.from;
+        // TODO: Also check for deployment failures, need custom clones library
+        ISmartWallet wallet = SmartWalletFactory.getSmartContractWalletInstance(
+            _req.from,
+            smartWalletImplementation
+        );
+
+        bytes memory returndata;
+        try wallet.execute(_req) returns (
+            bool _success,
+            bytes memory _returndata
+        ) {
+            success = _success;
+            returndata = _returndata;
+            console.log("transaction success:", success);
+        } catch (bytes memory _reason) {
+            success = false;
+            returndata = _reason;
+            console.log("transaction success:", success);
+        }
+
+        return (success, returndata, gas - gasleft());
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
     /// @param _reqs requested txs to be forwarded
-    /// @param _signature signature of the client
     /// @param _relayerGenerationIterations index at which relayer was selected
     /// @param _cdfIndex index of relayer in cdf
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
+    // TODO: Non Reentrant?
     function execute(
         ForwardRequest[] calldata _reqs,
-        bytes calldata _signature,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex
-    )
-        public
-        payable
-        returns (
-            // verifyStakeArrayHash(_stakePercArray)
-            bool[] memory,
-            bytes[] memory
-        )
-    {
+    ) public payable returns (bool[] memory, bytes[] memory) {
         uint256 gasLeft = gasleft();
         if (!_verifyLatestCdfHash(_cdf)) {
             revert InvalidCdfArrayHash();
@@ -557,11 +483,10 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         ) {
             revert InvalidRelayerWindow();
         }
-        // require(verify(req, _signature), "signature does not match request");
-        // _nonces[_req.from] = _req.nonce + 1;
         emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
 
         gasLeft = gasleft();
+
         uint256 length = _reqs.length;
         uint256 totalGas = 0;
         bool[] memory successes = new bool[](length);
@@ -570,11 +495,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         for (uint256 i = 0; i < length; ) {
             ForwardRequest calldata _req = _reqs[i];
 
-            // TODO: Check for success
-            (bool success, bytes memory returndata) = _req.to.call{
-                gas: _req.gas,
-                value: _req.value
-            }(abi.encodePacked(_req.data, _req.from));
+            (bool success, bytes memory returndata, ) = _executeTx(_req);
 
             successes[i] = success;
             returndatas[i] = returndata;
@@ -622,6 +543,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         verifyStakeArrayHash(_currentStakeArray)
     {
         uint256 gas = gasleft();
+        address reporter_relayerAddress = msg.sender;
 
         if (
             !(_reporter_relayerGenerationIterations.length == 1) ||
@@ -634,7 +556,7 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         // Verify Reporter Selection in Current Window
         if (
             !_verifyRelayerSelection(
-                msg.sender,
+                reporter_relayerAddress,
                 _reporter_cdf,
                 _reporter_cdfIndex,
                 _reporter_relayerGenerationIterations,
@@ -698,8 +620,9 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
             (penalty / STAKE_SCALING_FACTOR).toUint32()
         );
         _updateStakeAccounting(newStakeArray);
+        // TODO: Enable once funds are accepted in registration flow
+        // _sendPenalty(reporter_relayerAddress, penalty);
 
-        // TODO: Send reporter the penalty as reward
         emit AbsenceProofProcessed(
             _windowIdentifier(block.number),
             msg.sender,
@@ -709,6 +632,13 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         );
 
         emit GenericGasConsumed("Process Penalty", gas - gasleft());
+    }
+
+    function _sendPenalty(address _reporter, uint256 _amount) internal {
+        (bool success, ) = _reporter.call{value: _amount}("");
+        if (!success) {
+            revert ReporterTransferFailed(_reporter, _amount);
+        }
     }
 
     function _windowIdentifier(
@@ -901,5 +831,15 @@ contract TransactionAllocator is EIP712, Ownable, ITransactionAllocator {
         uint256 _newRelayersPerWindow
     ) external onlyOwner {
         relayersPerWindow = _newRelayersPerWindow;
+    }
+
+    function predictSmartContractWalletAddress(
+        address _owner
+    ) external view returns (address) {
+        return
+            SmartWalletFactory.predictSmartContractWalletAddress(
+                _owner,
+                smartWalletImplementation
+            );
     }
 }

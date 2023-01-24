@@ -3,7 +3,13 @@ import { expect } from 'chai';
 import { BigNumber, BigNumberish } from 'ethers';
 import { AbiCoder, keccak256, parseEther, solidityPack } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { TransactionAllocator__factory, TransactionMock__factory } from '../typechain-types';
+import { signTransaction } from '../scripts/utils';
+import {
+  SmartWalletFactory__factory,
+  SmartWallet__factory,
+  TransactionAllocator__factory,
+  TransactionMock__factory,
+} from '../typechain-types';
 
 describe('BRN', function () {
   const blocksWindow = 10;
@@ -25,11 +31,14 @@ describe('BRN', function () {
       relayer3Acc2,
     ] = await ethers.getSigners();
 
+    const scwImplementation = await new SmartWallet__factory(deployer).deploy();
+
     const txnAllocator = await new TransactionAllocator__factory(deployer).deploy(
       blocksWindow,
       withdrawDelay,
       relayersPerWindow,
-      penaltyDelayBlocks
+      penaltyDelayBlocks,
+      scwImplementation.address
     );
 
     const transactionMock = await new TransactionMock__factory(deployer).deploy();
@@ -266,25 +275,28 @@ describe('BRN', function () {
 
       expect(txnAllocated.length).to.be.greaterThan(0);
 
+      const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
+
       for (let i = 0; i < txnAllocated.length; i++) {
-        await expect(
-          txnAllocator.connect(relayers[1].accounts[1]).execute(
-            [
-              {
-                from: relayers[1].accounts[0].address,
-                to: transactionMock.address,
-                value: 0,
-                gas: 100000,
-                nonce: 0,
-                data: txnAllocated[i],
-              },
-            ],
-            new AbiCoder().encode(['uint256'], [0]),
+        const req = {
+          from: relayers[1].accounts[0].address,
+          to: transactionMock.address,
+          value: 0,
+          gas: 1000000,
+          nonce: i,
+          data: txnAllocated[i],
+          signature: '',
+        };
+        const result = txnAllocator
+          .connect(relayers[1].accounts[1])
+          .execute(
+            [await signTransaction(req, chainId, relayers[1].accounts[0], txnAllocator)],
             await txnAllocator.getCdf(),
             relayerGenerationIteration,
             selectedCdfIndex
-          )
-        ).to.not.be.reverted;
+          );
+        await expect(result).to.not.be.reverted;
+        await expect(result).to.emit(transactionMock, 'UpdatedA');
       }
     });
 
@@ -310,24 +322,27 @@ describe('BRN', function () {
 
       expect(txnAllocated.length).to.be.greaterThan(0);
 
+      const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
+
       for (let i = 0; i < txnAllocated.length; i++) {
+        const req = {
+          from: relayers[1].accounts[0].address,
+          to: transactionMock.address,
+          value: 0,
+          gas: 100000,
+          nonce: 0,
+          data: txnAllocated[i],
+          signature: '',
+        };
         await expect(
-          txnAllocator.connect(relayers[0].accounts[0]).execute(
-            [
-              {
-                from: relayers[1].accounts[0].address,
-                to: transactionMock.address,
-                value: 0,
-                gas: 100000,
-                nonce: 0,
-                data: txnAllocated[i],
-              },
-            ],
-            new AbiCoder().encode(['uint256'], [0]),
-            await txnAllocator.getCdf(),
-            relayerGenerationIteration,
-            selectedCdfIndex
-          )
+          txnAllocator
+            .connect(relayers[0].accounts[0])
+            .execute(
+              [await signTransaction(req, chainId, relayers[1].accounts[0], txnAllocator)],
+              await txnAllocator.getCdf(),
+              relayerGenerationIteration,
+              selectedCdfIndex
+            )
         ).to.be.revertedWithCustomError(txnAllocator, 'InvalidRelayerWindow');
       }
     });
