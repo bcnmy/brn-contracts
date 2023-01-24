@@ -5,14 +5,16 @@ import { AbiCoder, keccak256, parseEther, solidityPack } from 'ethers/lib/utils'
 import { ethers, network } from 'hardhat';
 import { signTransaction } from '../scripts/utils';
 import {
+  Paymaster__factory,
   SmartWalletFactory__factory,
   SmartWallet__factory,
   TransactionAllocator__factory,
   TransactionMock__factory,
 } from '../typechain-types';
+import { ForwardRequestStruct } from '../typechain-types/contracts/SmartWallet';
 
 describe('BRN', function () {
-  const blocksWindow = 10;
+  const blocksWindow = 100;
   const withdrawDelay = 1;
   const relayersPerWindow = 2;
   const penaltyDelayBlocks = 0;
@@ -43,6 +45,8 @@ describe('BRN', function () {
 
     const transactionMock = await new TransactionMock__factory(deployer).deploy();
 
+    const paymaster = await new Paymaster__factory(deployer).deploy(txnAllocator.address);
+
     return {
       relayers: [
         {
@@ -63,6 +67,7 @@ describe('BRN', function () {
       relayersPerWindow,
       txnAllocator,
       transactionMock,
+      paymaster,
     };
   }
 
@@ -254,7 +259,7 @@ describe('BRN', function () {
 
   describe('Transaction Verification', async function () {
     it('Should allow relayer 1 to execute transaction', async function () {
-      const { relayers, txnAllocator, transactionMock } = await deployAndConfigure([
+      const { relayers, txnAllocator, transactionMock, paymaster } = await deployAndConfigure([
         parseEther('2'),
         parseEther('2'),
         parseEther('2'),
@@ -277,14 +282,23 @@ describe('BRN', function () {
 
       const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
+      await paymaster.addFunds(
+        await txnAllocator.predictSmartContractWalletAddress(relayers[1].accounts[0].address),
+        {
+          value: parseEther('1'),
+        }
+      );
+
       for (let i = 0; i < txnAllocated.length; i++) {
-        const req = {
+        const req: ForwardRequestStruct = {
           from: relayers[1].accounts[0].address,
           to: transactionMock.address,
           value: 0,
-          gas: 1000000,
+          gas: 10000000,
           nonce: i,
           data: txnAllocated[i],
+          fixedgas: 10000,
+          paymaster: paymaster.address,
           signature: '',
         };
         const result = txnAllocator
@@ -295,13 +309,14 @@ describe('BRN', function () {
             relayerGenerationIteration,
             selectedCdfIndex
           );
+        console.log(await result);
         await expect(result).to.not.be.reverted;
         await expect(result).to.emit(transactionMock, 'UpdatedA');
       }
     });
 
     it('Should revert if non-selected relayer tries to submit transaction', async function () {
-      const { relayers, txnAllocator, transactionMock } = await deployAndConfigure([
+      const { relayers, txnAllocator, transactionMock, paymaster } = await deployAndConfigure([
         parseEther('2'),
         parseEther('2'),
         parseEther('2'),
@@ -325,13 +340,21 @@ describe('BRN', function () {
       const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
 
       for (let i = 0; i < txnAllocated.length; i++) {
-        const req = {
+        await paymaster.addFunds(
+          await txnAllocator.predictSmartContractWalletAddress(relayers[1].accounts[0].address),
+          {
+            value: parseEther('1'),
+          }
+        );
+        const req: ForwardRequestStruct = {
           from: relayers[1].accounts[0].address,
           to: transactionMock.address,
           value: 0,
           gas: 100000,
           nonce: 0,
           data: txnAllocated[i],
+          fixedgas: 10000,
+          paymaster: paymaster.address,
           signature: '',
         };
         await expect(

@@ -2,6 +2,8 @@ import { BigNumber, BigNumberish, ContractReceipt, Wallet } from 'ethers';
 import { AbiCoder, hexValue, parseEther } from 'ethers/lib/utils';
 import { ethers, network, tenderly } from 'hardhat';
 import {
+  Paymaster,
+  Paymaster__factory,
   SmartWallet__factory,
   TransactionAllocator,
   TransactionAllocator__factory,
@@ -11,8 +13,9 @@ import {
 import { createObjectCsvWriter } from 'csv-writer';
 import { resolve } from 'path';
 import { signTransaction } from './utils';
+import { ForwardRequestStruct } from '../typechain-types/contracts/SmartWallet';
 
-const totalTransactions = 100;
+const totalTransactions = 100
 const windowLength = 1000000;
 const totalRelayers = 100;
 const relayersPerWindow = 10;
@@ -31,6 +34,7 @@ const deploy = async () => {
     0,
     scwImplementation.address
   );
+  const paymaster = await new Paymaster__factory(deployer).deploy(txnAllocator.address);
   const txMock = await new TransactionMock__factory(deployer).deploy();
   // await tenderly.persistArtifacts(
   //   ...[
@@ -44,7 +48,7 @@ const deploy = async () => {
   //     },
   //   ]
   // );
-  return { txnAllocator, txMock };
+  return { txnAllocator, txMock, paymaster };
 };
 
 const getGenericGasConsumption = (
@@ -128,6 +132,7 @@ const getVerificationGasConsumed = (
 const generateTransactions = async (
   txnAllocator: TransactionAllocator,
   txMock: TransactionMock,
+  paymaster: Paymaster,
   count: number
 ) => {
   const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
@@ -136,15 +141,22 @@ const generateTransactions = async (
       const randomWallet = new Wallet(ethers.Wallet.createRandom().privateKey, ethers.provider);
       await network.provider.send('hardhat_setBalance', [
         randomWallet.address,
-        hexValue(parseEther('1')),
+        hexValue(parseEther('10')),
       ]);
-      const tx = {
+      await paymaster
+        .connect(randomWallet)
+        .addFunds(await txnAllocator.predictSmartContractWalletAddress(randomWallet.address), {
+          value: parseEther('5'),
+        });
+      const tx: ForwardRequestStruct = {
         from: randomWallet.address,
         to: txMock.address,
         value: 0,
-        gas: 1000000,
+        gas: 10000000,
         nonce: 0,
         data: txMock.interface.encodeFunctionData('mockUpdate', [i]),
+        fixedgas: 30000,
+        paymaster: paymaster.address,
         signature: '',
       };
       return signTransaction(tx, chainId, randomWallet, txnAllocator);
@@ -156,9 +168,9 @@ const generateTransactions = async (
   const allocationCsvData: any[] = [];
   const absenceProofCsvData: any[] = [];
 
-  const { txnAllocator, txMock } = await deploy();
+  const { txnAllocator, txMock, paymaster } = await deploy();
   console.log('Generating transactions...');
-  const txns = await generateTransactions(txnAllocator, txMock, totalTransactions);
+  const txns = await generateTransactions(txnAllocator, txMock, paymaster, totalTransactions);
   console.log('Transactions generated');
   const { wallets: relayers, gasConsumed: registrationGasConsumed } = await setupRelayers(
     txnAllocator,

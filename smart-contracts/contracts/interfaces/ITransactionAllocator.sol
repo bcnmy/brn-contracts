@@ -31,6 +31,7 @@ interface ITransactionAllocator {
         uint256 actualLength
     );
     error ReporterTransferFailed(address reporter, uint256 amount);
+    error GasLimitExceeded(uint256 gasLimit, uint256 gasUsed);
 
     event RelayerRegistered(
         address indexed relayer,
@@ -50,4 +51,5 @@ interface ITransactionAllocator {
         uint256 penalty
     );
     event GenericGasConsumed(string label, uint256 gasConsumed);
+    event RelayersPerWindowUpdated(uint256 relayersPerWindow);
 }

@@ -20,8 +20,10 @@ export const signTransaction = async (
     SmartContractExecutionRequest: [
       { name: 'from', type: 'address' },
       { name: 'to', type: 'address' },
+      { name: 'paymaster', type: 'address' },
       { name: 'value', type: 'uint256' },
       { name: 'gas', type: 'uint256' },
+      { name: 'fixedgas', type: 'uint256'},
       { name: 'nonce', type: 'uint256' },
       { name: 'data', type: 'bytes' },
     ],

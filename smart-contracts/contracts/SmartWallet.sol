@@ -41,8 +41,10 @@ contract SmartWallet is
                     TYPEHASH,
                     _req.from,
                     _req.to,
+                    _req.paymaster,
                     _req.value,
                     _req.gas,
+                    _req.fixedgas,
                     _req.nonce,
                     keccak256(_req.data)
                 )

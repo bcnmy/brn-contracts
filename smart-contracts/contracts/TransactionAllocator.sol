@@ -6,25 +6,23 @@ import "hardhat/console.sol";
 
 import "./interfaces/ITransactionAllocator.sol";
 import "./interfaces/ISmartWallet.sol";
+import "./interfaces/IPaymaster.sol";
 import "./library/SmartWalletFactory.sol";
 import "./structs/TransactionAllocatorStructs.sol";
 import "./structs/WalletStructs.sol";
+import "./constants/TransactionAllocationConstants.sol";
 
 pragma solidity 0.8.17;
 
 // POC for a forwarder contract that determines asignations of a time windows to relayers
 // preventing gas wars to submit user transactions ahead of the other relayers
 
-contract TransactionAllocator is Ownable, ITransactionAllocator {
+contract TransactionAllocator is
+    Ownable,
+    ITransactionAllocator,
+    TransactionAllocationConstants
+{
     using SafeCast for uint256;
-
-    uint256 constant CDF_PRECISION_MULTIPLIER = 10 ** 4;
-    uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
-    // % * 100
-    uint256 constant ABSENCE_PENATLY = 250;
-    uint256 constant ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION = 0;
-    // minimum amount stake required by the replayer
-    uint256 constant MINIMUM_STAKE_AMOUNT = 1e17;
 
     uint256 immutable MIN_PENATLY_BLOCK_NUMBER;
 
@@ -57,7 +55,7 @@ contract TransactionAllocator is Ownable, ITransactionAllocator {
     // attendance: windowIndex -> relayer -> wasPresent?
     mapping(uint256 => mapping(address => bool)) public attendance;
 
-    address smartWalletImplementation;
+    address public smartWalletImplementation;
 
     modifier verifyStakeArrayHash(uint32[] calldata _array) {
         if (!_verifyStakeArrayHash(_array)) {
@@ -453,7 +451,19 @@ contract TransactionAllocator is Ownable, ITransactionAllocator {
             console.log("transaction success:", success);
         }
 
-        return (success, returndata, gas - gasleft());
+        uint256 executionGas = gas - gasleft();
+        if (executionGas > _req.gas) {
+            revert GasLimitExceeded(executionGas, _req.gas);
+        }
+
+        // Invoke Paymaster to reimburse the relayer
+        IPaymaster(_req.paymaster).reimburseRelayer(
+            tx.origin,
+            address(wallet),
+            (executionGas + _req.fixedgas) * tx.gasprice
+        );
+
+        return (success, returndata, executionGas);
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
