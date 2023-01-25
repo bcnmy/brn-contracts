@@ -40,9 +40,7 @@ contract Paymaster is IPaymaster, Ownable {
     }
 
     function addFunds(address _sponsor) external payable override {
-        unchecked {
-            balances[_sponsor] += msg.value;
-        }
+        balances[_sponsor] += msg.value;
 
         emit FundsAdded(_sponsor, msg.value);
     }

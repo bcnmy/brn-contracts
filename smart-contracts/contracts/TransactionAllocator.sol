@@ -437,6 +437,8 @@ contract TransactionAllocator is
             smartWalletImplementation
         );
 
+        console.log("Deployment Gas:", gas - gasleft());
+
         bytes memory returndata;
         try wallet.execute(_req) returns (
             bool _success,
@@ -457,11 +459,14 @@ contract TransactionAllocator is
         }
 
         // Invoke Paymaster to reimburse the relayer
+        // TODO: only a portion is sent ot the relayer, rest to delegators
+        gas = gasleft();
         IPaymaster(_req.paymaster).reimburseRelayer(
             tx.origin,
             address(wallet),
             (executionGas + _req.fixedgas) * tx.gasprice
         );
+        console.log("Reimbursement Gas:", gas - gasleft());
 
         return (success, returndata, executionGas);
     }
