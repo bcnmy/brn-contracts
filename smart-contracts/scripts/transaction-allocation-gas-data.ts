@@ -15,7 +15,7 @@ import { resolve } from 'path';
 import { signTransaction } from './utils';
 import { ForwardRequestStruct } from '../typechain-types/contracts/SmartWallet';
 
-const totalTransactions = 100
+const totalTransactions = 100;
 const windowLength = 1000000;
 const totalRelayers = 100;
 const relayersPerWindow = 10;
@@ -110,7 +110,7 @@ const setupRelayers = async (txnAllocator: TransactionAllocator, count: number) 
   return { wallets, gasConsumed };
 };
 
-const getVerificationGasConsumed = (
+const getGasConsumption = (
   txnAllocator: TransactionAllocator,
   transactionReceipt: ContractReceipt
 ): Record<string, BigNumberish> => {
@@ -227,10 +227,14 @@ const generateTransactions = async (
       );
     const receipt = await wait();
     if (receipt.status === 0) throw new Error(`Transaction failed: ${receipt}`);
-    const { totalGas, VerificationGas, ExecutionGas, OtherOverhead } = getVerificationGasConsumed(
-      txnAllocator,
-      receipt
-    );
+    const {
+      totalGas,
+      VerificationGas,
+      ExecutionGas,
+      OtherOverhead,
+      deploymentGas,
+      reimbursementGas,
+    } = getGasConsumption(txnAllocator, receipt);
     console.log(
       `Verification Gas used for transaction batch of length ${
         txnRequests.length
@@ -247,6 +251,8 @@ const generateTransactions = async (
       verificationGasPerTx: BigNumber.from(VerificationGas).div(txnRequests.length).toString(),
       otherOverhead: OtherOverhead.toString(),
       totalOverhead: BigNumber.from(VerificationGas).add(OtherOverhead).toString(),
+      deploymentGas: BigNumber.from(deploymentGas).toString(),
+      reimbursementGas: BigNumber.from(reimbursementGas).toString(),
       totalOverheadPerTx: BigNumber.from(VerificationGas)
         .add(OtherOverhead)
         .div(txnRequests.length)

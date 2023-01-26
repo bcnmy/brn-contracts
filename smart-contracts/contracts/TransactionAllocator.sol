@@ -437,7 +437,7 @@ contract TransactionAllocator is
             smartWalletImplementation
         );
 
-        console.log("Deployment Gas:", gas - gasleft());
+        emit GenericGasConsumed("deploymentGas", gas - gasleft());
 
         bytes memory returndata;
         try wallet.execute(_req) returns (
@@ -466,7 +466,7 @@ contract TransactionAllocator is
             address(wallet),
             (executionGas + _req.fixedgas) * tx.gasprice
         );
-        console.log("Reimbursement Gas:", gas - gasleft());
+        emit GenericGasConsumed("reimbursementGas", gas - gasleft());
 
         return (success, returndata, executionGas);
     }
