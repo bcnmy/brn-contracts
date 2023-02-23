@@ -20,18 +20,18 @@ contract Paymaster is IPaymaster, Ownable {
         transactionAllocator = _transactionAllocator;
     }
 
-    function reimburseRelayer(
-        address _relayer,
-        address _sponsor,
-        uint256 _amount
-    ) external override onlyTransactionAllocator {
+    function reimburseRelayer(address _relayer, address _sponsor, uint256 _amount)
+        external
+        override
+        onlyTransactionAllocator
+    {
         if (balances[_sponsor] < _amount) {
             revert InsufficientBalance(_sponsor, balances[_sponsor], _amount);
         }
         unchecked {
             balances[_sponsor] -= _amount;
         }
-        (bool success, ) = _relayer.call{value: _amount}("");
+        (bool success,) = _relayer.call{value: _amount}("");
         if (!success) {
             revert NativeTransferFailed(_relayer, _amount);
         }
@@ -45,9 +45,7 @@ contract Paymaster is IPaymaster, Ownable {
         emit FundsAdded(_sponsor, msg.value);
     }
 
-    function updateTransactionAllocator(
-        address _newTransactionAllocator
-    ) external onlyOwner {
+    function updateTransactionAllocator(address _newTransactionAllocator) external onlyOwner {
         transactionAllocator = _newTransactionAllocator;
         emit TransactionAllocator(_newTransactionAllocator);
     }

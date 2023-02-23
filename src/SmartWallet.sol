@@ -10,16 +10,10 @@ import "openzeppelin-contracts-upgradeable/contracts/token/ERC20/utils/SafeERC20
 import "openzeppelin-contracts-upgradeable/contracts/token/ERC20/IERC20Upgradeable.sol";
 
 import "./interfaces/ISmartWallet.sol";
-import "./structs/WalletStructs.sol";
+import "./structs/Transaction.sol";
 import "./constants/SmartWalletConstants.sol";
 
-contract SmartWallet is
-    Initializable,
-    EIP712Upgradeable,
-    ISmartWallet,
-    OwnableUpgradeable,
-    SmartWalletConstants
-{
+contract SmartWallet is Initializable, EIP712Upgradeable, ISmartWallet, OwnableUpgradeable, SmartWalletConstants {
     using ECDSAUpgradeable for bytes32;
 
     // State
@@ -42,20 +36,17 @@ contract SmartWallet is
                     _req.to,
                     _req.paymaster,
                     _req.value,
-                    _req.gas,
-                    _req.fixedgas,
+                    _req.gasLimit,
+                    _req.fixedGas,
                     _req.nonce,
                     keccak256(_req.data)
                 )
             )
         ).recover(_req.signature);
-        return
-            nextNonce == _req.nonce && signer == _req.from && signer == owner();
+        return nextNonce == _req.nonce && signer == _req.from && signer == owner();
     }
 
-    function execute(
-        ForwardRequest calldata _req
-    ) external returns (bool, bytes memory) {
+    function execute(ForwardRequest calldata _req) external returns (bool, bytes memory) {
         uint256 gas = gasleft();
 
         if (!verify(_req)) {
@@ -63,10 +54,7 @@ contract SmartWallet is
         }
 
         nextNonce++;
-        (bool success, bytes memory returndata) = _req.to.call{
-            value: _req.value,
-            gas: _req.gas
-        }(_req.data);
+        (bool success, bytes memory returndata) = _req.to.call{value: _req.value, gas: _req.gasLimit}(_req.data);
 
         emit WalletExecution(success, returndata, gas - gasleft());
 

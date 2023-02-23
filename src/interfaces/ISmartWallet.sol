@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "../structs/WalletStructs.sol";
+import "../structs/Transaction.sol";
 
 interface ISmartWallet {
     error InvalidSignature();
