@@ -13,3 +13,18 @@ docs/
 # Dotenv file
 .env
 hardhat
+
+node_modules
+.env
+coverage
+coverage.json
+typechain
+typechain-types
+deployments
+stats
+
+#Hardhat files
+cache_hardhat
+artifacts
+
+*.csv

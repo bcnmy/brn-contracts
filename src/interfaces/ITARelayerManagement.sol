@@ -27,4 +27,32 @@ interface ITARelayerManagement is IDebug_GasConsumption {
         uint256 absenceWindowId,
         uint256 penalty
     );
+
+    function getStakeArray() external view returns (uint32[] memory);
+
+    function getCdf() external view returns (uint16[] memory);
+
+    function register(
+        uint32[] calldata _previousStakeArray,
+        uint256 _stake,
+        address[] calldata _accounts,
+        string memory _endpoint
+    ) external;
+
+    function unRegister(uint32[] calldata _previousStakeArray) external;
+
+    function withdraw(address relayer) external;
+
+    function processAbsenceProof(
+        uint16[] calldata _reporter_cdf,
+        uint256 _reporter_cdfIndex,
+        uint256[] calldata _reporter_relayerGenerationIterations,
+        address _absentee_relayerAddress,
+        uint256 _absentee_blockNumber,
+        uint256 _absentee_latestStakeUpdationCdfLogIndex,
+        uint16[] calldata _absentee_cdf,
+        uint256[] calldata _absentee_relayerGenerationIterations,
+        uint256 _absentee_cdfIndex,
+        uint32[] calldata _currentStakeArray
+    ) external;
 }

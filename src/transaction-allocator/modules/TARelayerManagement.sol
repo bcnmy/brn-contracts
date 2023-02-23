@@ -105,6 +105,13 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         emit CdfArrayUpdated(cdfHash);
     }
 
+    function _sendPenalty(address _reporter, uint256 _amount) internal {
+        (bool success,) = _reporter.call{value: _amount}("");
+        if (!success) {
+            revert ReporterTransferFailed(_reporter, _amount);
+        }
+    }
+
     function getStakeArray() public view returns (uint32[] memory) {
         TAStorage storage ps = TAProxyStorage.getProxyStorage();
 
@@ -297,12 +304,5 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
             );
 
         emit GenericGasConsumed("Process Penalty", gas - gasleft());
-    }
-
-    function _sendPenalty(address _reporter, uint256 _amount) internal {
-        (bool success,) = _reporter.call{value: _amount}("");
-        if (!success) {
-            revert ReporterTransferFailed(_reporter, _amount);
-        }
     }
 }
