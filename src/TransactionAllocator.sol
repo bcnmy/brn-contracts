@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: MIT
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/math/SafeCast.sol";
-import "hardhat/console.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
+import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/ITransactionAllocator.sol";
 import "./interfaces/ISmartWallet.sol";
@@ -446,11 +445,9 @@ contract TransactionAllocator is
         ) {
             success = _success;
             returndata = _returndata;
-            console.log("transaction success:", success);
         } catch (bytes memory _reason) {
             success = false;
             returndata = _reason;
-            console.log("transaction success:", success);
         }
 
         uint256 executionGas = gas - gasleft();

@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 import "./interfaces/IPaymaster.sol";
 
 contract Paymaster is IPaymaster, Ownable {

@@ -2,13 +2,10 @@
 
 pragma solidity ^0.8;
 
-contract ProxyStorage {
-    bytes32 internal constant PROXY_STORAGE_SLOT = keccak256("Proxy.storage");
+import "../structs/ProxyStorageStructs.sol";
 
-    struct PStorage {
-        mapping(bytes4 => address) implementations;
-        mapping(address => bytes32) selectorsHash;
-    }
+library ProxyStorage {
+    bytes32 internal constant PROXY_STORAGE_SLOT = keccak256("Proxy.storage");
 
     /* solhint-disable no-inline-assembly */
     function getProxyStorage() internal pure returns (PStorage storage ms) {
@@ -17,5 +14,4 @@ contract ProxyStorage {
             ms.slot := slot
         }
     }
-    /* solhint-enable no-inline-assembly */
 }

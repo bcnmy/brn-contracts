@@ -2,9 +2,9 @@
 
 pragma solidity ^0.8;
 
-import "./ProxyStorage.sol";
+import "./library/ProxyStorage.sol";
 
-contract Proxy is ProxyStorage {
+contract Proxy {
     /// @dev Emitted when a module has been added
     event ModuleAdded(address indexed moduleAddr, bytes4[] selectors);
 
@@ -15,7 +15,7 @@ contract Proxy is ProxyStorage {
     /// @notice pass a call to a module
     /* solhint-disable no-complex-fallback, payable-fallback, no-inline-assembly */
     fallback() external payable {
-        PStorage storage ds = getProxyStorage();
+        PStorage storage ds = ProxyStorage.getProxyStorage();
         address implementation = ds.implementations[msg.sig];
         assembly {
             calldatacopy(0, 0, calldatasize())
@@ -46,10 +46,11 @@ contract Proxy is ProxyStorage {
     /// @dev function selector should not have been registered.
     /// @param implementation address of the implementation
     /// @param selectors selectors of the implementation contract
-    function addModule(address implementation, bytes4[] calldata selectors)
-        internal
-    {
-        PStorage storage ds = getProxyStorage();
+    function addModule(
+        address implementation,
+        bytes4[] calldata selectors
+    ) internal {
+        PStorage storage ds = ProxyStorage.getProxyStorage();
         for (uint256 i = 0; i < selectors.length; i++) {
             require(
                 ds.implementations[selectors[i]] == address(0),
