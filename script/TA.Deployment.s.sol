@@ -12,11 +12,48 @@ import "src/transaction-allocator/modules/TATransactionExecution.sol";
 
 import "src/interfaces/ITransactionAllocator.sol";
 
-contract TADeploymentScript is Script {
-    function run() external returns (Proxy proxy) {
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+import "src/structs/TAStructs.sol";
 
-        vm.startBroadcast(deployerPrivateKey);
+contract TADeploymentScript is Script {
+    error EmptyDeploymentConfigPath();
+
+    function run() external returns (ITransactionAllocator) {
+        // Load Deployment Config
+        string memory deployConfigPath = vm.envString("TRANSACTION_ALLOCATOR_DEPLOYMENT_CONFIG_JSON");
+        if (keccak256(abi.encode(deployConfigPath)) == keccak256(abi.encode(""))) {
+            revert EmptyDeploymentConfigPath();
+        }
+        string memory deploymentConfigStr = vm.readFile(deployConfigPath);
+        console2.log("Deployment Config Path: ", deployConfigPath);
+        InitalizerParams memory params = InitalizerParams({
+            blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
+            withdrawDelay: vm.parseJsonUint(deploymentConfigStr, ".withdrawDelay"),
+            relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
+            penaltyDelayBlocks: vm.parseJsonUint(deploymentConfigStr, ".penaltyDelayBlocks")
+        });
+        console2.log("Deployment Config: ");
+        console2.log("  blocksPerWindow: ", params.blocksPerWindow);
+        console2.log("  withdrawDelay: ", params.withdrawDelay);
+        console2.log("  relayersPerWindow: ", params.relayersPerWindow);
+        console2.log("  penaltyDelayBlocks: ", params.penaltyDelayBlocks);
+
+        // Deploy
+        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        ITransactionAllocator proxy = deploy(deployerPrivateKey, true);
+        configure(deployerPrivateKey, true, proxy, params);
+        return proxy;
+    }
+
+    function deploy(uint256 _deployerPrivateKey, bool _debug) public returns (ITransactionAllocator) {
+        address deployerAddr = vm.addr(_deployerPrivateKey);
+        if (_debug) {
+            console2.log("Deploying Transaction Allocator contracts...");
+            console2.log("Chain ID: ", block.chainid);
+            console2.log("Deployer Address: ", deployerAddr);
+            console2.log("Deployer Funds:", deployerAddr.balance);
+        }
+
+        vm.startBroadcast(_deployerPrivateKey);
 
         // Deploy Modules
         address[] memory moduleAddresses = new address[](4);
@@ -39,10 +76,37 @@ contract TADeploymentScript is Script {
         selectors[3] = _generateSelectors("TATransactionExecution");
 
         // Deploy Proxy
-        proxy = new Proxy(moduleAddresses, selectors);
-        console2.log("Proxy address: ", address(proxy));
+        Proxy proxy = new Proxy(moduleAddresses, selectors);
+        if (_debug) {
+            console2.log("Proxy address: ", address(proxy));
+            console2.log("Transaction Allocator contracts deployed successfully.");
+        }
 
         vm.stopBroadcast();
+
+        return ITransactionAllocator(address(proxy));
+    }
+
+    function configure(
+        uint256 _configurePrivateKey,
+        bool _debug,
+        ITransactionAllocator _proxy,
+        InitalizerParams memory _params
+    ) public {
+        address configureAddr = vm.addr(_configurePrivateKey);
+        if (_debug) {
+            console2.log("Configuring Transaction Allocator...");
+            console2.log("Chain ID: ", block.chainid);
+            console2.log("Configure Address: ", configureAddr);
+            console2.log("Configure Funds:", configureAddr.balance);
+        }
+
+        vm.broadcast(_configurePrivateKey);
+        _proxy.initialize(_params);
+
+        if (_debug) {
+            console2.log("Transaction Allocator configured successfully.");
+        }
     }
 
     function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory selectors) {

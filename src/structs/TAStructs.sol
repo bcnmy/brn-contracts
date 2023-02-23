@@ -19,3 +19,10 @@ struct CdfHashUpdateInfo {
     uint256 windowId;
     bytes32 cdfHash;
 }
+
+struct InitalizerParams {
+    uint256 blocksPerWindow;
+    uint256 withdrawDelay;
+    uint256 relayersPerWindow;
+    uint256 penaltyDelayBlocks;
+}

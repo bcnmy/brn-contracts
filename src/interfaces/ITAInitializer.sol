@@ -2,15 +2,12 @@
 
 pragma solidity 0.8.17;
 
+import "../structs/TAStructs.sol";
+
 interface ITAInitializer {
     error AlreadyInitialized();
 
     event Initialized();
 
-    function initialize(
-        uint256 blocksPerNode_,
-        uint256 withdrawDelay_,
-        uint256 relayersPerWindow_,
-        uint256 penaltyDelayBlocks_
-    ) external;
+    function initialize(InitalizerParams calldata _params) external;
 }

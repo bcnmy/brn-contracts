@@ -18,18 +18,13 @@ contract TAInitializer is ITAInitializer {
         _;
     }
 
-    function initialize(
-        uint256 blocksPerNode_,
-        uint256 withdrawDelay_,
-        uint256 relayersPerWindow_,
-        uint256 penaltyDelayBlocks_
-    ) external initializer {
+    function initialize(InitalizerParams calldata _params) external initializer {
         TAStorage storage ps = TAProxyStorage.getProxyStorage();
 
-        ps.blocksWindow = blocksPerNode_;
-        ps.withdrawDelay = withdrawDelay_;
-        ps.relayersPerWindow = relayersPerWindow_;
+        ps.blocksWindow = _params.blocksPerWindow;
+        ps.withdrawDelay = _params.withdrawDelay;
+        ps.relayersPerWindow = _params.relayersPerWindow;
         ps.stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
-        ps.MIN_PENATLY_BLOCK_NUMBER = block.number + penaltyDelayBlocks_;
+        ps.MIN_PENATLY_BLOCK_NUMBER = block.number + _params.penaltyDelayBlocks;
     }
 }
