@@ -2,7 +2,9 @@
 
 pragma solidity 0.8.17;
 
-interface IProxy {
+import "src/structs/TAStructs.sol";
+
+interface ITAProxy {
     error ParameterLengthMismatch();
     error SelectorAlreadyRegistered(address oldModule, address newModule, bytes4 selector);
 

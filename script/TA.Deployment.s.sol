@@ -4,13 +4,11 @@ pragma solidity 0.8.17;
 
 import "forge-std/Script.sol";
 
-import "src/transaction-allocator/Proxy.sol";
-import "src/transaction-allocator/modules/TAAllocationHelper.sol";
-import "src/transaction-allocator/modules/TAInitializer.sol";
-import "src/transaction-allocator/modules/TARelayerManagement.sol";
-import "src/transaction-allocator/modules/TATransactionExecution.sol";
-
-import "src/interfaces/ITransactionAllocator.sol";
+import "src/transaction-allocator/TAProxy.sol";
+import "src/transaction-allocator/modules/delegation/TADelegation.sol";
+import "src/transaction-allocator/modules/relayer-management/TARelayerManagement.sol";
+import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocation.sol";
+import "src/transaction-allocator/ITransactionAllocator.sol";
 
 import "src/structs/TAStructs.sol";
 
@@ -39,12 +37,14 @@ contract TADeploymentScript is Script {
 
         // Deploy
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        ITransactionAllocator proxy = deploy(deployerPrivateKey, true);
-        configure(deployerPrivateKey, true, proxy, params);
+        ITransactionAllocator proxy = deploy(deployerPrivateKey, params, true);
         return proxy;
     }
 
-    function deploy(uint256 _deployerPrivateKey, bool _debug) public returns (ITransactionAllocator) {
+    function deploy(uint256 _deployerPrivateKey, InitalizerParams memory _params, bool _debug)
+        public
+        returns (ITransactionAllocator)
+    {
         address deployerAddr = vm.addr(_deployerPrivateKey);
         if (_debug) {
             console2.log("Deploying Transaction Allocator contracts...");
@@ -56,27 +56,21 @@ contract TADeploymentScript is Script {
         vm.startBroadcast(_deployerPrivateKey);
 
         // Deploy Modules
-        address[] memory moduleAddresses = new address[](4);
-        bytes4[][] memory selectors = new bytes4[][](4);
+        uint256 moduleCount = 3;
+        address[] memory moduleAddresses = new address[](moduleCount);
+        bytes4[][] memory selectors = new bytes4[][](moduleCount);
 
-        TAAllocationHelper taAllocationHelper = new TAAllocationHelper();
-        moduleAddresses[0] = address(taAllocationHelper);
-        selectors[0] = _generateSelectors("TAAllocationHelper");
+        moduleAddresses[0] = address(new TADelegation());
+        selectors[0] = _generateSelectors("TADelegation");
 
-        TAInitializer taInitializer = new TAInitializer();
-        moduleAddresses[1] = address(taInitializer);
-        selectors[1] = _generateSelectors("TAInitializer");
+        moduleAddresses[1] = address(new TARelayerManagement());
+        selectors[1] = _generateSelectors("TARelayerManagement");
 
-        TARelayerManagement taRelayerManagement = new TARelayerManagement();
-        moduleAddresses[2] = address(taRelayerManagement);
-        selectors[2] = _generateSelectors("TARelayerManagement");
-
-        TATransactionExecution taTransactionExecution = new TATransactionExecution();
-        moduleAddresses[3] = address(taTransactionExecution);
-        selectors[3] = _generateSelectors("TATransactionExecution");
+        moduleAddresses[2] = address(new TATransactionAllocation());
+        selectors[2] = _generateSelectors("TATransactionAllocation");
 
         // Deploy Proxy
-        Proxy proxy = new Proxy(moduleAddresses, selectors);
+        TAProxy proxy = new TAProxy(moduleAddresses, selectors, _params);
         if (_debug) {
             console2.log("Proxy address: ", address(proxy));
             console2.log("Transaction Allocator contracts deployed successfully.");
@@ -85,28 +79,6 @@ contract TADeploymentScript is Script {
         vm.stopBroadcast();
 
         return ITransactionAllocator(address(proxy));
-    }
-
-    function configure(
-        uint256 _configurePrivateKey,
-        bool _debug,
-        ITransactionAllocator _proxy,
-        InitalizerParams memory _params
-    ) public {
-        address configureAddr = vm.addr(_configurePrivateKey);
-        if (_debug) {
-            console2.log("Configuring Transaction Allocator...");
-            console2.log("Chain ID: ", block.chainid);
-            console2.log("Configure Address: ", configureAddr);
-            console2.log("Configure Funds:", configureAddr.balance);
-        }
-
-        vm.broadcast(_configurePrivateKey);
-        _proxy.initialize(_params);
-
-        if (_debug) {
-            console2.log("Transaction Allocator configured successfully.");
-        }
     }
 
     function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory selectors) {

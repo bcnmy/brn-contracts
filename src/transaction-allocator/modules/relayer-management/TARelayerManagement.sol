@@ -2,15 +2,45 @@
 
 pragma solidity 0.8.17;
 
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+// TODO: Fix ide settings to detect lib/* imports
+import "lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
-import "../common/TAVerificationUtils.sol";
-import "../../constants/TransactionAllocationConstants.sol";
-import "../../library/TAProxyStorage.sol";
-import "../../interfaces/ITARelayerManagement.sol";
+import "./ITARelayerManagement.sol";
+import "./TARelayerManagementStorage.sol";
+import "src/constants/TransactionAllocationConstants.sol";
+import "../transaction-allocation/TATransactionAllocationStorage.sol";
+import "../../common/TAHelpers.sol";
 
-contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConstants, ITARelayerManagement {
+contract TARelayerManagement is
+    TARelayerManagementStorage,
+    TAHelpers,
+    ITARelayerManagement,
+    TransactionAllocationConstants,
+    TATransactionAllocationStorage
+{
     using SafeCast for uint256;
+
+    function _verifyPrevCdfHash(uint16[] calldata _array, uint256 _windowId, uint256 _cdfLogIndex)
+        internal
+        view
+        returns (bool)
+    {
+        // Validate _cdfLogIndex
+        RMStorage storage ds = getRMStorage();
+        if (
+            !(
+                ds.cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId
+                    && (
+                        _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
+                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowId > _windowId
+                    )
+            )
+        ) {
+            return false;
+        }
+
+        return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == keccak256(abi.encodePacked(_array));
+    }
 
     function _stakeArrayToCdf(uint32[] memory _stakeArray) internal pure returns (uint16[] memory, bytes32 cdfHash) {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
@@ -84,24 +114,24 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
     }
 
     function _updateStakeAccounting(uint32[] memory _newStakeArray) internal {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
 
         // Update Stake Array Hash
-        ps.stakeArrayHash = keccak256(abi.encodePacked(_newStakeArray));
+        ds.stakeArrayHash = keccak256(abi.encodePacked(_newStakeArray));
 
         // Update cdf hash
         (, bytes32 cdfHash) = _stakeArrayToCdf(_newStakeArray);
         uint256 currentWindowId = _windowIdentifier(block.number);
         if (
-            ps.cdfHashUpdateLog.length == 0
-                || ps.cdfHashUpdateLog[ps.cdfHashUpdateLog.length - 1].windowId != currentWindowId
+            ds.cdfHashUpdateLog.length == 0
+                || ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowId != currentWindowId
         ) {
-            ps.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowId: _windowIdentifier(block.number), cdfHash: cdfHash}));
+            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowId: _windowIdentifier(block.number), cdfHash: cdfHash}));
         } else {
-            ps.cdfHashUpdateLog[ps.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
+            ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
         }
 
-        emit StakeArrayUpdated(ps.stakeArrayHash);
+        emit StakeArrayUpdated(ds.stakeArrayHash);
         emit CdfArrayUpdated(cdfHash);
     }
 
@@ -113,12 +143,12 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
     }
 
     function getStakeArray() public view returns (uint32[] memory) {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
 
-        uint256 length = ps.relayerCount;
+        uint256 length = ds.relayerCount;
         uint32[] memory stakeArray = new uint32[](length);
         for (uint256 i = 0; i < length;) {
-            stakeArray[i] = (ps.relayerInfo[ps.relayerIndexToRelayer[i]].stake / STAKE_SCALING_FACTOR).toUint32();
+            stakeArray[i] = (ds.relayerInfo[ds.relayerIndexToRelayer[i]].stake / STAKE_SCALING_FACTOR).toUint32();
             unchecked {
                 ++i;
             }
@@ -142,7 +172,7 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         address[] calldata _accounts,
         string memory _endpoint
     ) external verifyStakeArrayHash(_previousStakeArray) {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
 
         if (_accounts.length == 0) {
             revert NoAccountsProvided();
@@ -151,15 +181,15 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
             revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
         }
 
-        RelayerInfo storage node = ps.relayerInfo[msg.sender];
+        RelayerInfo storage node = ds.relayerInfo[msg.sender];
         node.stake += _stake;
         node.endpoint = _endpoint;
-        node.index = ps.relayerCount;
+        node.index = ds.relayerCount;
         for (uint256 i = 0; i < _accounts.length; i++) {
             node.isAccount[_accounts[i]] = true;
         }
-        ps.relayerIndexToRelayer[node.index] = msg.sender;
-        ++ps.relayerCount;
+        ds.relayerIndexToRelayer[node.index] = msg.sender;
+        ++ds.relayerCount;
 
         // Update stake array and hash
         uint32[] memory newStakeArray = _appendStake(_previousStakeArray, _stake);
@@ -172,23 +202,23 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
     /// @param _previousStakeArray current stake array for verification
     function unRegister(uint32[] calldata _previousStakeArray) external verifyStakeArrayHash(_previousStakeArray) {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
 
-        RelayerInfo storage node = ps.relayerInfo[msg.sender];
-        uint256 n = ps.relayerCount - 1;
+        RelayerInfo storage node = ds.relayerInfo[msg.sender];
+        uint256 n = ds.relayerCount - 1;
         uint256 stake = node.stake;
         uint256 nodeIndex = node.index;
 
         if (nodeIndex != n) {
-            address lastRelayer = ps.relayerIndexToRelayer[n];
-            ps.relayerIndexToRelayer[nodeIndex] = lastRelayer;
-            ps.relayerInfo[lastRelayer].index = nodeIndex;
-            ps.relayerIndexToRelayer[n] = address(0);
+            address lastRelayer = ds.relayerIndexToRelayer[n];
+            ds.relayerIndexToRelayer[nodeIndex] = lastRelayer;
+            ds.relayerInfo[lastRelayer].index = nodeIndex;
+            ds.relayerIndexToRelayer[n] = address(0);
         }
 
-        --ps.relayerCount;
+        --ds.relayerCount;
 
-        ps.withdrawalInfo[msg.sender] = WithdrawalInfo(stake, block.timestamp + ps.withdrawDelay);
+        ds.withdrawalInfo[msg.sender] = WithdrawalInfo(stake, block.timestamp + ds.withdrawDelay);
 
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _removeStake(_previousStakeArray, nodeIndex);
@@ -197,13 +227,13 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
     }
 
     function withdraw(address relayer) external {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
 
-        WithdrawalInfo memory w = ps.withdrawalInfo[relayer];
+        WithdrawalInfo memory w = ds.withdrawalInfo[relayer];
         if (!(w.amount > 0 && w.time < block.timestamp)) {
             revert InvalidWithdrawal(w.amount, w.time, 0, block.timestamp);
         }
-        ps.withdrawalInfo[relayer] = WithdrawalInfo(0, 0);
+        ds.withdrawalInfo[relayer] = WithdrawalInfo(0, 0);
 
         // todo: send w.amount to relayer
 
@@ -225,7 +255,9 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         // Other stuff
         uint32[] calldata _currentStakeArray
     ) public verifyCdfHash(_reporter_cdf) verifyStakeArrayHash(_currentStakeArray) {
-        TAStorage storage ps = TAProxyStorage.getProxyStorage();
+        RMStorage storage ds = getRMStorage();
+        TAStorage storage ts = getTAStorage();
+
         uint256 gas = gasleft();
         address reporter_relayerAddress = msg.sender;
 
@@ -250,12 +282,12 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         }
 
         // Absentee block must not be in a point before the contract was deployed
-        if (_absentee_blockNumber < ps.MIN_PENATLY_BLOCK_NUMBER) {
+        if (_absentee_blockNumber < ds.MIN_PENATLY_BLOCK_NUMBER) {
             revert InvalidAbsenteeBlockNumber();
         }
 
         // The Absentee block must not be in the current window
-        uint256 currentWindowStartBlock = block.number - (block.number % ps.blocksWindow);
+        uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksWindow);
         if (_absentee_blockNumber >= currentWindowStartBlock) {
             revert InvalidAbsenteeBlockNumber();
         }
@@ -280,7 +312,7 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         }
 
         // Verify Absence of the relayer
-        if (ps.attendance[absentee_windowId][_absentee_relayerAddress]) {
+        if (ts.attendance[absentee_windowId][_absentee_relayerAddress]) {
             revert AbsenteeWasPresent(absentee_windowId);
         }
 
@@ -288,7 +320,7 @@ contract TARelayerManagement is TAVerificationUtils, TransactionAllocationConsta
         gas = gasleft();
 
         // Process penalty
-        uint256 penalty = (ps.relayerInfo[_absentee_relayerAddress].stake * ABSENCE_PENATLY) / 10000;
+        uint256 penalty = (ds.relayerInfo[_absentee_relayerAddress].stake * ABSENCE_PENATLY) / 10000;
         uint32[] memory newStakeArray =
             _decreaseStake(_currentStakeArray, _absentee_cdfIndex, (penalty / STAKE_SCALING_FACTOR).toUint32());
         _updateStakeAccounting(newStakeArray);

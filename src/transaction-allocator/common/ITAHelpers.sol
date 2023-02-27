@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-interface ITAVerificationUtils {
+interface ITAHelpers {
     error InvalidStakeArrayHash();
     error InvalidCdfArrayHash();
 }

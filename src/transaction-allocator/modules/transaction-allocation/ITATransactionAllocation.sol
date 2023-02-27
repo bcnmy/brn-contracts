@@ -1,16 +1,26 @@
 // SPDX-License-Identifier: MIT
 
-import "openzeppelin-contracts/contracts/utils/cryptography/EIP712.sol";
-import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
-import "openzeppelin-contracts/contracts/access/Ownable.sol";
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
-
 pragma solidity 0.8.17;
 
-interface ITAAllocationHelper {
+import "src/interfaces/IDebug_GasConsumption.sol";
+import "src/structs/Transaction.sol";
+import "../../common/ITAHelpers.sol";
+
+interface ITATransactionAllocation is IDebug_GasConsumption, ITAHelpers {
     error NoRelayersRegistered();
     error InsufficientRelayersRegistered();
     error RelayerAllocationResultLengthMismatch(uint256 expectedLength, uint256 actualLength);
+    error InvalidRelayerWindow();
+    error GasLimitExceeded(uint256 gasLimit, uint256 gasUsed);
+
+    event RelayersPerWindowUpdated(uint256 relayersPerWindow);
+
+    function execute(
+        ForwardRequest[] calldata _reqs,
+        uint16[] calldata _cdf,
+        uint256[] calldata _relayerGenerationIterations,
+        uint256 _cdfIndex
+    ) external payable returns (bool[] memory, bytes[] memory);
 
     function allocateRelayers(uint256 _blockNumber, uint16[] calldata _cdf)
         external

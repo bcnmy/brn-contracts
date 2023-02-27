@@ -2,9 +2,10 @@
 
 pragma solidity 0.8.17;
 
-import "./IDebug_GasConsumption.sol";
+import "src/interfaces/IDebug_GasConsumption.sol";
+import "../../common/ITAHelpers.sol";
 
-interface ITARelayerManagement is IDebug_GasConsumption {
+interface ITARelayerManagement is IDebug_GasConsumption, ITAHelpers {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
     error InvalidWithdrawal(uint256 amount, uint256 currentTime, uint256 minValidTime, uint256 maxValidTime);
