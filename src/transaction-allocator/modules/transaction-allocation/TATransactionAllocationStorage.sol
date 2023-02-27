@@ -19,5 +19,6 @@ contract TATransactionAllocationStorage {
             ms.slot := slot
         }
     }
+
     /* solhint-enable no-inline-assembly */
 }

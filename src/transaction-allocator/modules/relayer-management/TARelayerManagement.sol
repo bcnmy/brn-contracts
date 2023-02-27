@@ -5,17 +5,17 @@ pragma solidity 0.8.17;
 // TODO: Fix ide settings to detect lib/* imports
 import "lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
-import "./ITARelayerManagement.sol";
-import "./TARelayerManagementStorage.sol";
 import "src/constants/TransactionAllocationConstants.sol";
+import "./interfaces/ITARelayerManagement.sol";
+import "./TARelayerManagementStorage.sol";
 import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
 
 contract TARelayerManagement is
+    TransactionAllocationConstants,
+    ITARelayerManagement,
     TARelayerManagementStorage,
     TAHelpers,
-    ITARelayerManagement,
-    TransactionAllocationConstants,
     TATransactionAllocationStorage
 {
     using SafeCast for uint256;
@@ -282,12 +282,12 @@ contract TARelayerManagement is
         }
 
         // Absentee block must not be in a point before the contract was deployed
-        if (_absentee_blockNumber < ds.MIN_PENATLY_BLOCK_NUMBER) {
+        if (_absentee_blockNumber < ds.penaltyDelayBlocks) {
             revert InvalidAbsenteeBlockNumber();
         }
 
         // The Absentee block must not be in the current window
-        uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksWindow);
+        uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksPerWindow);
         if (_absentee_blockNumber >= currentWindowStartBlock) {
             revert InvalidAbsenteeBlockNumber();
         }
@@ -336,5 +336,55 @@ contract TARelayerManagement is
             );
 
         emit GenericGasConsumed("Process Penalty", gas - gasleft());
+    }
+
+    ////////////////////////// Getters //////////////////////////
+
+    function relayerCount() external view override returns (uint256) {
+        return getRMStorage().relayerCount;
+    }
+
+    function relayerInfo_Stake(address _relayer) external view override returns (uint256) {
+        return getRMStorage().relayerInfo[_relayer].stake;
+    }
+
+    function relayerInfo_Endpoint(address _relayer) external view override returns (string memory) {
+        return getRMStorage().relayerInfo[_relayer].endpoint;
+    }
+
+    function relayerInfo_Index(address _relayer) external view override returns (uint256) {
+        return getRMStorage().relayerInfo[_relayer].index;
+    }
+
+    function relayerInfo_isAccount(address _relayer, address _account) external view override returns (bool) {
+        return getRMStorage().relayerInfo[_relayer].isAccount[_account];
+    }
+
+    function relayersPerWindow() external view override returns (uint256) {
+        return getRMStorage().relayersPerWindow;
+    }
+
+    function blocksPerWindow() external view override returns (uint256) {
+        return getRMStorage().blocksPerWindow;
+    }
+
+    function cdfHashUpdateLog(uint256 _index) external view override returns (CdfHashUpdateInfo memory) {
+        return getRMStorage().cdfHashUpdateLog[_index];
+    }
+
+    function stakeArrayHash() external view override returns (bytes32) {
+        return getRMStorage().stakeArrayHash;
+    }
+
+    function penaltyDelayBlocks() external view override returns (uint256) {
+        return getRMStorage().penaltyDelayBlocks;
+    }
+
+    function withdrawalInfo(address _relayer) external view override returns (WithdrawalInfo memory) {
+        return getRMStorage().withdrawalInfo[_relayer];
+    }
+
+    function withdrawDelay() external view override returns (uint256) {
+        return getRMStorage().withdrawDelay;
     }
 }

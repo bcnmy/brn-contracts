@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "./ITATransactionAllocation.sol";
+import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
 import "../../common/TAHelpers.sol";
@@ -255,5 +255,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         return (txnAllocated, relayerGenerationIteration, selectedRelayerCdfIndex);
+    }
+
+    ////////////////////////// Getters //////////////////////////
+
+    function attendance(uint256 _windowIndex, address _relayer) external view override returns (bool) {
+        return getTAStorage().attendance[_windowIndex][_relayer];
     }
 }

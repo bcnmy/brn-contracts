@@ -3,9 +3,9 @@
 pragma solidity 0.8.17;
 
 import "src/interfaces/IDebug_GasConsumption.sol";
-import "../../common/ITAHelpers.sol";
+import "src/structs/TAStructs.sol";
 
-interface ITARelayerManagement is IDebug_GasConsumption, ITAHelpers {
+interface ITARelayerManagement is IDebug_GasConsumption {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
     error InvalidWithdrawal(uint256 amount, uint256 currentTime, uint256 minValidTime, uint256 maxValidTime);
@@ -56,4 +56,28 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITAHelpers {
         uint256 _absentee_cdfIndex,
         uint32[] calldata _currentStakeArray
     ) external;
+
+    function relayerCount() external view returns (uint256);
+
+    function relayerInfo_Stake(address) external view returns (uint256);
+
+    function relayerInfo_Endpoint(address) external view returns (string memory);
+
+    function relayerInfo_Index(address) external view returns (uint256);
+
+    function relayerInfo_isAccount(address, address) external view returns (bool);
+
+    function relayersPerWindow() external view returns (uint256);
+
+    function blocksPerWindow() external view returns (uint256);
+
+    function cdfHashUpdateLog(uint256) external view returns (CdfHashUpdateInfo memory);
+
+    function stakeArrayHash() external view returns (bytes32);
+
+    function penaltyDelayBlocks() external view returns (uint256);
+
+    function withdrawalInfo(address) external view returns (WithdrawalInfo memory);
+
+    function withdrawDelay() external view returns (uint256);
 }

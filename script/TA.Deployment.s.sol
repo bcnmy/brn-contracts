@@ -8,7 +8,7 @@ import "src/transaction-allocator/TAProxy.sol";
 import "src/transaction-allocator/modules/delegation/TADelegation.sol";
 import "src/transaction-allocator/modules/relayer-management/TARelayerManagement.sol";
 import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocation.sol";
-import "src/transaction-allocator/ITransactionAllocator.sol";
+import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
 
 import "src/structs/TAStructs.sol";
 
@@ -50,7 +50,7 @@ contract TADeploymentScript is Script {
             console2.log("Deploying Transaction Allocator contracts...");
             console2.log("Chain ID: ", block.chainid);
             console2.log("Deployer Address: ", deployerAddr);
-            console2.log("Deployer Funds:", deployerAddr.balance);
+            console2.log("Deployer Funds: ", deployerAddr.balance);
         }
 
         vm.startBroadcast(_deployerPrivateKey);

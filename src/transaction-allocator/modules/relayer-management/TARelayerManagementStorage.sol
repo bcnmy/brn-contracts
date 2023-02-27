@@ -17,13 +17,13 @@ contract TARelayerManagementStorage {
         // random number of realyers selected per window
         uint256 relayersPerWindow;
         /// blocks per node
-        uint256 blocksWindow;
+        uint256 blocksPerWindow;
         // cdf array hash
         CdfHashUpdateInfo[] cdfHashUpdateLog;
         // stake array hash
         bytes32 stakeArrayHash;
         // -------Transaction Allocator State-------
-        uint256 MIN_PENATLY_BLOCK_NUMBER;
+        uint256 penaltyDelayBlocks;
         /// Maps relayer address to pending withdrawals
         mapping(address => WithdrawalInfo) withdrawalInfo;
         // unbounding period
@@ -37,5 +37,6 @@ contract TARelayerManagementStorage {
             ms.slot := slot
         }
     }
+
     /* solhint-enable no-inline-assembly */
 }

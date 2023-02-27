@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "./ITAProxy.sol";
+import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
@@ -55,11 +55,11 @@ contract TAProxy is
     function _initialize(InitalizerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
 
-        rms.blocksWindow = _params.blocksPerWindow;
+        rms.blocksPerWindow = _params.blocksPerWindow;
         rms.withdrawDelay = _params.withdrawDelay;
         rms.relayersPerWindow = _params.relayersPerWindow;
         rms.stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
-        rms.MIN_PENATLY_BLOCK_NUMBER = block.number + _params.penaltyDelayBlocks;
+        rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
     }
 
     /// @notice Adds a new module

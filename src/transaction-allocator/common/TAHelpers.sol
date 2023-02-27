@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-import "./ITAHelpers.sol";
+import "./interfaces/ITAHelpers.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 
 contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
@@ -32,7 +32,7 @@ contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
 
     function _windowIdentifier(uint256 _blockNumber) internal view returns (uint256) {
         RMStorage storage ds = getRMStorage();
-        return _blockNumber / ds.blocksWindow;
+        return _blockNumber / ds.blocksPerWindow;
     }
 
     function _randomCdfNumber(uint256 _blockNumber, uint256 _iter, uint256 _max)

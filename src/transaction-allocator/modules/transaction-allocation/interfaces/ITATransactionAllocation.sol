@@ -4,9 +4,8 @@ pragma solidity 0.8.17;
 
 import "src/interfaces/IDebug_GasConsumption.sol";
 import "src/structs/Transaction.sol";
-import "../../common/ITAHelpers.sol";
 
-interface ITATransactionAllocation is IDebug_GasConsumption, ITAHelpers {
+interface ITATransactionAllocation is IDebug_GasConsumption {
     error NoRelayersRegistered();
     error InsufficientRelayersRegistered();
     error RelayerAllocationResultLengthMismatch(uint256 expectedLength, uint256 actualLength);
@@ -33,4 +32,6 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITAHelpers {
         bytes[] calldata _txnCalldata,
         uint16[] calldata _cdf
     ) external view returns (bytes[] memory, uint256[] memory, uint256);
+
+    function attendance(uint256, address) external view returns (bool);
 }
