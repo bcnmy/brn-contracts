@@ -13,7 +13,7 @@ contract TARelayerManagementRegistrationTest is
     ITARelayerManagementEventsErrors,
     ITAHelpers
 {
-    function testRelayerRegistration() external withTADeployed {
+    function testRelayerRegistration() external atSnapshot {
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
             string memory endpoint = "test";
@@ -37,7 +37,7 @@ contract TARelayerManagementRegistrationTest is
         }
     }
 
-    function testRelayerUnRegistration() external withTADeployed {
+    function testRelayerUnRegistration() external atSnapshot {
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
@@ -80,7 +80,7 @@ contract TARelayerManagementRegistrationTest is
         }
     }
 
-    function testWithdrawal() external withTADeployed {
+    function testWithdrawal() external atSnapshot {
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
@@ -126,7 +126,7 @@ contract TARelayerManagementRegistrationTest is
         }
     }
 
-    function testCannotRegisterWithNoRelayAccounts() external withTADeployed {
+    function testCannotRegisterWithNoRelayAccounts() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
         address[] memory accounts;
@@ -138,7 +138,7 @@ contract TARelayerManagementRegistrationTest is
         vm.stopPrank();
     }
 
-    function testCannotRegisterWithInsufficientStake() external withTADeployed {
+    function testCannotRegisterWithInsufficientStake() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT - 1;
         string memory endpoint = "test";
 
@@ -149,7 +149,7 @@ contract TARelayerManagementRegistrationTest is
         vm.stopPrank();
     }
 
-    function testCannotRegisterWithInvalidStakeArray() external withTADeployed {
+    function testCannotRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
@@ -161,7 +161,7 @@ contract TARelayerManagementRegistrationTest is
         vm.stopPrank();
     }
 
-    function testCannotUnRegisterWithInvalidStakeArray() external withTADeployed {
+    function testCannotUnRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
@@ -174,7 +174,7 @@ contract TARelayerManagementRegistrationTest is
         vm.stopPrank();
     }
 
-    function testCannotSetAccountsStateAfterUnRegistering() external withTADeployed {
+    function testCannotSetAccountsStateAfterUnRegistering() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
@@ -189,7 +189,7 @@ contract TARelayerManagementRegistrationTest is
         vm.stopPrank();
     }
 
-    function testCannotWithdrawBeforeWithdrawTime() external withTADeployed {
+    function testCannotWithdrawBeforeWithdrawTime() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 

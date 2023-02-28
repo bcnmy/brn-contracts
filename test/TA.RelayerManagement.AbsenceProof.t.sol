@@ -42,7 +42,7 @@ contract TARelayerManagementAbsenceProofTest is
         return _postRegistrationSnapshotId;
     }
 
-    function testAbsenceProofSubmission() external withTADeployed {
+    function testAbsenceProofSubmission() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -84,7 +84,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofWithIncorrectReporterCdf() external withTADeployed {
+    function testCannotSubmitAbsenceProofWithIncorrectReporterCdf() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -122,7 +122,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofWithIncorrectReporterStakeArray() external withTADeployed {
+    function testCannotSubmitAbsenceProofWithIncorrectReporterStakeArray() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -160,7 +160,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofIfReporterIsNotSelectedAsFirstRelayerInWindow() external withTADeployed {
+    function testCannotSubmitAbsenceProofIfReporterIsNotSelectedAsFirstRelayerInWindow() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -199,7 +199,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofInTheSameWindow() external withTADeployed {
+    function testCannotSubmitAbsenceProofInTheSameWindow() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -233,7 +233,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofWithIncorrectAbsenteeCdf() external withTADeployed {
+    function testCannotSubmitAbsenceProofWithIncorrectAbsenteeCdf() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -271,7 +271,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofIfAbsenteeWasNotAbsent() external withTADeployed {
+    function testCannotSubmitAbsenceProofIfAbsenteeWasNotAbsent() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer in the current window to miss tx submission in current window
@@ -316,7 +316,7 @@ contract TARelayerManagementAbsenceProofTest is
         vm.stopPrank();
     }
 
-    function testCannotSubmitAbsenceProofIfAbsenteeWasNotSelected() external withTADeployed {
+    function testCannotSubmitAbsenceProofIfAbsenteeWasNotSelected() external atSnapshot {
         vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
 
         // Select a relayer not selected in the current window

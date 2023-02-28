@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
+import "./Transaction.sol";
+
 // relayer information
 struct RelayerInfo {
     uint256 stake;
@@ -44,6 +46,6 @@ struct AbsenceProofAbsenteeData {
 
 struct AllocateTransactionParams {
     address relayer;
-    bytes[] txnCalldata;
+    ForwardRequest[] requests;
     uint16[] cdf;
 }

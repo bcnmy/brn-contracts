@@ -61,7 +61,7 @@ abstract contract TATestBase is Test {
         _postDeploymentSnapshotId = vm.snapshot();
     }
 
-    modifier withTADeployed() {
+    modifier atSnapshot() {
         bool revertStatus = vm.revertTo(_preTestSnapshotId());
         if (!revertStatus) {
             fail("Failed to revert to post deployment snapshot");

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.17;
 
-contract TransactionMock {
-    event UpdatedA(uint256 a);
+import "./interfaces/ITransactionMockEventsErrors.sol";
 
+contract TransactionMock is ITransactionMockEventsErrors {
     uint256 a;
 
     function mockAdd(uint256 b, uint256 c) public pure returns (uint256) {
@@ -14,8 +14,9 @@ contract TransactionMock {
         return b - c;
     }
 
-    function mockUpdate(uint256 _a) public {
+    function mockUpdate(uint256 _a) public returns (bool) {
         a = _a;
         emit UpdatedA(_a);
+        return true;
     }
 }

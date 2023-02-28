@@ -6,7 +6,6 @@ import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
 import "../../common/TAHelpers.sol";
-
 import "src/structs/Transaction.sol";
 import "src/structs/TAStructs.sol";
 
@@ -159,9 +158,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         if (_cdf.length == 0) {
             revert NoRelayersRegistered();
         }
-        if (ds.relayerCount < ds.relayersPerWindow) {
-            revert InsufficientRelayersRegistered();
-        }
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
         address[] memory selectedRelayers = new address[](ds.relayersPerWindow);
@@ -196,7 +192,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         external
         view
         verifyCdfHash(_data.cdf)
-        returns (bytes[] memory, uint256[] memory, uint256)
+        returns (ForwardRequest[] memory, uint256[] memory, uint256)
     {
         (address[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) = allocateRelayers(_data.cdf);
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
@@ -205,17 +201,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Filter the transactions
         uint256 selectedRelayerCdfIndex;
-        bytes[] memory txnAllocated = new bytes[](_data.txnCalldata.length);
+        ForwardRequest[] memory txnAllocated = new ForwardRequest[](_data.requests.length);
         uint256[] memory relayerGenerationIteration = new uint256[](
-            _data.txnCalldata.length
+            _data.requests.length
         );
         uint256 j;
-        for (uint256 i = 0; i < _data.txnCalldata.length;) {
+        for (uint256 i = 0; i < _data.requests.length;) {
             // If the transaction can be processed by this relayer, store it's info
-            uint256 relayerIndex = _assignRelayer(_data.txnCalldata[i]);
+            uint256 relayerIndex = _assignRelayer(_data.requests[i].data);
             if (relayersAllocated[relayerIndex] == _data.relayer) {
                 relayerGenerationIteration[j] = relayerIndex;
-                txnAllocated[j] = _data.txnCalldata[i];
+                txnAllocated[j] = _data.requests[i];
                 selectedRelayerCdfIndex = relayerStakePrefixSumIndex[relayerIndex];
                 unchecked {
                     ++j;
@@ -228,7 +224,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Reduce the array sizes if needed
-        uint256 extraLength = _data.txnCalldata.length - j;
+        uint256 extraLength = _data.requests.length - j;
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
             mstore(relayerGenerationIteration, sub(mload(relayerGenerationIteration), extraLength))

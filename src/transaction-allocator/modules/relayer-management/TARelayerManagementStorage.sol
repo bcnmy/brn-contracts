@@ -15,6 +15,7 @@ abstract contract TARelayerManagementStorage {
         // Relayer Index to Relayer
         mapping(uint256 => address) relayerIndexToRelayer;
         // random number of realyers selected per window
+        // TODO: Dynamic?
         uint256 relayersPerWindow;
         /// blocks per node
         uint256 blocksPerWindow;

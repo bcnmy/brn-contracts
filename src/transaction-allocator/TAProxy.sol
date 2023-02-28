@@ -7,7 +7,6 @@ import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
-
 import "src/structs/TAStructs.sol";
 
 contract TAProxy is
@@ -55,6 +54,7 @@ contract TAProxy is
     function _initialize(InitalizerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
 
+        // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
         rms.withdrawDelay = _params.withdrawDelay;
         rms.relayersPerWindow = _params.relayersPerWindow;

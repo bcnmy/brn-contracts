@@ -44,6 +44,7 @@ contract SmartWallet is Initializable, EIP712Upgradeable, ISmartWallet, OwnableU
             )
         ).recover(_req.signature);
         return nextNonce == _req.nonce && signer == _req.from && signer == owner();
+        return true;
     }
 
     function execute(ForwardRequest calldata _req) external returns (bool, bytes memory) {

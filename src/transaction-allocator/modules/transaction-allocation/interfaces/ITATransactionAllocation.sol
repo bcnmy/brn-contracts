@@ -20,7 +20,7 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
     function allocateTransaction(AllocateTransactionParams calldata _data)
         external
         view
-        returns (bytes[] memory, uint256[] memory, uint256);
+        returns (ForwardRequest[] memory, uint256[] memory, uint256);
 
     function attendance(uint256, address) external view returns (bool);
 }
