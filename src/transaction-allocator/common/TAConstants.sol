@@ -6,5 +6,5 @@ abstract contract TAConstants {
     uint256 constant STAKE_SCALING_FACTOR = 10 ** 18;
     uint256 constant ABSENCE_PENATLY = 250; // % * 100
     uint256 constant ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION = 0;
-    uint256 constant MINIMUM_STAKE_AMOUNT = 1e17;
+    uint256 constant MINIMUM_STAKE_AMOUNT = 10 ** 19;
 }

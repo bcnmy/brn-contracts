@@ -6,12 +6,5 @@ import "../modules/delegation/interfaces/ITADelegation.sol";
 import "../modules/relayer-management/interfaces/ITARelayerManagement.sol";
 import "../modules/transaction-allocation/interfaces/ITATransactionAllocation.sol";
 import "../common/interfaces/ITAHelpers.sol";
-import "./ITAProxy.sol";
 
-interface ITransactionAllocator is
-    ITADelegation,
-    ITARelayerManagement,
-    ITATransactionAllocation,
-    ITAProxy,
-    ITAHelpers
-{}
+interface ITransactionAllocator is ITADelegation, ITARelayerManagement, ITATransactionAllocation, ITAHelpers {}

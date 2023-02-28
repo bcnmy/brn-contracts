@@ -3,32 +3,10 @@
 pragma solidity 0.8.17;
 
 import "src/interfaces/IDebug_GasConsumption.sol";
+import "./ITARelayerManagementEventsErrors.sol";
 import "src/structs/TAStructs.sol";
 
-interface ITARelayerManagement is IDebug_GasConsumption {
-    error NoAccountsProvided();
-    error InsufficientStake(uint256 stake, uint256 minimumStake);
-    error InvalidWithdrawal(uint256 amount, uint256 currentTime, uint256 minValidTime, uint256 maxValidTime);
-    error InvalidRelayerWindowForReporter();
-    error InvalidAbsenteeBlockNumber();
-    error InvalidAbsenteeCdfArrayHash();
-    error InvalidRelayeWindowForAbsentee();
-    error AbsenteeWasPresent(uint256 absenteeWindowId);
-    error ReporterTransferFailed(address reporter, uint256 amount);
-
-    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
-    event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
-    event RelayerRegistered(address indexed relayer, string endpoint, address[] accounts, uint256 stake);
-    event RelayerUnRegistered(address indexed relayer);
-    event Withdraw(address indexed relayer, uint256 amount);
-    event AbsenceProofProcessed(
-        uint256 indexed windowId,
-        address indexed reporter,
-        address indexed absentRelayer,
-        uint256 absenceWindowId,
-        uint256 penalty
-    );
-
+interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
     function getStakeArray() external view returns (uint32[] memory);
 
     function getCdf() external view returns (uint16[] memory);
@@ -42,7 +20,7 @@ interface ITARelayerManagement is IDebug_GasConsumption {
 
     function unRegister(uint32[] calldata _previousStakeArray) external;
 
-    function withdraw(address relayer) external;
+    function withdraw() external;
 
     function processAbsenceProof(
         uint16[] calldata _reporter_cdf,
@@ -80,4 +58,6 @@ interface ITARelayerManagement is IDebug_GasConsumption {
     function withdrawalInfo(address) external view returns (WithdrawalInfo memory);
 
     function withdrawDelay() external view returns (uint256);
+
+    function setRelayerAccountsStatus(address[] calldata _accounts, bool[] calldata _status) external;
 }

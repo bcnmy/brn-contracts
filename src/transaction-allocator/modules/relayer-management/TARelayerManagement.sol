@@ -10,6 +10,8 @@ import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
 import "../../common/TAConstants.sol";
 
+import "forge-std/console2.sol";
+
 contract TARelayerManagement is
     TAConstants,
     ITARelayerManagement,
@@ -184,8 +186,12 @@ contract TARelayerManagement is
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.index = ds.relayerCount;
-        for (uint256 i = 0; i < _accounts.length; i++) {
+        uint256 length = _accounts.length;
+        for (uint256 i = 0; i < length;) {
             node.isAccount[_accounts[i]] = true;
+            unchecked {
+                ++i;
+            }
         }
         ds.relayerIndexToRelayer[node.index] = msg.sender;
         ++ds.relayerCount;
@@ -207,6 +213,7 @@ contract TARelayerManagement is
         uint256 n = ds.relayerCount - 1;
         uint256 stake = node.stake;
         uint256 nodeIndex = node.index;
+        delete ds.relayerInfo[msg.sender];
 
         if (nodeIndex != n) {
             address lastRelayer = ds.relayerIndexToRelayer[n];
@@ -225,18 +232,41 @@ contract TARelayerManagement is
         emit RelayerUnRegistered(msg.sender);
     }
 
-    function withdraw(address relayer) external {
+    function withdraw() external {
         RMStorage storage ds = getRMStorage();
 
-        WithdrawalInfo memory w = ds.withdrawalInfo[relayer];
+        WithdrawalInfo memory w = ds.withdrawalInfo[msg.sender];
         if (!(w.amount > 0 && w.time < block.timestamp)) {
-            revert InvalidWithdrawal(w.amount, w.time, 0, block.timestamp);
+            // TODO: Max Valid Time??
+            revert InvalidWithdrawal(w.amount, block.timestamp, w.time, 0);
         }
-        ds.withdrawalInfo[relayer] = WithdrawalInfo(0, 0);
+        ds.withdrawalInfo[msg.sender] = WithdrawalInfo(0, 0);
 
         // todo: send w.amount to relayer
 
-        emit Withdraw(relayer, w.amount);
+        emit Withdraw(msg.sender, w.amount);
+    }
+
+    function setRelayerAccountsStatus(address[] calldata _accounts, bool[] calldata _status) external {
+        if (_accounts.length != _status.length) {
+            revert ParameterLengthMismatch();
+        }
+
+        RMStorage storage ds = getRMStorage();
+        RelayerInfo storage node = ds.relayerInfo[msg.sender];
+        if (node.stake == 0) {
+            revert InvalidRelayer(msg.sender);
+        }
+
+        uint256 length = _accounts.length;
+        for (uint256 i = 0; i < length;) {
+            node.isAccount[_accounts[i]] = _status[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        emit RelayerAccountsUpdated(msg.sender, _accounts, _status);
     }
 
     function processAbsenceProof(

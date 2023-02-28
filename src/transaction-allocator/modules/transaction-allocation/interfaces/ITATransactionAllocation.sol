@@ -4,16 +4,9 @@ pragma solidity 0.8.17;
 
 import "src/interfaces/IDebug_GasConsumption.sol";
 import "src/structs/Transaction.sol";
+import "./ITATransactionAllocationEventsErrors.sol";
 
-interface ITATransactionAllocation is IDebug_GasConsumption {
-    error NoRelayersRegistered();
-    error InsufficientRelayersRegistered();
-    error RelayerAllocationResultLengthMismatch(uint256 expectedLength, uint256 actualLength);
-    error InvalidRelayerWindow();
-    error GasLimitExceeded(uint256 gasLimit, uint256 gasUsed);
-
-    event RelayersPerWindowUpdated(uint256 relayersPerWindow);
-
+interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
