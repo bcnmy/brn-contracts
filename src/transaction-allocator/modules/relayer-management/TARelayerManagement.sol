@@ -2,8 +2,7 @@
 
 pragma solidity 0.8.17;
 
-// TODO: Fix ide settings to detect lib/* imports
-import "lib/openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 import "src/constants/TransactionAllocationConstants.sol";
 import "./interfaces/ITARelayerManagement.sol";
