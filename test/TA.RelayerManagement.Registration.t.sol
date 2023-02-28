@@ -2,12 +2,17 @@
 
 pragma solidity 0.8.17;
 
-import "./base/TATestBase.sol";
+import "./base/TATestBase.t.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-contract TARelayerManagementTest is TATestBase, TAConstants, ITARelayerManagementEventsErrors, ITAHelpers {
+contract TARelayerManagementRegistrationTest is
+    TATestBase,
+    TAConstants,
+    ITARelayerManagementEventsErrors,
+    ITAHelpers
+{
     function testRelayerRegistration() external withTADeployed {
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;

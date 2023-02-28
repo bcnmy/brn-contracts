@@ -23,15 +23,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function withdraw() external;
 
     function processAbsenceProof(
-        uint16[] calldata _reporter_cdf,
-        uint256 _reporter_cdfIndex,
-        uint256[] calldata _reporter_relayerGenerationIterations,
-        address _absentee_relayerAddress,
-        uint256 _absentee_blockNumber,
-        uint256 _absentee_latestStakeUpdationCdfLogIndex,
-        uint16[] calldata _absentee_cdf,
-        uint256[] calldata _absentee_relayerGenerationIterations,
-        uint256 _absentee_cdfIndex,
+        AbsenceProofReporterData calldata _reporterData,
+        AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray
     ) external;
 

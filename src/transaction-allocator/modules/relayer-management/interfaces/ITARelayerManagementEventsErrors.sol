@@ -10,7 +10,7 @@ interface ITARelayerManagementEventsErrors {
     error InvalidRelayerWindowForReporter();
     error InvalidAbsenteeBlockNumber();
     error InvalidAbsenteeCdfArrayHash();
-    error InvalidRelayeWindowForAbsentee();
+    error InvalidRelayerWindowForAbsentee();
     error AbsenteeWasPresent(uint256 absenteeWindowId);
     error ReporterTransferFailed(address reporter, uint256 amount);
     error ParameterLengthMismatch();

@@ -26,3 +26,24 @@ struct InitalizerParams {
     uint256 relayersPerWindow;
     uint256 penaltyDelayBlocks;
 }
+
+struct AbsenceProofReporterData {
+    uint16[] cdf;
+    uint256 cdfIndex;
+    uint256[] relayerGenerationIterations;
+}
+
+struct AbsenceProofAbsenteeData {
+    address relayerAddress;
+    uint256 blockNumber;
+    uint256 latestStakeUpdationCdfLogIndex;
+    uint16[] cdf;
+    uint256[] relayerGenerationIterations;
+    uint256 cdfIndex;
+}
+
+struct AllocateTransactionParams {
+    address relayer;
+    bytes[] txnCalldata;
+    uint16[] cdf;
+}

@@ -270,29 +270,17 @@ contract TARelayerManagement is
     }
 
     function processAbsenceProof(
-        // Reporter selection proof in current window
-        uint16[] calldata _reporter_cdf,
-        uint256 _reporter_cdfIndex,
-        uint256[] calldata _reporter_relayerGenerationIterations,
-        // Absentee selection proof in arbitrary past window
-        address _absentee_relayerAddress,
-        uint256 _absentee_blockNumber,
-        uint256 _absentee_latestStakeUpdationCdfLogIndex,
-        uint16[] calldata _absentee_cdf,
-        uint256[] calldata _absentee_relayerGenerationIterations,
-        uint256 _absentee_cdfIndex,
-        // Other stuff
+        AbsenceProofReporterData calldata _reporterData,
+        AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray
-    ) public verifyCdfHash(_reporter_cdf) verifyStakeArrayHash(_currentStakeArray) {
-        RMStorage storage ds = getRMStorage();
-        TAStorage storage ts = getTAStorage();
-
+    ) public verifyCdfHash(_reporterData.cdf) verifyStakeArrayHash(_currentStakeArray) {
         uint256 gas = gasleft();
+
         address reporter_relayerAddress = msg.sender;
 
         if (
-            !(_reporter_relayerGenerationIterations.length == 1)
-                || !(_reporter_relayerGenerationIterations[0] == ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION)
+            !(_reporterData.relayerGenerationIterations.length == 1)
+                || !(_reporterData.relayerGenerationIterations[0] == ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION)
         ) {
             revert InvalidRelayerWindowForReporter();
         }
@@ -301,57 +289,67 @@ contract TARelayerManagement is
         if (
             !_verifyRelayerSelection(
                 reporter_relayerAddress,
-                _reporter_cdf,
-                _reporter_cdfIndex,
-                _reporter_relayerGenerationIterations,
+                _reporterData.cdf,
+                _reporterData.cdfIndex,
+                _reporterData.relayerGenerationIterations,
                 block.number
             )
         ) {
             revert InvalidRelayerWindowForReporter();
         }
 
-        // Absentee block must not be in a point before the contract was deployed
-        if (_absentee_blockNumber < ds.penaltyDelayBlocks) {
-            revert InvalidAbsenteeBlockNumber();
+        {
+            RMStorage storage ds = getRMStorage();
+
+            // Absentee block must not be in a point before the contract was deployed
+            if (_absenteeData.blockNumber < ds.penaltyDelayBlocks) {
+                revert InvalidAbsenteeBlockNumber();
+            }
+
+            {
+                // The Absentee block must not be in the current window
+                uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksPerWindow);
+                if (_absenteeData.blockNumber >= currentWindowStartBlock) {
+                    revert InvalidAbsenteeBlockNumber();
+                }
+            }
         }
 
-        // The Absentee block must not be in the current window
-        uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksPerWindow);
-        if (_absentee_blockNumber >= currentWindowStartBlock) {
-            revert InvalidAbsenteeBlockNumber();
-        }
+        {
+            // Verify CDF hash of the Absentee Window
+            uint256 absentee_windowId = _windowIdentifier(_absenteeData.blockNumber);
+            if (!_verifyPrevCdfHash(_absenteeData.cdf, absentee_windowId, _absenteeData.latestStakeUpdationCdfLogIndex))
+            {
+                revert InvalidAbsenteeCdfArrayHash();
+            }
 
-        // Verify CDF hash of the Absentee Window
-        uint256 absentee_windowId = _windowIdentifier(_absentee_blockNumber);
-        if (!_verifyPrevCdfHash(_absentee_cdf, absentee_windowId, _absentee_latestStakeUpdationCdfLogIndex)) {
-            revert InvalidAbsenteeCdfArrayHash();
+            // Verify Absence of the relayer
+            TAStorage storage ts = getTAStorage();
+            if (ts.attendance[absentee_windowId][_absenteeData.relayerAddress]) {
+                revert AbsenteeWasPresent(absentee_windowId);
+            }
         }
 
         // Verify Relayer Selection in Absentee Window
         if (
             !_verifyRelayerSelection(
-                _absentee_relayerAddress,
-                _absentee_cdf,
-                _absentee_cdfIndex,
-                _absentee_relayerGenerationIterations,
-                _absentee_blockNumber
+                _absenteeData.relayerAddress,
+                _absenteeData.cdf,
+                _absenteeData.cdfIndex,
+                _absenteeData.relayerGenerationIterations,
+                _absenteeData.blockNumber
             )
         ) {
-            revert InvalidRelayeWindowForAbsentee();
-        }
-
-        // Verify Absence of the relayer
-        if (ts.attendance[absentee_windowId][_absentee_relayerAddress]) {
-            revert AbsenteeWasPresent(absentee_windowId);
+            revert InvalidRelayerWindowForAbsentee();
         }
 
         emit GenericGasConsumed("Verification", gas - gasleft());
         gas = gasleft();
 
         // Process penalty
-        uint256 penalty = (ds.relayerInfo[_absentee_relayerAddress].stake * ABSENCE_PENATLY) / 10000;
+        uint256 penalty = (getRMStorage().relayerInfo[_absenteeData.relayerAddress].stake * ABSENCE_PENALTY) / 10000;
         uint32[] memory newStakeArray =
-            _decreaseStake(_currentStakeArray, _absentee_cdfIndex, (penalty / STAKE_SCALING_FACTOR).toUint32());
+            _decreaseStake(_currentStakeArray, _absenteeData.cdfIndex, (penalty / STAKE_SCALING_FACTOR).toUint32());
         _updateStakeAccounting(newStakeArray);
         // TODO: Enable once funds are accepted in registration flow
         // _sendPenalty(reporter_relayerAddress, penalty);
@@ -359,8 +357,8 @@ contract TARelayerManagement is
         emit AbsenceProofProcessed(
             _windowIdentifier(block.number),
             msg.sender,
-            _absentee_relayerAddress,
-            _windowIdentifier(_absentee_blockNumber),
+            _absenteeData.relayerAddress,
+            _windowIdentifier(_absenteeData.blockNumber),
             penalty
             );
 

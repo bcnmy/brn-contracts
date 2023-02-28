@@ -72,31 +72,28 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @param _cdfIndex index of relayer in cdf
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
+    // TODO: Why payable? to save gas?
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex
-    ) public payable returns (bool[] memory, bytes[] memory) {
-        RMStorage storage ds = getRMStorage();
-        TAStorage storage ts = getTAStorage();
-
-        uint256 gasLeft = gasleft();
+    ) public payable returns (bool[] memory successes, bytes[] memory returndatas) {
+        // uint256 gasLeft = gasleft();
         if (!_verifyLatestCdfHash(_cdf)) {
             revert InvalidCdfArrayHash();
         }
         if (!_verifyTransactionAllocation(_cdf, _cdfIndex, _relayerGenerationIterations, block.number, _reqs)) {
             revert InvalidRelayerWindow();
         }
-        emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
+        // emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
+        uint256 gasLeft = gasleft();
 
-        gasLeft = gasleft();
-
+        // Execute all transactions
         uint256 length = _reqs.length;
         uint256 totalGas = 0;
-        bool[] memory successes = new bool[](length);
-        bytes[] memory returndatas = new bytes[](length);
-
+        successes = new bool[](length);
+        returndatas = new bytes[](length);
         for (uint256 i = 0; i < length;) {
             ForwardRequest calldata _req = _reqs[i];
 
@@ -120,6 +117,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit GenericGasConsumed("ExecutionGas", gasLeft - gasleft());
 
         gasLeft = gasleft();
+        TAStorage storage ts = getTAStorage();
+        RMStorage storage ds = getRMStorage();
         ts.attendance[_windowIdentifier(block.number)][ds.relayerIndexToRelayer[_cdfIndex]] = true;
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
@@ -146,11 +145,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @notice Given a block number, the function generates a list of pseudo-random relayers
     ///         for the window of which the block in a part of. The generated list of relayers
     ///         is pseudo-random but deterministic
-    /// @param _blockNumber block number for which the relayers are to be generated
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
     /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
-    function allocateRelayers(uint256 _blockNumber, uint16[] calldata _cdf)
+    function allocateRelayers(uint16[] calldata _cdf)
         public
         view
         verifyCdfHash(_cdf)
@@ -164,9 +162,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         if (ds.relayerCount < ds.relayersPerWindow) {
             revert InsufficientRelayersRegistered();
         }
-        if (_blockNumber == 0) {
-            _blockNumber = block.number;
-        }
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
         address[] memory selectedRelayers = new address[](ds.relayersPerWindow);
@@ -178,7 +173,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         for (uint256 i = 0; i < ds.relayersPerWindow;) {
-            uint256 randomCdfNumber = _randomCdfNumber(_blockNumber, i, _cdf[cdfLength - 1]);
+            uint256 randomCdfNumber = _randomCdfNumber(block.number, i, _cdf[cdfLength - 1]);
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
             RelayerInfo storage relayer = ds.relayerInfo[ds.relayerIndexToRelayer[cdfIndex[i]]];
             uint256 relayerIndex = relayer.index;
@@ -193,49 +188,34 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /// @notice determine what transactions can be relayed by the sender
-    /// @param _relayer Address of the relayer to allocate transactions for
-    /// @param _blockNumber block number for which the relayers are to be generated
-    /// @param _txnCalldata list with all transactions calldata to be filtered
-    /// @return txnAllocated list of transactions that can be relayed by the relayer
+    /// @param _data data for the allocation
     /// @return relayerGenerationIteration list of iterations of the relayer generation corresponding
     ///                                    to the selected transactions
     /// @return selectedRelayersCdfIndex index of the selected relayer in the cdf
-    function allocateTransaction(
-        address _relayer,
-        uint256 _blockNumber,
-        bytes[] calldata _txnCalldata,
-        uint16[] calldata _cdf
-    ) public view verifyCdfHash(_cdf) returns (bytes[] memory, uint256[] memory, uint256) {
-        RMStorage storage ds = getRMStorage();
-
-        if (_blockNumber == 0) {
-            _blockNumber = block.number;
-        }
-
-        (address[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
-            allocateRelayers(_blockNumber, _cdf);
-        if (relayersAllocated.length != ds.relayersPerWindow) {
-            revert RelayerAllocationResultLengthMismatch(ds.relayersPerWindow, relayersAllocated.length);
+    function allocateTransaction(AllocateTransactionParams calldata _data)
+        external
+        view
+        verifyCdfHash(_data.cdf)
+        returns (bytes[] memory, uint256[] memory, uint256)
+    {
+        (address[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) = allocateRelayers(_data.cdf);
+        if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
+            revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
         }
 
         // Filter the transactions
         uint256 selectedRelayerCdfIndex;
-        bytes[] memory txnAllocated = new bytes[](_txnCalldata.length);
+        bytes[] memory txnAllocated = new bytes[](_data.txnCalldata.length);
         uint256[] memory relayerGenerationIteration = new uint256[](
-            _txnCalldata.length
+            _data.txnCalldata.length
         );
         uint256 j;
-
-        // Filter the transactions
-        for (uint256 i = 0; i < _txnCalldata.length;) {
-            uint256 relayerIndex = _assignRelayer(_txnCalldata[i]);
-            address relayerAddress = relayersAllocated[relayerIndex];
-            RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-
+        for (uint256 i = 0; i < _data.txnCalldata.length;) {
             // If the transaction can be processed by this relayer, store it's info
-            if (node.isAccount[_relayer] || relayerAddress == _relayer) {
+            uint256 relayerIndex = _assignRelayer(_data.txnCalldata[i]);
+            if (relayersAllocated[relayerIndex] == _data.relayer) {
                 relayerGenerationIteration[j] = relayerIndex;
-                txnAllocated[j] = _txnCalldata[i];
+                txnAllocated[j] = _data.txnCalldata[i];
                 selectedRelayerCdfIndex = relayerStakePrefixSumIndex[relayerIndex];
                 unchecked {
                     ++j;
@@ -248,7 +228,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Reduce the array sizes if needed
-        uint256 extraLength = _txnCalldata.length - j;
+        uint256 extraLength = _data.txnCalldata.length - j;
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
             mstore(relayerGenerationIteration, sub(mload(relayerGenerationIteration), extraLength))

@@ -19,12 +19,12 @@ abstract contract TATestBase is Test {
     ITransactionAllocator internal ta;
     uint256[] internal relayerMainKey;
     address[] internal relayerMainAddress;
-    mapping(address => address[]) relayerAccountAddresses;
-    mapping(address => uint256[]) relayerAccountKeys;
+    mapping(address => address[]) internal relayerAccountAddresses;
+    mapping(address => uint256[]) internal relayerAccountKeys;
 
     uint256 private _postDeploymentSnapshotId = type(uint256).max;
 
-    function setUp() external virtual {
+    function setUp() public virtual {
         if (_postDeploymentSnapshotId != type(uint256).max) {
             return;
         }
@@ -62,7 +62,7 @@ abstract contract TATestBase is Test {
     }
 
     modifier withTADeployed() {
-        bool revertStatus = vm.revertTo(postDeploymentSnapshotId());
+        bool revertStatus = vm.revertTo(_preTestSnapshotId());
         if (!revertStatus) {
             fail("Failed to revert to post deployment snapshot");
         }
@@ -85,7 +85,7 @@ abstract contract TATestBase is Test {
         return string(abi.encodePacked(a, b, c, d));
     }
 
-    function postDeploymentSnapshotId() internal view virtual returns (uint256) {
+    function _preTestSnapshotId() internal view virtual returns (uint256) {
         return _postDeploymentSnapshotId;
     }
 }
