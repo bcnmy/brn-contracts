@@ -19,4 +19,7 @@ contract TransactionMock is ITransactionMockEventsErrors {
         emit UpdatedA(_a);
         return true;
     }
+
+    // add this to be excluded from coverage report
+    function test() public {}
 }

@@ -88,4 +88,7 @@ abstract contract TATestBase is Test {
     function _preTestSnapshotId() internal view virtual returns (uint256) {
         return _postDeploymentSnapshotId;
     }
+
+    // add this to be excluded from coverage report
+    function test() public {}
 }
