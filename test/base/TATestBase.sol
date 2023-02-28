@@ -29,13 +29,14 @@ abstract contract TATestBase is Test {
             return;
         }
 
+        uint32 keyIndex = 0;
+
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
+        uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
         ta = script.deploy(deployerPrivateKey, deployParams, false);
 
         // Generate Relayer Addresses
-        uint32 keyIndex = 0;
         for (uint256 i = 0; i < relayerCount; i++) {
             // Generate Main Relayer Addresses
             relayerMainKey.push(vm.deriveKey(mnemonic, ++keyIndex));
