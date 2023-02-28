@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 
 import "src/structs/TAStructs.sol";
 
-contract TARelayerManagementStorage {
+abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
     struct RMStorage {

@@ -5,7 +5,7 @@ pragma solidity 0.8.17;
 import "./interfaces/ITAHelpers.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 
-contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
+abstract contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
     modifier verifyStakeArrayHash(uint32[] calldata _array) {
         if (!_verifyStakeArrayHash(_array)) {
             revert InvalidStakeArrayHash();

@@ -4,7 +4,7 @@ pragma solidity 0.8.17;
 
 import "src/structs/TAStructs.sol";
 
-contract TATransactionAllocationStorage {
+abstract contract TATransactionAllocationStorage {
     bytes32 internal constant TRANSACTION_ALLOCATION_STORAGE_SLOT = keccak256("TransactionAllocation.storage");
 
     struct TAStorage {

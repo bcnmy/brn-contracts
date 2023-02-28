@@ -4,14 +4,14 @@ pragma solidity 0.8.17;
 
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
-import "src/constants/TransactionAllocationConstants.sol";
 import "./interfaces/ITARelayerManagement.sol";
 import "./TARelayerManagementStorage.sol";
 import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
+import "../../common/TAConstants.sol";
 
 contract TARelayerManagement is
-    TransactionAllocationConstants,
+    TAConstants,
     ITARelayerManagement,
     TARelayerManagementStorage,
     TAHelpers,

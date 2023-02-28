@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.17;
 
-contract TADelegationStorage {
+abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");
 
     struct DStorage {
