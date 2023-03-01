@@ -1,0 +1,6 @@
+{
+  "blocksPerWindow": 15,
+  "withdrawDelay": 100,
+  "relayersPerWindow": 4,
+  "penaltyDelayBlocks": 10
+}
