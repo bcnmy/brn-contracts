@@ -1,0 +1,4 @@
+relayerCount,generationIterationCount,txCount,totalGas,executionGas,verificationGas,verificationGasPerTx,otherOverhead,totalOverhead,totalOverheadPerTx
+5,1,1,105549,29809,16562,16562,22670,39232,39232
+5,1,1,83900,12709,16813,16813,22670,39483,39483
+5,2,3,121374,38932,19605,6535,22670,42275,14091

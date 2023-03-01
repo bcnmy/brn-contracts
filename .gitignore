@@ -26,5 +26,3 @@ stats
 #Hardhat files
 cache_hardhat
 artifacts
-
-*.csv
