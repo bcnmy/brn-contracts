@@ -25,6 +25,7 @@
     "typescript": "^4.9.5"
   },
   "dependencies": {
-    "@nomiclabs/hardhat-ethers": "^2.2.2"
+    "@nomiclabs/hardhat-ethers": "^2.2.2",
+    "csv-writer": "^1.6.0"
   }
 }

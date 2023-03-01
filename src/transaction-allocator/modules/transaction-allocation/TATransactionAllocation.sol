@@ -72,21 +72,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
     // TODO: Why payable? to save gas?
+    // TODO: Batching
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex
     ) public payable returns (bool[] memory successes, bytes[] memory returndatas) {
-        // uint256 gasLeft = gasleft();
+        uint256 gasLeft = gasleft();
         if (!_verifyLatestCdfHash(_cdf)) {
             revert InvalidCdfArrayHash();
         }
         if (!_verifyTransactionAllocation(_cdf, _cdfIndex, _relayerGenerationIterations, block.number, _reqs)) {
             revert InvalidRelayerWindow();
         }
-        // emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
-        uint256 gasLeft = gasleft();
+        emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
+        gasLeft = gasleft();
 
         // Execute all transactions
         uint256 length = _reqs.length;

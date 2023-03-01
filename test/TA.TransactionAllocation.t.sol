@@ -3,8 +3,8 @@
 pragma solidity 0.8.17;
 
 import "./base/TATestBase.t.sol";
-import "./mocks/TransactionMock.sol";
-import "./mocks/interfaces/ITransactionMockEventsErrors.sol";
+import "src/mocks/TransactionMock.sol";
+import "src/mocks/interfaces/ITransactionMockEventsErrors.sol";
 import "src/structs/TAStructs.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";

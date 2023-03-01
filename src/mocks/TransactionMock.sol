@@ -2,9 +2,12 @@
 pragma solidity 0.8.17;
 
 import "./interfaces/ITransactionMockEventsErrors.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
-contract TransactionMock is ITransactionMockEventsErrors {
+contract TransactionMock is ITransactionMockEventsErrors, Ownable {
     uint256 a;
+
+    constructor() Ownable() {}
 
     function mockAdd(uint256 b, uint256 c) public pure returns (uint256) {
         return b + c;

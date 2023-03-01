@@ -162,6 +162,8 @@ contract TARelayerManagement is
         return cdfArray;
     }
 
+    //TODO: Cooldown before relayer is allowed to transact
+
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
     /// @param _stake amount to be staked
@@ -200,7 +202,7 @@ contract TARelayerManagement is
         uint32[] memory newStakeArray = _appendStake(_previousStakeArray, _stake);
         _updateStakeAccounting(newStakeArray);
 
-        // TODO: transfer stake amount to be stored in a vault.
+        // TODO:YES transfer stake amount to be stored in a vault.
         emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
     }
 

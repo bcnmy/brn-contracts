@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { AbiCoder } from 'ethers/lib/utils';
+import { AbiCoder, Interface } from 'ethers/lib/utils';
 import path from 'path/posix';
 
 const args = process.argv.slice(2);
@@ -10,6 +10,14 @@ if (args.length != 1) {
   `);
   process.exit(1);
 }
+
+export const getSelectors = (_interface: Interface) => {
+  const signatures = Object.keys(_interface.functions);
+  const selectors = signatures
+    .filter((v) => v !== 'init(bytes)')
+    .map((v) => _interface.getSighash(v));
+  return selectors;
+};
 
 const printSelectors = async (
   contractName: string,
@@ -26,10 +34,7 @@ const printSelectors = async (
   const target = new ethers.ContractFactory(abi, bytecode);
   const signatures = Object.keys(target.interface.functions);
 
-  const selectors = signatures.reduce((acc: string[], val: string) => {
-    acc.push(target.interface.getSighash(val));
-    return acc;
-  }, []);
+  const selectors = getSelectors(target.interface);
 
   const coded = new AbiCoder().encode(['bytes4[]'], [selectors]);
 

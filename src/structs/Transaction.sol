@@ -14,3 +14,10 @@ struct ForwardRequest {
     bytes data;
 }
 // bytes signature;
+
+// {
+//     to: address(ENtrpointy)
+//     data: encoded(UserOper)
+// }
+
+// relayer -> int -> tf -> to
