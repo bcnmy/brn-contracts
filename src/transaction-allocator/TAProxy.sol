@@ -2,12 +2,15 @@
 
 pragma solidity 0.8.19;
 
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
 import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
+import "src/transaction-allocator/common/TATypes.sol";
 
 contract TAProxy is
     ITAProxy,
@@ -60,6 +63,7 @@ contract TAProxy is
         rms.relayersPerWindow = _params.relayersPerWindow;
         rms.stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
+        rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
     }
 
     /// @notice Adds a new module

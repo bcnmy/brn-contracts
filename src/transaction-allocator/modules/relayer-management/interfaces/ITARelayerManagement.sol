@@ -39,6 +39,10 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
 
+    function relayerInfo_isGasTokenSupported(RelayerAddress, TokenAddress) external view returns (bool);
+
+    function relayerInfo_SupportedGasTokens(RelayerAddress) external view returns (TokenAddress[] memory);
+
     function relayersPerWindow() external view returns (uint256);
 
     function blocksPerWindow() external view returns (uint256);
@@ -54,4 +58,10 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function withdrawDelay() external view returns (uint256);
 
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
+
+    function addSupportedGasTokens(TokenAddress[] calldata _tokens) external;
+
+    function removeSupportedGasTokens(TokenAddress[] calldata _tokens) external;
+
+    function bondTokenAddress() external view returns (TokenAddress);
 }

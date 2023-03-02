@@ -39,14 +39,10 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
     return TokenAddress.unwrap(a) != TokenAddress.unwrap(b);
 }
 
-using {relayerEquality as ==} for RelayerAddress global;
-using {relayerInequality as !=} for RelayerAddress global;
+using {relayerEquality as ==, relayerInequality as != } for RelayerAddress global;
 
-using {delegatorEquality as ==} for DelegatorAddress global;
-using {delegatorInequality as !=} for DelegatorAddress global;
+using {delegatorEquality as ==, delegatorInequality as !=} for DelegatorAddress global;
 
-using {relayerAccountEquality as ==} for RelayerAccountAddress global;
-using {relayerAccountInequality as !=} for RelayerAccountAddress global;
+using {relayerAccountEquality as ==, relayerAccountInequality as !=} for RelayerAccountAddress global;
 
-using {tokenEquality as ==} for TokenAddress global;
-using {tokenInequality as !=} for TokenAddress global;
+using {tokenEquality as ==,tokenInequality as !=} for TokenAddress global;

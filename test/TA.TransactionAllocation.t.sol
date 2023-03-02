@@ -11,7 +11,6 @@ import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
 contract TATransactionAllocationTest is
     TATestBase,
-    TAConstants,
     ITATransactionAllocationEventsErrors,
     ITAHelpers,
     ITransactionMockEventsErrors

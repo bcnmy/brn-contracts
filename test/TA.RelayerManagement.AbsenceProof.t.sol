@@ -7,12 +7,7 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-contract TARelayerManagementAbsenceProofTest is
-    TATestBase,
-    TAConstants,
-    ITARelayerManagementEventsErrors,
-    ITAHelpers
-{
+contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
 

@@ -9,9 +9,10 @@ struct RelayerInfo {
     mapping(RelayerAccountAddress => bool) isAccount;
     string endpoint;
     uint256 index;
+    mapping(TokenAddress => bool) isGasTokenSupported;
+    TokenAddress[] supportedGasTokens;
 }
 
-// relayer information
 struct WithdrawalInfo {
     uint256 amount;
     uint256 time;
@@ -27,6 +28,7 @@ struct InitalizerParams {
     uint256 withdrawDelay;
     uint256 relayersPerWindow;
     uint256 penaltyDelayBlocks;
+    TokenAddress bondTokenAddress;
 }
 
 struct AbsenceProofReporterData {

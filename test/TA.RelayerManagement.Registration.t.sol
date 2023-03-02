@@ -7,12 +7,7 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-contract TARelayerManagementRegistrationTest is
-    TATestBase,
-    TAConstants,
-    ITARelayerManagementEventsErrors,
-    ITAHelpers
-{
+contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     function testRelayerRegistration() external atSnapshot {
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
@@ -204,6 +199,99 @@ contract TARelayerManagementRegistrationTest is
         skip(1);
         vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.timestamp, withdrawTime));
         ta.withdraw();
+        vm.stopPrank();
+    }
+
+    function testGasTokenAddition() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+        string memory endpoint = "test";
+
+        _startPrankRA(relayerMainAddress[0]);
+        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        TokenAddress[] memory tokens = new TokenAddress[](2);
+        tokens[0] = NATIVE_TOKEN;
+        tokens[1] = TokenAddress.wrap(address(bico));
+        ta.addSupportedGasTokens(tokens);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0])[0] == tokens[0], true);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0])[1] == tokens[1], true);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0]).length, 2);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[0]), true);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[1]), true);
+        vm.stopPrank();
+    }
+
+    function testGasTokenRemoval() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+        string memory endpoint = "test";
+
+        _startPrankRA(relayerMainAddress[0]);
+        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        TokenAddress[] memory tokens = new TokenAddress[](2);
+        tokens[0] = NATIVE_TOKEN;
+        tokens[1] = TokenAddress.wrap(address(bico));
+        ta.addSupportedGasTokens(tokens);
+
+        TokenAddress[] memory removalTokens = new TokenAddress[](1);
+        removalTokens[0] = tokens[0];
+        ta.removeSupportedGasTokens(removalTokens);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0])[0] == tokens[1], true);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0]).length, 1);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[0]), false);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[1]), true);
+
+        removalTokens[0] = tokens[1];
+        ta.removeSupportedGasTokens(removalTokens);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0]).length, 0);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[0]), false);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[1]), false);
+        vm.stopPrank();
+    }
+
+    function testCannotAddTokenTwice() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+        string memory endpoint = "test";
+
+        _startPrankRA(relayerMainAddress[0]);
+        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        TokenAddress[] memory tokens = new TokenAddress[](2);
+        tokens[0] = NATIVE_TOKEN;
+        tokens[1] = TokenAddress.wrap(address(bico));
+        ta.addSupportedGasTokens(tokens);
+
+        TokenAddress[] memory additionToken = new TokenAddress[](1);
+        additionToken[0] = tokens[0];
+        vm.expectRevert(abi.encodeWithSelector(GasTokenAlreadySupported.selector, tokens[0]));
+        ta.addSupportedGasTokens(additionToken);
+
+        additionToken[0] = tokens[1];
+        vm.expectRevert(abi.encodeWithSelector(GasTokenAlreadySupported.selector, tokens[1]));
+        ta.addSupportedGasTokens(additionToken);
+
+        vm.stopPrank();
+    }
+
+    function testCannotRemoveAlreadyRemovedToken() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+        string memory endpoint = "test";
+
+        _startPrankRA(relayerMainAddress[0]);
+        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        TokenAddress[] memory tokens = new TokenAddress[](2);
+        tokens[0] = NATIVE_TOKEN;
+        tokens[1] = TokenAddress.wrap(address(bico));
+        ta.addSupportedGasTokens(tokens);
+
+        TokenAddress[] memory removalTokens = new TokenAddress[](1);
+        removalTokens[0] = tokens[0];
+        ta.removeSupportedGasTokens(removalTokens);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0])[0] == tokens[1], true);
+        assertEq(ta.relayerInfo_SupportedGasTokens(relayerMainAddress[0]).length, 1);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[0]), false);
+        assertEq(ta.relayerInfo_isGasTokenSupported(relayerMainAddress[0], tokens[1]), true);
+
+        removalTokens[0] = tokens[0];
+        vm.expectRevert(abi.encodeWithSelector(GasTokenNotSupported.selector, tokens[0]));
+        ta.removeSupportedGasTokens(removalTokens);
         vm.stopPrank();
     }
 }

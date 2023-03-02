@@ -9,6 +9,7 @@ import "src/transaction-allocator/common/TAStructs.sol";
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
+    // TODO: Check packing
     struct RMStorage {
         // Token in which registration are done. BICO
         IERC20 bondToken;

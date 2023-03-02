@@ -13,7 +13,6 @@ import "../../common/TAConstants.sol";
 import "forge-std/console2.sol";
 
 contract TARelayerManagement is
-    TAConstants,
     ITARelayerManagement,
     TARelayerManagementStorage,
     TAHelpers,
@@ -371,6 +370,78 @@ contract TARelayerManagement is
         emit GenericGasConsumed("Process Penalty", gas - gasleft());
     }
 
+    ////////////////////////// Relayer Configuration //////////////////////////
+    // TODO: Jailed relayers should not be able to update their configuration
+
+    function addSupportedGasTokens(TokenAddress[] calldata _tokens) external {
+        RMStorage storage ds = getRMStorage();
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
+        if (node.stake == 0) {
+            revert InvalidRelayer(relayerAddress);
+        }
+
+        uint256 length = _tokens.length;
+        for (uint256 i = 0; i < length;) {
+            TokenAddress token = _tokens[i];
+
+            if (node.isGasTokenSupported[token]) {
+                revert GasTokenAlreadySupported(token);
+            }
+
+            // Update Mapping
+            node.isGasTokenSupported[token] = true;
+            node.supportedGasTokens.push(token);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        emit GasTokensAdded(relayerAddress, _tokens);
+    }
+
+    function removeSupportedGasTokens(TokenAddress[] calldata _tokens) external {
+        RMStorage storage ds = getRMStorage();
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
+        if (node.stake == 0) {
+            revert InvalidRelayer(relayerAddress);
+        }
+
+        uint256 length = _tokens.length;
+        for (uint256 i = 0; i < length;) {
+            TokenAddress token = _tokens[i];
+
+            if (!node.isGasTokenSupported[token]) {
+                revert GasTokenNotSupported(token);
+            }
+
+            // Update Mapping
+            node.isGasTokenSupported[token] = false;
+
+            // Update Array. TODO: Optimize
+            uint256 jLength = node.supportedGasTokens.length;
+            for (uint256 j = 0; j < jLength;) {
+                if (node.supportedGasTokens[j] == token) {
+                    node.supportedGasTokens[j] = node.supportedGasTokens[jLength - 1];
+                    node.supportedGasTokens.pop();
+                    break;
+                }
+                unchecked {
+                    ++j;
+                }
+            }
+            unchecked {
+                ++i;
+            }
+        }
+
+        emit GasTokensRemoved(relayerAddress, _tokens);
+    }
+
     ////////////////////////// Getters //////////////////////////
 
     function relayerCount() external view override returns (uint256) {
@@ -396,6 +467,18 @@ contract TARelayerManagement is
         returns (bool)
     {
         return getRMStorage().relayerInfo[_relayer].isAccount[_account];
+    }
+
+    function relayerInfo_isGasTokenSupported(RelayerAddress _relayer, TokenAddress _token)
+        external
+        view
+        returns (bool)
+    {
+        return getRMStorage().relayerInfo[_relayer].isGasTokenSupported[_token];
+    }
+
+    function relayerInfo_SupportedGasTokens(RelayerAddress _relayer) external view returns (TokenAddress[] memory) {
+        return getRMStorage().relayerInfo[_relayer].supportedGasTokens;
     }
 
     function relayersPerWindow() external view override returns (uint256) {
@@ -424,5 +507,9 @@ contract TARelayerManagement is
 
     function withdrawDelay() external view override returns (uint256) {
         return getRMStorage().withdrawDelay;
+    }
+
+    function bondTokenAddress() external view override returns (TokenAddress) {
+        return TokenAddress.wrap(address(getRMStorage().bondToken));
     }
 }

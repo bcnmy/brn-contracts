@@ -16,8 +16,13 @@ contract TADeploymentTest is Test {
     }
 
     function testDeployment() external {
-        InitalizerParams memory params =
-            InitalizerParams({blocksPerWindow: 1, withdrawDelay: 2, relayersPerWindow: 3, penaltyDelayBlocks: 4});
+        InitalizerParams memory params = InitalizerParams({
+            blocksPerWindow: 1,
+            withdrawDelay: 2,
+            relayersPerWindow: 3,
+            penaltyDelayBlocks: 4,
+            bondTokenAddress: TokenAddress.wrap(address(this))
+        });
 
         ITransactionAllocator ta = script.deploy(privateKey, params, false);
 
@@ -25,5 +30,6 @@ contract TADeploymentTest is Test {
         assertEq(ta.withdrawDelay(), params.withdrawDelay);
         assertEq(ta.relayersPerWindow(), params.relayersPerWindow);
         assertEq(ta.penaltyDelayBlocks(), block.number + params.penaltyDelayBlocks);
+        assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);
     }
 }

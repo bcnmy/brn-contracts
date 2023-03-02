@@ -16,6 +16,8 @@ interface ITARelayerManagementEventsErrors {
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error ParameterLengthMismatch();
     error InvalidRelayer(RelayerAddress relayer);
+    error GasTokenAlreadySupported(TokenAddress token);
+    error GasTokenNotSupported(TokenAddress token);
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
     event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
@@ -34,4 +36,6 @@ interface ITARelayerManagementEventsErrors {
         uint256 absenceWindowId,
         uint256 penalty
     );
+    event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
+    event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
 }

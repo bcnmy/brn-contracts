@@ -2,11 +2,17 @@
 
 pragma solidity 0.8.19;
 
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+
 import "./interfaces/ITAHelpers.sol";
+import "./TAConstants.sol";
 import "./TATypes.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
+    using SafeERC20 for IERC20;
+
     modifier verifyStakeArrayHash(uint32[] calldata _array) {
         if (!_verifyStakeArrayHash(_array)) {
             revert InvalidStakeArrayHash();
@@ -89,5 +95,28 @@ abstract contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
         }
 
         return true;
+    }
+
+    // Token Helpers
+    function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
+        if (_token == NATIVE_TOKEN) {
+            uint256 balance = address(this).balance;
+            if (balance < _amount) {
+                revert InsufficientBalance(_token, balance, _amount);
+            }
+
+            (bool status,) = payable(_to).call{value: _amount}("");
+            if (!status) {
+                revert NativeTransferFailed(_to, _amount);
+            }
+        } else {
+            IERC20 token = IERC20(TokenAddress.unwrap(_token));
+            uint256 balance = token.balanceOf(address(this));
+            if (balance < _amount) {
+                revert InsufficientBalance(_token, balance, _amount);
+            }
+
+            token.safeTransfer(_to, _amount);
+        }
     }
 }
