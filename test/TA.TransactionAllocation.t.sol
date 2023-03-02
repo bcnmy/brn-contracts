@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
 import "src/mocks/TransactionMock.sol";
 import "src/mocks/interfaces/ITransactionMockEventsErrors.sol";
-import "src/structs/TAStructs.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
@@ -33,9 +32,9 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
@@ -97,7 +96,7 @@ contract TATransactionAllocationTest is
                 continue;
             }
 
-            vm.startPrank(relayerAccountAddresses[relayerMainAddress[i]][0]);
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             (bool[] memory successes, bytes[] memory returndatas) =
                 ta.execute(allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex);
             vm.stopPrank();
@@ -136,7 +135,7 @@ contract TATransactionAllocationTest is
                 continue;
             }
 
-            vm.startPrank(relayerAccountAddresses[relayerMainAddress[i]][0]);
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidCdfArrayHash.selector);
             ta.execute(allotedTransactions, cdf2, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1);
             assertEq(ta.attendance(block.number / ta.blocksPerWindow(), relayerMainAddress[i]), false);
@@ -160,7 +159,7 @@ contract TATransactionAllocationTest is
                 continue;
             }
 
-            vm.startPrank(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
             vm.expectRevert(InvalidRelayerWindow.selector);
             ta.execute(allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1);
             assertEq(ta.attendance(block.number / ta.blocksPerWindow(), relayerMainAddress[i]), false);
@@ -170,7 +169,7 @@ contract TATransactionAllocationTest is
 
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
         uint16[] memory cdf = ta.getCdf();
-        (address[] memory selectedRelayers,) = ta.allocateRelayers(cdf);
+        (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf);
         bool testRun = false;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -192,7 +191,7 @@ contract TATransactionAllocationTest is
 
             testRun = true;
 
-            vm.startPrank(relayerAccountAddresses[selectedRelayers[0]][0]);
+            _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
             vm.expectRevert(InvalidRelayerWindow.selector);
             ta.execute(allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1);
             vm.stopPrank();

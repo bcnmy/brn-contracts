@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
-import "src/structs/TAStructs.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
 
 contract TAProxy is
     ITAProxy,

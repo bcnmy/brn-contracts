@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
 import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
 import "script/TA.Deployment.s.sol";
-import "src/structs/TAStructs.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
 
 abstract contract TATestBase is Test {
     string constant mnemonic = "test test test test test test test test test test test junk";
@@ -18,9 +18,9 @@ abstract contract TATestBase is Test {
 
     ITransactionAllocator internal ta;
     uint256[] internal relayerMainKey;
-    address[] internal relayerMainAddress;
-    mapping(address => address[]) internal relayerAccountAddresses;
-    mapping(address => uint256[]) internal relayerAccountKeys;
+    RelayerAddress[] internal relayerMainAddress;
+    mapping(RelayerAddress => RelayerAccountAddress[]) internal relayerAccountAddresses;
+    mapping(RelayerAddress => uint256[]) internal relayerAccountKeys;
 
     uint256 private _postDeploymentSnapshotId = type(uint256).max;
 
@@ -40,19 +40,22 @@ abstract contract TATestBase is Test {
         for (uint256 i = 0; i < relayerCount; i++) {
             // Generate Main Relayer Addresses
             relayerMainKey.push(vm.deriveKey(mnemonic, ++keyIndex));
-            relayerMainAddress.push(vm.addr(relayerMainKey[i]));
-            vm.deal(relayerMainAddress[i], initialMainAccountFunds);
-            vm.label(relayerMainAddress[i], _stringConcat2("relayer", vm.toString(i)));
+            relayerMainAddress.push(RelayerAddress.wrap(vm.addr(relayerMainKey[i])));
+            vm.deal(RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
+            vm.label(RelayerAddress.unwrap(relayerMainAddress[i]), _stringConcat2("relayer", vm.toString(i)));
 
             // Generate Relayer Account Addresses
             for (uint256 j = 0; j < relayerAccountsPerRelayer; j++) {
                 relayerAccountKeys[relayerMainAddress[i]].push(vm.deriveKey(mnemonic, ++keyIndex));
                 relayerAccountAddresses[relayerMainAddress[i]].push(
-                    vm.addr(relayerAccountKeys[relayerMainAddress[i]][j])
+                    RelayerAccountAddress.wrap(vm.addr(relayerAccountKeys[relayerMainAddress[i]][j]))
                 );
-                vm.deal(relayerAccountAddresses[relayerMainAddress[i]][j], initialRelayerAccountFunds);
+                vm.deal(
+                    RelayerAccountAddress.unwrap(relayerAccountAddresses[relayerMainAddress[i]][j]),
+                    initialRelayerAccountFunds
+                );
                 vm.label(
-                    relayerAccountAddresses[relayerMainAddress[i]][j],
+                    RelayerAccountAddress.unwrap(relayerAccountAddresses[relayerMainAddress[i]][j]),
                     _stringConcat4("relayer", vm.toString(i), "account", vm.toString(j))
                 );
             }
@@ -87,6 +90,14 @@ abstract contract TATestBase is Test {
 
     function _preTestSnapshotId() internal view virtual returns (uint256) {
         return _postDeploymentSnapshotId;
+    }
+
+    function _startPrankRA(RelayerAddress _relayer) internal {
+        vm.startPrank(RelayerAddress.unwrap(_relayer));
+    }
+
+    function _startPrankRAA(RelayerAccountAddress _account) internal {
+        vm.startPrank(RelayerAccountAddress.unwrap(_account));
     }
 
     // add this to be excluded from coverage report

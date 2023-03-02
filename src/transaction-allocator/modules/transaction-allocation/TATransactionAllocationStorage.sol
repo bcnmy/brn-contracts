@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
-import "src/structs/TAStructs.sol";
+import "src/transaction-allocator/common/TATypes.sol";
 
 abstract contract TATransactionAllocationStorage {
     bytes32 internal constant TRANSACTION_ALLOCATION_STORAGE_SLOT = keccak256("TransactionAllocation.storage");
 
     struct TAStorage {
         // attendance: windowIndex -> relayer -> wasPresent?
-        mapping(uint256 => mapping(address => bool)) attendance;
+        mapping(uint256 => mapping(RelayerAddress => bool)) attendance;
     }
 
     /* solhint-disable no-inline-assembly */

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "./interfaces/ITAHelpers.sol";
+import "./TATypes.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
@@ -81,10 +82,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, ITAHelpers {
             }
         }
 
-        // Verify if the relayer selected is msg.sender
-        address relayerAddress = ds.relayerIndexToRelayer[_cdfIndex];
+        RelayerAddress relayerAddress = ds.relayerIndexToRelayer[_cdfIndex];
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        if (!node.isAccount[_relayer] && relayerAddress != _relayer) {
+        if (!node.isAccount[RelayerAccountAddress.wrap(_relayer)] && relayerAddress != RelayerAddress.wrap(_relayer)) {
             return false;
         }
 

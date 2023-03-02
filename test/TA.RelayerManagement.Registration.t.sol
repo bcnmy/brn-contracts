@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
@@ -17,9 +17,9 @@ contract TARelayerManagementRegistrationTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
             string memory endpoint = "test";
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
             emit RelayerRegistered(relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake);
             // TODO: Pass tokens while registering
@@ -42,19 +42,19 @@ contract TARelayerManagementRegistrationTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
             string memory endpoint = "test";
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
 
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
-            address relayerAddress = relayerMainAddress[i];
-            address[] storage accounts = relayerAccountAddresses[relayerAddress];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
 
             // De Register Accounts
             bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
@@ -85,19 +85,19 @@ contract TARelayerManagementRegistrationTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
             string memory endpoint = "test";
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
 
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
-            address relayerAddress = relayerMainAddress[i];
-            address[] storage accounts = relayerAccountAddresses[relayerAddress];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
             ta.setRelayerAccountsStatus(accounts, accountUpdatedStatus);
             ta.unRegister(ta.getStakeArray());
@@ -111,10 +111,10 @@ contract TARelayerManagementRegistrationTest is
         skip(ta.withdrawDelay() + 1);
 
         for (uint256 i = 0; i < relayerCount; i++) {
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
             uint256 stake = MINIMUM_STAKE_AMOUNT;
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
             emit Withdraw(relayerAddress, stake);
             ta.withdraw();
@@ -129,9 +129,9 @@ contract TARelayerManagementRegistrationTest is
     function testCannotRegisterWithNoRelayAccounts() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
-        address[] memory accounts;
+        RelayerAccountAddress[] memory accounts;
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
         vm.expectRevert(NoAccountsProvided.selector);
         ta.register(stakeArray, stake, accounts, endpoint);
@@ -142,7 +142,7 @@ contract TARelayerManagementRegistrationTest is
         uint256 stake = MINIMUM_STAKE_AMOUNT - 1;
         string memory endpoint = "test";
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
         vm.expectRevert(abi.encodeWithSelector(InsufficientStake.selector, stake, MINIMUM_STAKE_AMOUNT));
         ta.register(stakeArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
@@ -153,7 +153,7 @@ contract TARelayerManagementRegistrationTest is
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
         vm.expectRevert(InvalidStakeArrayHash.selector);
@@ -165,7 +165,7 @@ contract TARelayerManagementRegistrationTest is
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
@@ -178,7 +178,7 @@ contract TARelayerManagementRegistrationTest is
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         ta.unRegister(ta.getStakeArray());
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
@@ -193,7 +193,7 @@ contract TARelayerManagementRegistrationTest is
         uint256 stake = MINIMUM_STAKE_AMOUNT;
         string memory endpoint = "test";
 
-        vm.startPrank(relayerMainAddress[0]);
+        _startPrankRA(relayerMainAddress[0]);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         ta.setRelayerAccountsStatus(
             relayerAccountAddresses[relayerMainAddress[0]],
@@ -202,7 +202,7 @@ contract TARelayerManagementRegistrationTest is
         ta.unRegister(ta.getStakeArray());
         uint256 withdrawTime = block.timestamp + ta.withdrawDelay();
         skip(1);
-        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.timestamp, withdrawTime, 0));
+        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.timestamp, withdrawTime));
         ta.withdraw();
         vm.stopPrank();
     }

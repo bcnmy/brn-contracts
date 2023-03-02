@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
-import "src/structs/TAStructs.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
@@ -28,9 +27,9 @@ contract TARelayerManagementAbsenceProofTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
-            address relayerAddress = relayerMainAddress[i];
+            RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            vm.startPrank(relayerAddress);
+            _startPrankRA(relayerAddress);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
@@ -48,7 +47,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -60,10 +59,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -71,15 +70,15 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdf();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectEmit(true, true, true, true);
         emit AbsenceProofProcessed(
             block.number / ta.blocksPerWindow(),
-            reporter,
+            RelayerAddress.unwrap(reporter),
             absenteeData.relayerAddress,
             absenteeData.blockNumber / ta.blocksPerWindow(),
             _initialStakeAmount * ABSENCE_PENALTY / 10000
-            );
+        );
         ta.processAbsenceProof(reporterData, absenteeData, ta.getStakeArray());
         vm.stopPrank();
     }
@@ -90,7 +89,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -102,10 +101,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -116,7 +115,7 @@ contract TARelayerManagementAbsenceProofTest is
         uint32[] memory stakeArray = ta.getStakeArray();
         // Corrupt the reporter's CDF
         reporterData.cdf[0] += 1;
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(InvalidCdfArrayHash.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray);
         vm.stopPrank();
@@ -128,7 +127,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -140,10 +139,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -154,7 +153,7 @@ contract TARelayerManagementAbsenceProofTest is
         uint32[] memory stakeArray = ta.getStakeArray();
         // Corrupt the reporter's Stake Array
         stakeArray[0] += 1;
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(InvalidStakeArrayHash.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray);
         vm.stopPrank();
@@ -166,7 +165,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -178,10 +177,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[1];
+        RelayerAddress reporter = reporter_selectedRelayers[1];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -193,7 +192,7 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdf();
         uint32[] memory stakeArray = ta.getStakeArray();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(InvalidRelayerWindowForReporter.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray);
         vm.stopPrank();
@@ -205,7 +204,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[1];
         absenteeData.cdf = ta.getCdf();
@@ -215,10 +214,10 @@ contract TARelayerManagementAbsenceProofTest is
         absenteeData.latestStakeUpdationCdfLogIndex = 0;
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -227,7 +226,7 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdf();
         uint32[] memory stakeArray = ta.getStakeArray();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(InvalidAbsenteeBlockNumber.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray);
         vm.stopPrank();
@@ -239,7 +238,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -253,10 +252,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -265,7 +264,7 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdf();
         uint32[] memory stakeArray = ta.getStakeArray();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(InvalidAbsenteeCdfArrayHash.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray);
         vm.stopPrank();
@@ -277,7 +276,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer in the current window to miss tx submission in current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         absenteeData.relayerAddress = absence_selectedRelayers[0];
         absenteeData.cdf = ta.getCdf();
@@ -287,7 +286,7 @@ contract TARelayerManagementAbsenceProofTest is
         absenteeData.latestStakeUpdationCdfLogIndex = 0;
 
         // Mark the absentee as not absent
-        vm.startPrank(absenteeData.relayerAddress);
+        _startPrankRA(absenteeData.relayerAddress);
         ta.execute(
             new ForwardRequest[](0), absenteeData.cdf, absenteeData.relayerGenerationIterations, absenteeData.cdfIndex
         );
@@ -296,10 +295,10 @@ contract TARelayerManagementAbsenceProofTest is
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Submit the absence proof
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -308,7 +307,7 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdf();
         uint32[] memory stakeArray = ta.getStakeArray();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         vm.expectRevert(
             abi.encodeWithSelector(AbsenteeWasPresent.selector, absenteeData.blockNumber / ta.blocksPerWindow())
         );
@@ -322,7 +321,7 @@ contract TARelayerManagementAbsenceProofTest is
         // Select a relayer not selected in the current window
         AbsenceProofAbsenteeData memory absenteeData;
         absenteeData.blockNumber = block.number;
-        (address[] memory absence_selectedRelayers,) = ta.allocateRelayers(ta.getCdf());
+        (RelayerAddress[] memory absence_selectedRelayers,) = ta.allocateRelayers(ta.getCdf());
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             bool found = false;
@@ -341,17 +340,17 @@ contract TARelayerManagementAbsenceProofTest is
             }
         }
 
-        if (absenteeData.relayerAddress == address(0)) {
+        if (absenteeData.relayerAddress == RelayerAddress.wrap(address(0))) {
             fail("No unselected relayer found");
         }
 
         vm.roll(block.number + ta.blocksPerWindow());
 
         // Try to submit the absence proof for all possible combn of (genItern,  cdfIndex)
-        (address[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
             ta.allocateRelayers(ta.getCdf());
         AbsenceProofReporterData memory reporterData;
-        address reporter = reporter_selectedRelayers[0];
+        RelayerAddress reporter = reporter_selectedRelayers[0];
         if (reporter == absenteeData.relayerAddress) {
             fail("Reporter and Absentee cannot be the same relayer");
         }
@@ -361,7 +360,7 @@ contract TARelayerManagementAbsenceProofTest is
         reporterData.cdf = ta.getCdf();
         uint32[] memory stakeArray = ta.getStakeArray();
         uint256 relayerCount = ta.relayerCount();
-        vm.startPrank(reporter);
+        _startPrankRA(reporter);
         for (
             uint256 relayerGenerationIteration = 0;
             relayerGenerationIteration < relayerCount;

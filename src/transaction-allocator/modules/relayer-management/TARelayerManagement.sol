@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
@@ -136,8 +136,8 @@ contract TARelayerManagement is
         emit CdfArrayUpdated(cdfHash);
     }
 
-    function _sendPenalty(address _reporter, uint256 _amount) internal {
-        (bool success,) = _reporter.call{value: _amount}("");
+    function _sendPenalty(RelayerAccountAddress _reporter, uint256 _amount) internal {
+        (bool success,) = RelayerAccountAddress.unwrap(_reporter).call{value: _amount}("");
         if (!success) {
             revert ReporterTransferFailed(_reporter, _amount);
         }
@@ -172,7 +172,7 @@ contract TARelayerManagement is
     function register(
         uint32[] calldata _previousStakeArray,
         uint256 _stake,
-        address[] calldata _accounts,
+        RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint
     ) external verifyStakeArrayHash(_previousStakeArray) {
         RMStorage storage ds = getRMStorage();
@@ -184,7 +184,8 @@ contract TARelayerManagement is
             revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
         }
 
-        RelayerInfo storage node = ds.relayerInfo[msg.sender];
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.index = ds.relayerCount;
@@ -195,7 +196,7 @@ contract TARelayerManagement is
                 ++i;
             }
         }
-        ds.relayerIndexToRelayer[node.index] = msg.sender;
+        ds.relayerIndexToRelayer[node.index] = relayerAddress;
         ++ds.relayerCount;
 
         // Update stake array and hash
@@ -203,7 +204,7 @@ contract TARelayerManagement is
         _updateStakeAccounting(newStakeArray);
 
         // TODO:YES transfer stake amount to be stored in a vault.
-        emit RelayerRegistered(msg.sender, _endpoint, _accounts, _stake);
+        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake);
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
@@ -211,53 +212,56 @@ contract TARelayerManagement is
     function unRegister(uint32[] calldata _previousStakeArray) external verifyStakeArrayHash(_previousStakeArray) {
         RMStorage storage ds = getRMStorage();
 
-        RelayerInfo storage node = ds.relayerInfo[msg.sender];
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         uint256 n = ds.relayerCount - 1;
         uint256 stake = node.stake;
         uint256 nodeIndex = node.index;
-        delete ds.relayerInfo[msg.sender];
+        delete ds.relayerInfo[relayerAddress];
 
         if (nodeIndex != n) {
-            address lastRelayer = ds.relayerIndexToRelayer[n];
+            RelayerAddress lastRelayer = ds.relayerIndexToRelayer[n];
             ds.relayerIndexToRelayer[nodeIndex] = lastRelayer;
             ds.relayerInfo[lastRelayer].index = nodeIndex;
-            ds.relayerIndexToRelayer[n] = address(0);
+            ds.relayerIndexToRelayer[n] = RelayerAddress.wrap(address(0));
         }
 
         --ds.relayerCount;
 
-        ds.withdrawalInfo[msg.sender] = WithdrawalInfo(stake, block.timestamp + ds.withdrawDelay);
+        ds.withdrawalInfo[relayerAddress] = WithdrawalInfo(stake, block.timestamp + ds.withdrawDelay);
 
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _removeStake(_previousStakeArray, nodeIndex);
         _updateStakeAccounting(newStakeArray);
-        emit RelayerUnRegistered(msg.sender);
+        emit RelayerUnRegistered(relayerAddress);
     }
 
     function withdraw() external {
         RMStorage storage ds = getRMStorage();
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
 
-        WithdrawalInfo memory w = ds.withdrawalInfo[msg.sender];
+        WithdrawalInfo memory w = ds.withdrawalInfo[relayerAddress];
         if (!(w.amount > 0 && w.time < block.timestamp)) {
-            // TODO: Max Valid Time??
-            revert InvalidWithdrawal(w.amount, block.timestamp, w.time, 0);
+            revert InvalidWithdrawal(w.amount, block.timestamp, w.time);
         }
-        ds.withdrawalInfo[msg.sender] = WithdrawalInfo(0, 0);
+        ds.withdrawalInfo[relayerAddress] = WithdrawalInfo(0, 0);
 
         // todo: send w.amount to relayer
 
-        emit Withdraw(msg.sender, w.amount);
+        emit Withdraw(relayerAddress, w.amount);
     }
 
-    function setRelayerAccountsStatus(address[] calldata _accounts, bool[] calldata _status) external {
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external {
         if (_accounts.length != _status.length) {
             revert ParameterLengthMismatch();
         }
 
         RMStorage storage ds = getRMStorage();
-        RelayerInfo storage node = ds.relayerInfo[msg.sender];
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         if (node.stake == 0) {
-            revert InvalidRelayer(msg.sender);
+            revert InvalidRelayer(relayerAddress);
         }
 
         uint256 length = _accounts.length;
@@ -268,7 +272,7 @@ contract TARelayerManagement is
             }
         }
 
-        emit RelayerAccountsUpdated(msg.sender, _accounts, _status);
+        emit RelayerAccountsUpdated(relayerAddress, _accounts, _status);
     }
 
     function processAbsenceProof(
@@ -278,7 +282,7 @@ contract TARelayerManagement is
     ) public verifyCdfHash(_reporterData.cdf) verifyStakeArrayHash(_currentStakeArray) {
         uint256 gas = gasleft();
 
-        address reporter_relayerAddress = msg.sender;
+        RelayerAccountAddress reporter_relayerAddress = RelayerAccountAddress.wrap(msg.sender);
 
         if (
             !(_reporterData.relayerGenerationIterations.length == 1)
@@ -290,7 +294,7 @@ contract TARelayerManagement is
         // Verify Reporter Selection in Current Window
         if (
             !_verifyRelayerSelection(
-                reporter_relayerAddress,
+                RelayerAccountAddress.unwrap(reporter_relayerAddress),
                 _reporterData.cdf,
                 _reporterData.cdfIndex,
                 _reporterData.relayerGenerationIterations,
@@ -335,7 +339,7 @@ contract TARelayerManagement is
         // Verify Relayer Selection in Absentee Window
         if (
             !_verifyRelayerSelection(
-                _absenteeData.relayerAddress,
+                RelayerAddress.unwrap(_absenteeData.relayerAddress),
                 _absenteeData.cdf,
                 _absenteeData.cdfIndex,
                 _absenteeData.relayerGenerationIterations,
@@ -358,11 +362,11 @@ contract TARelayerManagement is
 
         emit AbsenceProofProcessed(
             _windowIdentifier(block.number),
-            msg.sender,
+            RelayerAccountAddress.unwrap(reporter_relayerAddress),
             _absenteeData.relayerAddress,
             _windowIdentifier(_absenteeData.blockNumber),
             penalty
-            );
+        );
 
         emit GenericGasConsumed("Process Penalty", gas - gasleft());
     }
@@ -373,19 +377,24 @@ contract TARelayerManagement is
         return getRMStorage().relayerCount;
     }
 
-    function relayerInfo_Stake(address _relayer) external view override returns (uint256) {
+    function relayerInfo_Stake(RelayerAddress _relayer) external view override returns (uint256) {
         return getRMStorage().relayerInfo[_relayer].stake;
     }
 
-    function relayerInfo_Endpoint(address _relayer) external view override returns (string memory) {
+    function relayerInfo_Endpoint(RelayerAddress _relayer) external view override returns (string memory) {
         return getRMStorage().relayerInfo[_relayer].endpoint;
     }
 
-    function relayerInfo_Index(address _relayer) external view override returns (uint256) {
+    function relayerInfo_Index(RelayerAddress _relayer) external view override returns (uint256) {
         return getRMStorage().relayerInfo[_relayer].index;
     }
 
-    function relayerInfo_isAccount(address _relayer, address _account) external view override returns (bool) {
+    function relayerInfo_isAccount(RelayerAddress _relayer, RelayerAccountAddress _account)
+        external
+        view
+        override
+        returns (bool)
+    {
         return getRMStorage().relayerInfo[_relayer].isAccount[_account];
     }
 
@@ -409,7 +418,7 @@ contract TARelayerManagement is
         return getRMStorage().penaltyDelayBlocks;
     }
 
-    function withdrawalInfo(address _relayer) external view override returns (WithdrawalInfo memory) {
+    function withdrawalInfo(RelayerAddress _relayer) external view override returns (WithdrawalInfo memory) {
         return getRMStorage().withdrawalInfo[_relayer];
     }
 

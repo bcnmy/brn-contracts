@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
 import "forge-std/Script.sol";
 
@@ -10,7 +10,7 @@ import "src/transaction-allocator/modules/relayer-management/TARelayerManagement
 import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocation.sol";
 import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
 
-import "src/structs/TAStructs.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
 
 contract TADeploymentScript is Script {
     error EmptyDeploymentConfigPath();

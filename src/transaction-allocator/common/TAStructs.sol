@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
-import "./Transaction.sol";
+import "./TATypes.sol";
 
-// relayer information
+// Relayer Information
 struct RelayerInfo {
     uint256 stake;
-    mapping(address => bool) isAccount;
+    mapping(RelayerAccountAddress => bool) isAccount;
     string endpoint;
     uint256 index;
 }
@@ -36,7 +36,7 @@ struct AbsenceProofReporterData {
 }
 
 struct AbsenceProofAbsenteeData {
-    address relayerAddress;
+    RelayerAddress relayerAddress;
     uint256 blockNumber;
     uint256 latestStakeUpdationCdfLogIndex;
     uint16[] cdf;
@@ -45,7 +45,21 @@ struct AbsenceProofAbsenteeData {
 }
 
 struct AllocateTransactionParams {
-    address relayer;
+    RelayerAddress relayer;
     ForwardRequest[] requests;
     uint16[] cdf;
 }
+
+// TODO: Check Stuct Packing
+// TODO: Discuss structure
+struct ForwardRequest {
+    // address from;
+    address to;
+    // address paymaster;
+    // uint256 value;
+    // uint256 fixedGas;
+    uint256 gasLimit;
+    // uint256 nonce;
+    bytes data;
+}
+// bytes signature;

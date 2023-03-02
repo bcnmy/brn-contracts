@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
-import "src/structs/TAStructs.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "src/transaction-allocator/common/TATypes.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
 
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
     struct RMStorage {
+        // Token in which registration are done. BICO
+        IERC20 bondToken;
         // No of registered relayers
         uint256 relayerCount;
         /// Maps relayer main address to info
-        mapping(address => RelayerInfo) relayerInfo;
+        mapping(RelayerAddress => RelayerInfo) relayerInfo;
         // Relayer Index to Relayer
-        mapping(uint256 => address) relayerIndexToRelayer;
+        mapping(uint256 => RelayerAddress) relayerIndexToRelayer;
         // random number of realyers selected per window
         // TODO: Dynamic?
         uint256 relayersPerWindow;
@@ -26,7 +30,7 @@ abstract contract TARelayerManagementStorage {
         // -------Transaction Allocator State-------
         uint256 penaltyDelayBlocks;
         /// Maps relayer address to pending withdrawals
-        mapping(address => WithdrawalInfo) withdrawalInfo;
+        mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
         // unbounding period
         uint256 withdrawDelay;
     }

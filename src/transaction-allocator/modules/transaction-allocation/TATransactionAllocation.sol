@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
 
+import "src/transaction-allocator/common/TAStructs.sol";
+import "src/transaction-allocator/common/TAHelpers.sol";
+import "src/transaction-allocator/common/TATypes.sol";
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
-import "../../common/TAHelpers.sol";
-import "src/structs/Transaction.sol";
-import "src/structs/TAStructs.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     function _assignRelayer(bytes calldata _calldata) internal view returns (uint256 relayerIndex) {
@@ -152,7 +152,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         public
         view
         verifyCdfHash(_cdf)
-        returns (address[] memory, uint256[] memory)
+        returns (RelayerAddress[] memory, uint256[] memory)
     {
         RMStorage storage ds = getRMStorage();
 
@@ -161,7 +161,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
-        address[] memory selectedRelayers = new address[](ds.relayersPerWindow);
+        RelayerAddress[] memory selectedRelayers = new RelayerAddress[](ds.relayersPerWindow);
         uint256[] memory cdfIndex = new uint256[](ds.relayersPerWindow);
 
         uint256 cdfLength = _cdf.length;
@@ -174,7 +174,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
             RelayerInfo storage relayer = ds.relayerInfo[ds.relayerIndexToRelayer[cdfIndex[i]]];
             uint256 relayerIndex = relayer.index;
-            address relayerAddress = ds.relayerIndexToRelayer[relayerIndex];
+            RelayerAddress relayerAddress = ds.relayerIndexToRelayer[relayerIndex];
             selectedRelayers[i] = relayerAddress;
 
             unchecked {
@@ -195,7 +195,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         verifyCdfHash(_data.cdf)
         returns (ForwardRequest[] memory, uint256[] memory, uint256)
     {
-        (address[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) = allocateRelayers(_data.cdf);
+        (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
+            allocateRelayers(_data.cdf);
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
             revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
         }
@@ -236,7 +237,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ////////////////////////// Getters //////////////////////////
 
-    function attendance(uint256 _windowIndex, address _relayer) external view override returns (bool) {
+    function attendance(uint256 _windowIndex, RelayerAddress _relayer) external view override returns (bool) {
         return getTAStorage().attendance[_windowIndex][_relayer];
     }
 }

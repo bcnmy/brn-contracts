@@ -1,16 +1,20 @@
 // SPDX-License-Identifier: MIT
 
-pragma solidity 0.8.17;
+pragma solidity 0.8.19;
+
+import "src/transaction-allocator/common/TATypes.sol";
 
 abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");
 
-    struct DStorage {
-        uint256 var1;
+    struct TADStorage {
+        mapping(RelayerAddress => uint256) totalDelegation;
+        mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegations;
+        mapping(RelayerAddress => mapping(address => uint256)) unclaimedRewards;
     }
 
     /* solhint-disable no-inline-assembly */
-    function getDStorage() internal pure returns (DStorage storage ms) {
+    function getTADStorage() internal pure returns (TADStorage storage ms) {
         bytes32 slot = DELEGATION_STORAGE_SLOT;
         assembly {
             ms.slot := slot
