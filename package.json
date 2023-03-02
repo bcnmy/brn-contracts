@@ -14,6 +14,7 @@
   },
   "homepage": "https://github.com/bcnmy/POC-DRN#readme",
   "devDependencies": {
+    "@nomicfoundation/hardhat-foundry": "^1.0.0",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
     "ethers": "5.4",
