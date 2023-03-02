@@ -11,29 +11,22 @@ abstract contract TARelayerManagementStorage {
 
     // TODO: Check packing
     struct RMStorage {
-        // Token in which registration are done. BICO
+        // Config
         IERC20 bondToken;
+        uint256 penaltyDelayBlocks;
+        uint256 withdrawDelay;
         // No of registered relayers
         uint256 relayerCount;
-        /// Maps relayer main address to info
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        // Relayer Index to Relayer
         mapping(uint256 => RelayerAddress) relayerIndexToRelayer;
-        // random number of realyers selected per window
         // TODO: Dynamic?
         uint256 relayersPerWindow;
-        /// blocks per node
         uint256 blocksPerWindow;
         // cdf array hash
         CdfHashUpdateInfo[] cdfHashUpdateLog;
-        // stake array hash
         bytes32 stakeArrayHash;
-        // -------Transaction Allocator State-------
-        uint256 penaltyDelayBlocks;
         /// Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
-        // unbounding period
-        uint256 withdrawDelay;
     }
 
     /* solhint-disable no-inline-assembly */

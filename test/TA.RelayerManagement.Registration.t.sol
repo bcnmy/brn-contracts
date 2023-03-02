@@ -17,7 +17,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
             emit RelayerRegistered(relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake);
-            // TODO: Pass tokens while registering
+            bico.approve(address(ta), stake);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
 
@@ -40,6 +40,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
+            bico.approve(address(ta), stake);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
@@ -83,6 +84,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
+            bico.approve(address(ta), stake);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }
@@ -108,6 +110,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             uint256 stake = MINIMUM_STAKE_AMOUNT;
+            uint256 balanceBefore = bico.balanceOf(RelayerAddress.unwrap(relayerAddress));
 
             _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
@@ -115,9 +118,9 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             ta.withdraw();
             vm.stopPrank();
 
-            // TODO: Check if the stake is transferred to the relayer address
             assertEq(ta.withdrawalInfo(relayerAddress).amount, 0);
             assertEq(ta.withdrawalInfo(relayerAddress).time, 0);
+            assertEq(bico.balanceOf(RelayerAddress.unwrap(relayerAddress)), balanceBefore + stake);
         }
     }
 
@@ -128,6 +131,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
+        bico.approve(address(ta), stake);
         vm.expectRevert(NoAccountsProvided.selector);
         ta.register(stakeArray, stake, accounts, endpoint);
         vm.stopPrank();
@@ -139,6 +143,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
+        bico.approve(address(ta), stake);
         vm.expectRevert(abi.encodeWithSelector(InsufficientStake.selector, stake, MINIMUM_STAKE_AMOUNT));
         ta.register(stakeArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         vm.stopPrank();
@@ -151,6 +156,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
+        bico.approve(address(ta), stake);
         vm.expectRevert(InvalidStakeArrayHash.selector);
         ta.register(stakeArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         vm.stopPrank();
@@ -161,6 +167,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
@@ -174,6 +181,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         ta.unRegister(ta.getStakeArray());
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
@@ -189,6 +197,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         ta.setRelayerAccountsStatus(
             relayerAccountAddresses[relayerMainAddress[0]],
@@ -207,6 +216,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         TokenAddress[] memory tokens = new TokenAddress[](2);
         tokens[0] = NATIVE_TOKEN;
@@ -225,6 +235,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         TokenAddress[] memory tokens = new TokenAddress[](2);
         tokens[0] = NATIVE_TOKEN;
@@ -252,6 +263,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         TokenAddress[] memory tokens = new TokenAddress[](2);
         tokens[0] = NATIVE_TOKEN;
@@ -275,6 +287,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
         ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
         TokenAddress[] memory tokens = new TokenAddress[](2);
         tokens[0] = NATIVE_TOKEN;

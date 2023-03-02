@@ -52,8 +52,6 @@ struct AllocateTransactionParams {
     uint16[] cdf;
 }
 
-// TODO: Check Stuct Packing
-// TODO: Discuss structure
 struct ForwardRequest {
     // address from;
     address to;

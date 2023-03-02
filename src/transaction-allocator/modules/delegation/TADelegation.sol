@@ -12,7 +12,6 @@ import "src/library/FixedPointArithmetic.sol";
 import "../../common/TAConstants.sol";
 import "../../common/TAHelpers.sol";
 
-// TODO: ERC2771 support?
 contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADelegation, TAHelpers {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;

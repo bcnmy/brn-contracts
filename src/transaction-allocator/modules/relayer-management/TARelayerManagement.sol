@@ -3,6 +3,7 @@
 pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/ITARelayerManagement.sol";
 import "./TARelayerManagementStorage.sol";
@@ -19,6 +20,7 @@ contract TARelayerManagement is
     TATransactionAllocationStorage
 {
     using SafeCast for uint256;
+    using SafeERC20 for IERC20;
 
     function _verifyPrevCdfHash(uint16[] calldata _array, uint256 _windowId, uint256 _cdfLogIndex)
         internal
@@ -107,7 +109,6 @@ contract TARelayerManagement is
         pure
         returns (uint32[] memory)
     {
-        // TODO: Is this optimal?
         uint32[] memory newStakeArray = _stakeArray;
         newStakeArray[_index] = newStakeArray[_index] - _scaledAmount;
         return newStakeArray;
@@ -133,13 +134,6 @@ contract TARelayerManagement is
 
         emit StakeArrayUpdated(ds.stakeArrayHash);
         emit CdfArrayUpdated(cdfHash);
-    }
-
-    function _sendPenalty(RelayerAccountAddress _reporter, uint256 _amount) internal {
-        (bool success,) = RelayerAccountAddress.unwrap(_reporter).call{value: _amount}("");
-        if (!success) {
-            revert ReporterTransferFailed(_reporter, _amount);
-        }
     }
 
     function getStakeArray() public view returns (uint32[] memory) {
@@ -183,6 +177,8 @@ contract TARelayerManagement is
             revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
         }
 
+        ds.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         node.stake += _stake;
@@ -202,7 +198,6 @@ contract TARelayerManagement is
         uint32[] memory newStakeArray = _appendStake(_previousStakeArray, _stake);
         _updateStakeAccounting(newStakeArray);
 
-        // TODO:YES transfer stake amount to be stored in a vault.
         emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake);
     }
 
@@ -244,9 +239,7 @@ contract TARelayerManagement is
             revert InvalidWithdrawal(w.amount, block.timestamp, w.time);
         }
         ds.withdrawalInfo[relayerAddress] = WithdrawalInfo(0, 0);
-
-        // todo: send w.amount to relayer
-
+        _transfer(TokenAddress.wrap(address(ds.bondToken)), RelayerAddress.unwrap(relayerAddress), w.amount);
         emit Withdraw(relayerAddress, w.amount);
     }
 
@@ -356,8 +349,11 @@ contract TARelayerManagement is
         uint32[] memory newStakeArray =
             _decreaseStake(_currentStakeArray, _absenteeData.cdfIndex, (penalty / STAKE_SCALING_FACTOR).toUint32());
         _updateStakeAccounting(newStakeArray);
-        // TODO: Enable once funds are accepted in registration flow
-        // _sendPenalty(reporter_relayerAddress, penalty);
+        _transfer(
+            TokenAddress.wrap(address(getRMStorage().bondToken)),
+            RelayerAccountAddress.unwrap(reporter_relayerAddress),
+            penalty
+        );
 
         emit AbsenceProofProcessed(
             _windowIdentifier(block.number),

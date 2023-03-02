@@ -78,7 +78,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex
-    ) public payable returns (bool[] memory successes, bytes[] memory returndatas) {
+    ) public returns (bool[] memory successes, bytes[] memory returndatas) {
         uint256 gasLeft = gasleft();
         if (!_verifyLatestCdfHash(_cdf)) {
             revert InvalidCdfArrayHash();

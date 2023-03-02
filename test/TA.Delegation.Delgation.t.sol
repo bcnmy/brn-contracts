@@ -34,6 +34,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
+            bico.approve(address(ta), stake);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             ta.addSupportedGasTokens(supportedTokens);
             vm.stopPrank();

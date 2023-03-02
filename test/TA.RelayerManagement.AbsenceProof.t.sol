@@ -25,6 +25,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
+            bico.approve(address(ta), stake);
             ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
             vm.stopPrank();
         }

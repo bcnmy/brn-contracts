@@ -12,7 +12,7 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex
-    ) external payable returns (bool[] memory, bytes[] memory);
+    ) external returns (bool[] memory, bytes[] memory);
 
     function allocateRelayers(uint16[] calldata _cdf)
         external
