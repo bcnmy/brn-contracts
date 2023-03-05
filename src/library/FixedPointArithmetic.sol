@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-uint256 constant MULTIPLIER = 10 ** 18;
+uint256 constant MULTIPLIER = 10 ** 24;
 
 type FixedPointType is uint256;
 

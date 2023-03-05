@@ -146,6 +146,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
     }
 
+    // TODO: Reach a level where abs equality is possible
     function testClaimDelegationRewards() external atSnapshot {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);

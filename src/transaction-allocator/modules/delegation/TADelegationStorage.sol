@@ -14,6 +14,7 @@ abstract contract TADelegationStorage {
         mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => FixedPointType))) shares;
         mapping(RelayerAddress => mapping(TokenAddress => FixedPointType)) totalShares;
+        // TODO: Add C*Time
         mapping(RelayerAddress => mapping(TokenAddress => uint256)) unclaimedRewards;
     }
 
