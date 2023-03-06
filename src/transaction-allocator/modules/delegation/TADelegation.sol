@@ -4,18 +4,43 @@ pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
+import "src/library/FixedPointArithmetic.sol";
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
-import "../relayer-management/TARelayerManagementStorage.sol";
-import "src/library/FixedPointArithmetic.sol";
 import "../../common/TAConstants.sol";
 import "../../common/TAHelpers.sol";
 
-contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADelegation, TAHelpers {
+contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
     using SafeERC20 for IERC20;
+    using SafeCast for uint256;
+
+    function _scaleDelegation(uint256 _delegatedAmount) internal pure returns (uint32) {
+        return (_delegatedAmount / DELGATION_SCALING_FACTOR).toUint32();
+    }
+
+    function _addDelegationInDelegationArray(uint32[] calldata _delegationArray, uint256 _index, uint32 _scaledAmount)
+        internal
+        pure
+        returns (uint32[] memory)
+    {
+        uint32[] memory _newDelegationArray = _delegationArray;
+        _newDelegationArray[_index] = _newDelegationArray[_index] + _scaledAmount;
+        return _newDelegationArray;
+    }
+
+    function _decreaseDelegationInDelegationArray(
+        uint32[] calldata _delegationArray,
+        uint256 _index,
+        uint32 _scaledAmount
+    ) internal pure returns (uint32[] memory) {
+        uint32[] memory _newDelegationArray = _delegationArray;
+        _newDelegationArray[_index] = _newDelegationArray[_index] - _scaledAmount;
+        return _newDelegationArray;
+    }
 
     function _mintPoolShares(
         RelayerAddress _relayerAddress,
@@ -39,7 +64,17 @@ contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADel
         emit SharesMinted(_relayerAddress, _delegatorAddress, _pool, _delegatedAmount, sharesMinted, sharePrice_);
     }
 
-    function delegate(RelayerAddress _relayerAddress, uint256 _amount) external {
+    function delegate(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _prevDelegationArray,
+        RelayerAddress _relayerAddress,
+        uint256 _amount
+    )
+        external
+        verifyStakeArrayHash(_currentStakeArray)
+        verifyDelegationArrayHash(_prevDelegationArray)
+        validRelayer(_relayerAddress)
+    {
         RMStorage storage rms = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
@@ -59,7 +94,12 @@ contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADel
         ds.delegation[_relayerAddress][delegatorAddress] += _amount;
         ds.totalDelegation[_relayerAddress] += _amount;
 
+        uint32[] memory _newDelegationArray = _addDelegationInDelegationArray(
+            _prevDelegationArray, rms.relayerInfo[_relayerAddress].index, _scaleDelegation(_amount)
+        );
+
         // TODO: Update CDF after Delay
+        _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
 
         emit DelegationAdded(_relayerAddress, delegatorAddress, _amount);
     }
@@ -89,7 +129,17 @@ contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADel
     // TODO: Non Reentrant
     // TODO: Partial Claim?
     // TODO: Implement delay
-    function unDelegate(RelayerAddress _relayerAddress) external {
+    // TODO: What if the relayer has already un-registered?
+    function unDelegate(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _prevDelegationArray,
+        RelayerAddress _relayerAddress
+    )
+        external
+        verifyStakeArrayHash(_currentStakeArray)
+        verifyDelegationArrayHash(_prevDelegationArray)
+        validRelayer(_relayerAddress)
+    {
         TADStorage storage ds = getTADStorage();
         RMStorage storage rms = getRMStorage();
 
@@ -105,10 +155,15 @@ contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADel
             }
         }
 
-        ds.totalDelegation[_relayerAddress] -= ds.delegation[_relayerAddress][delegatorAddress];
+        uint256 delegation_ = ds.delegation[_relayerAddress][delegatorAddress];
+        uint32[] memory _newDelegationArray = _decreaseDelegationInDelegationArray(
+            _prevDelegationArray, rms.relayerInfo[_relayerAddress].index, _scaleDelegation(delegation_)
+        );
+        ds.totalDelegation[_relayerAddress] -= delegation_;
         ds.delegation[_relayerAddress][delegatorAddress] = 0;
 
         // TODO: Update CDF after Delay
+        _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
 
         emit DelegationRemoved(_relayerAddress, delegatorAddress, ds.delegation[_relayerAddress][delegatorAddress]);
     }
@@ -187,5 +242,21 @@ contract TADelegation is TADelegationStorage, TARelayerManagementStorage, ITADel
     {
         TADStorage storage ds = getTADStorage();
         return ds.unclaimedRewards[_relayerAddress][_tokenAddress];
+    }
+
+    function getDelegationArray() external view override returns (uint32[] memory) {
+        TADStorage storage ds = getTADStorage();
+        RMStorage storage rms = getRMStorage();
+        uint256 length = rms.relayerCount;
+        uint32[] memory delegationArray = new uint32[](length);
+
+        for (uint256 i = 0; i < length;) {
+            delegationArray[i] = _scaleDelegation(ds.totalDelegation[rms.relayerIndexToRelayer[i]]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        return delegationArray;
     }
 }

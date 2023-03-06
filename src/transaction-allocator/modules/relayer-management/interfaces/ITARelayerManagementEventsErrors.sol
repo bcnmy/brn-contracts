@@ -15,12 +15,9 @@ interface ITARelayerManagementEventsErrors {
     error AbsenteeWasPresent(uint256 absenteeWindowId);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error ParameterLengthMismatch();
-    error InvalidRelayer(RelayerAddress relayer);
     error GasTokenAlreadySupported(TokenAddress token);
     error GasTokenNotSupported(TokenAddress token);
 
-    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
-    event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
     event RelayerRegistered(
         RelayerAddress indexed relayer, string indexed endpoint, RelayerAccountAddress[] accounts, uint256 indexed stake
     );

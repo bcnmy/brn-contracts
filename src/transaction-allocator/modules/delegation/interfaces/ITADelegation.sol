@@ -6,9 +6,19 @@ import "./ITADelegationEventsErrors.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 
 interface ITADelegation is ITADelegationEventsErrors {
-    function delegate(RelayerAddress _relayerAddress, uint256 _amount) external;
+    function delegate(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _prevDelegationArray,
+        RelayerAddress _relayerAddress,
+        uint256 _amount
+    ) external;
 
-    function unDelegate(RelayerAddress _relayerAddress) external;
+    function unDelegate(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _prevDelegationArray,
+        RelayerAddress _relayerAddress
+    ) external;
+
     function sharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
         view
@@ -19,6 +29,7 @@ interface ITADelegation is ITADelegationEventsErrors {
         TokenAddress _tokenAddres,
         DelegatorAddress _delegatorAddress
     ) external view returns (uint256);
+
     ////////////////////////// Getters //////////////////////////
     function totalDelegation(RelayerAddress _relayerAddress) external view returns (uint256);
 
@@ -41,4 +52,6 @@ interface ITADelegation is ITADelegationEventsErrors {
         external
         view
         returns (uint256);
+
+    function getDelegationArray() external view returns (uint32[] memory);
 }

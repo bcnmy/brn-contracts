@@ -10,23 +10,25 @@ import "./ITARelayerManagementEventsErrors.sol";
 interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
     function getStakeArray() external view returns (uint32[] memory);
 
-    function getCdf() external view returns (uint16[] memory);
+    function getCdfArray() external view returns (uint16[] memory);
 
     function register(
         uint32[] calldata _previousStakeArray,
+        uint32[] calldata _currentDelegationArray,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint
     ) external;
 
-    function unRegister(uint32[] calldata _previousStakeArray) external;
+    function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _currentDelegationArray) external;
 
     function withdraw() external;
 
     function processAbsenceProof(
         AbsenceProofReporterData calldata _reporterData,
         AbsenceProofAbsenteeData calldata _absenteeData,
-        uint32[] calldata _currentStakeArray
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray
     ) external;
 
     function relayerCount() external view returns (uint256);
