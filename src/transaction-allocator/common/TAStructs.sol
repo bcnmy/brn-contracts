@@ -9,7 +9,6 @@ struct RelayerInfo {
     string endpoint;
     uint256 index;
     RelayerAddress relayerAddress;
-    TokenAddress[] supportedGasTokens;
     mapping(TokenAddress => bool) isGasTokenSupported;
     mapping(RelayerAccountAddress => bool) isAccount;
 }

@@ -185,4 +185,51 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
+
+    function testClaimDelegationRewardsAfterRelayerDeRegistration() external atSnapshot {
+        delegate(r0, d0, 0.01 ether);
+        delegate(r0, d1, 0.02 ether);
+
+        increaseRewards(r0, t0, 0.001 ether);
+        expRewards[r0][d0][t0] += uint256(0.001 ether) * 1 / 3;
+        expRewards[r0][d1][t0] += uint256(0.001 ether) * 2 / 3;
+
+        increaseRewards(r0, t1, 0.002 ether);
+        expRewards[r0][d0][t1] += uint256(0.002 ether) * 1 / 3;
+        expRewards[r0][d1][t1] += uint256(0.002 ether) * 2 / 3;
+
+        delegate(r0, d0, 0.01 ether);
+
+        increaseRewards(r0, t0, 0.005 ether);
+        expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
+        expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
+
+        _startPrankRA(relayerAddressMap[r0]);
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray(), r0);
+        vm.stopPrank();
+
+        uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
+        uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
+        unDelegate(r0, d0);
+        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
+        assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
+
+        uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
+        uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
+        unDelegate(r0, d1);
+        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
+        assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
+    }
+
+    function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
+        _startPrankRA(relayerAddressMap[r0]);
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray(), r0);
+        vm.stopPrank();
+
+        uint32[] memory stakeArray = ta.getStakeArray();
+        uint32[] memory delegationArray = ta.getDelegationArray();
+        _prankDa(d0);
+        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, r0));
+        ta.delegate(stakeArray, delegationArray, r0, 0.01 ether);
+    }
 }

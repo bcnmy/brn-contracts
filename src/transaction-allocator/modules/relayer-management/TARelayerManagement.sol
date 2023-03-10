@@ -392,6 +392,7 @@ contract TARelayerManagement is
         onlyRelayerOwner(_relayerId)
     {
         RMStorage storage ds = getRMStorage();
+        TADStorage storage tds = getTADStorage();
 
         RelayerInfo storage node = ds.relayerInfo[_relayerId];
 
@@ -405,7 +406,24 @@ contract TARelayerManagement is
 
             // Update Mapping
             node.isGasTokenSupported[token] = true;
-            node.supportedGasTokens.push(token);
+
+            // TODO: Optimize? One time operation, Max length of this array is 4-5
+            // Update supported pools array
+            uint256 _length = tds.supportedPools[_relayerId].length;
+            bool found = false;
+            for (uint256 j = 0; j < _length;) {
+                if (tds.supportedPools[_relayerId][j] == token) {
+                    found = true;
+                    break;
+                }
+
+                unchecked {
+                    ++j;
+                }
+            }
+            if (!found) {
+                tds.supportedPools[_relayerId].push(token);
+            }
 
             unchecked {
                 ++i;
@@ -435,18 +453,9 @@ contract TARelayerManagement is
             // Update Mapping
             node.isGasTokenSupported[token] = false;
 
-            // Update Array. TODO: Optimize
-            uint256 jLength = node.supportedGasTokens.length;
-            for (uint256 j = 0; j < jLength;) {
-                if (node.supportedGasTokens[j] == token) {
-                    node.supportedGasTokens[j] = node.supportedGasTokens[jLength - 1];
-                    node.supportedGasTokens.pop();
-                    break;
-                }
-                unchecked {
-                    ++j;
-                }
-            }
+            // Do not remove the token from the suppported pools array
+            // since it is used to keep track of delegator rewards
+
             unchecked {
                 ++i;
             }
@@ -493,15 +502,6 @@ contract TARelayerManagement is
         returns (bool)
     {
         return getRMStorage().relayerInfo[_relayerId].isGasTokenSupported[_token];
-    }
-
-    function relayerInfo_SupportedGasTokens(RelayerId _relayerId)
-        external
-        view
-        override
-        returns (TokenAddress[] memory)
-    {
-        return getRMStorage().relayerInfo[_relayerId].supportedGasTokens;
     }
 
     function relayersPerWindow() external view override returns (uint256) {

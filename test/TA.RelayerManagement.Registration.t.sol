@@ -284,9 +284,9 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         tokens[0] = NATIVE_TOKEN;
         tokens[1] = TokenAddress.wrap(address(bico));
         ta.addSupportedGasTokens(relayerId, tokens);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId)[0] == tokens[0], true);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId)[1] == tokens[1], true);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId).length, 2);
+        assertEq(ta.supportedPools(relayerId)[0] == tokens[0], true);
+        assertEq(ta.supportedPools(relayerId)[1] == tokens[1], true);
+        assertEq(ta.supportedPools(relayerId).length, 2);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[0]), true);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[1]), true);
         vm.stopPrank();
@@ -309,14 +309,17 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         TokenAddress[] memory removalTokens = new TokenAddress[](1);
         removalTokens[0] = tokens[0];
         ta.removeSupportedGasTokens(relayerId, removalTokens);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId)[0] == tokens[1], true);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId).length, 1);
+        assertEq(ta.supportedPools(relayerId)[0] == tokens[0], true);
+        assertEq(ta.supportedPools(relayerId)[1] == tokens[1], true);
+        assertEq(ta.supportedPools(relayerId).length, 2);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[0]), false);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[1]), true);
 
         removalTokens[0] = tokens[1];
         ta.removeSupportedGasTokens(relayerId, removalTokens);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId).length, 0);
+        assertEq(ta.supportedPools(relayerId)[0] == tokens[0], true);
+        assertEq(ta.supportedPools(relayerId)[1] == tokens[1], true);
+        assertEq(ta.supportedPools(relayerId).length, 2);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[0]), false);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[1]), false);
         vm.stopPrank();
@@ -365,8 +368,9 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         TokenAddress[] memory removalTokens = new TokenAddress[](1);
         removalTokens[0] = tokens[0];
         ta.removeSupportedGasTokens(relayerId, removalTokens);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId)[0] == tokens[1], true);
-        assertEq(ta.relayerInfo_SupportedGasTokens(relayerId).length, 1);
+        assertEq(ta.supportedPools(relayerId)[0] == tokens[0], true);
+        assertEq(ta.supportedPools(relayerId)[1] == tokens[1], true);
+        assertEq(ta.supportedPools(relayerId).length, 2);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[0]), false);
         assertEq(ta.relayerInfo_isGasTokenSupported(relayerId, tokens[1]), true);
 

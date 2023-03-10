@@ -81,14 +81,14 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
-        TokenAddress[] storage supportedGasTokens = rms.relayerInfo[_relayerId].supportedGasTokens;
-        uint256 length = supportedGasTokens.length;
+        TokenAddress[] storage supportedPools_ = ds.supportedPools[_relayerId];
+        uint256 length = supportedPools_.length;
         if (length == 0) {
             revert NoSupportedGasTokens(_relayerId);
         }
 
         for (uint256 i = 0; i < length;) {
-            _mintPoolShares(_relayerId, delegatorAddress, _amount, supportedGasTokens[i]);
+            _mintPoolShares(_relayerId, delegatorAddress, _amount, supportedPools_[i]);
             unchecked {
                 ++i;
             }
@@ -131,7 +131,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     // TODO: Non Reentrant
     // TODO: Partial Claim?
     // TODO: Implement delay
-    // TODO: What if the relayer has already un-registered?
     function unDelegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
@@ -142,26 +141,30 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
-        TokenAddress[] storage supportedGasTokens = rms.relayerInfo[_relayerId].supportedGasTokens;
-        uint256 length = supportedGasTokens.length;
+        TokenAddress[] storage supportedPools_ = ds.supportedPools[_relayerId];
+        uint256 length = supportedPools_.length;
 
         // TODO: What if relayer removes support for a token once rewards are accrued?
         for (uint256 i = 0; i < length;) {
-            _processRewards(_relayerId, supportedGasTokens[i], delegatorAddress);
+            _processRewards(_relayerId, supportedPools_[i], delegatorAddress);
             unchecked {
                 ++i;
             }
         }
 
         uint256 delegation_ = ds.delegation[_relayerId][delegatorAddress];
-        uint32[] memory _newDelegationArray = _decreaseDelegationInDelegationArray(
-            _prevDelegationArray, rms.relayerInfo[_relayerId].index, _scaleDelegation(delegation_)
-        );
         ds.totalDelegation[_relayerId] -= delegation_;
         ds.delegation[_relayerId][delegatorAddress] = 0;
 
         // TODO: Update CDF after Delay
-        _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
+        // Update the CDF if and only if the relayer is still registered
+        // There can be a case where the relayer is unregistered and the user still has rewards
+        if (_isStakedRelayer(_relayerId)) {
+            uint32[] memory _newDelegationArray = _decreaseDelegationInDelegationArray(
+                _prevDelegationArray, rms.relayerInfo[_relayerId].index, _scaleDelegation(delegation_)
+            );
+            _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
+        }
 
         emit DelegationRemoved(_relayerId, delegatorAddress, delegation_);
     }
@@ -258,5 +261,10 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
 
         return delegationArray;
+    }
+
+    function supportedPools(RelayerId _relayerId) external view override returns (TokenAddress[] memory) {
+        TADStorage storage ds = getTADStorage();
+        return ds.supportedPools[_relayerId];
     }
 }
