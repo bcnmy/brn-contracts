@@ -18,11 +18,15 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint
+    ) external returns (RelayerId);
+
+    function unRegister(
+        uint32[] calldata _previousStakeArray,
+        uint32[] calldata _currentDelegationArray,
+        RelayerId _relayerId
     ) external;
 
-    function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _currentDelegationArray) external;
-
-    function withdraw() external;
+    function withdraw(RelayerId _relayerId) external;
 
     function processAbsenceProof(
         AbsenceProofReporterData calldata _reporterData,
@@ -33,17 +37,19 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function relayerCount() external view returns (uint256);
 
-    function relayerInfo_Stake(RelayerAddress) external view returns (uint256);
+    function relayerInfo_Stake(RelayerId) external view returns (uint256);
 
-    function relayerInfo_Endpoint(RelayerAddress) external view returns (string memory);
+    function relayerInfo_Endpoint(RelayerId) external view returns (string memory);
 
-    function relayerInfo_Index(RelayerAddress) external view returns (uint256);
+    function relayerInfo_Index(RelayerId) external view returns (uint256);
 
-    function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
+    function relayerInfo_isAccount(RelayerId, RelayerAccountAddress) external view returns (bool);
 
-    function relayerInfo_isGasTokenSupported(RelayerAddress, TokenAddress) external view returns (bool);
+    function relayerInfo_isGasTokenSupported(RelayerId, TokenAddress) external view returns (bool);
 
-    function relayerInfo_SupportedGasTokens(RelayerAddress) external view returns (TokenAddress[] memory);
+    function relayerInfo_SupportedGasTokens(RelayerId) external view returns (TokenAddress[] memory);
+
+    function relayerInfo_RelayerAddress(RelayerId) external view returns (RelayerAddress);
 
     function relayersPerWindow() external view returns (uint256);
 
@@ -55,15 +61,19 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function penaltyDelayBlocks() external view returns (uint256);
 
-    function withdrawalInfo(RelayerAddress) external view returns (WithdrawalInfo memory);
+    function withdrawalInfo(RelayerId) external view returns (WithdrawalInfo memory);
 
     function withdrawDelay() external view returns (uint256);
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
+    function setRelayerAccountsStatus(
+        RelayerId _relayerId,
+        RelayerAccountAddress[] calldata _accounts,
+        bool[] calldata _status
+    ) external;
 
-    function addSupportedGasTokens(TokenAddress[] calldata _tokens) external;
+    function addSupportedGasTokens(RelayerId _relayerId, TokenAddress[] calldata _tokens) external;
 
-    function removeSupportedGasTokens(TokenAddress[] calldata _tokens) external;
+    function removeSupportedGasTokens(RelayerId _relayerId, TokenAddress[] calldata _tokens) external;
 
     function bondTokenAddress() external view returns (TokenAddress);
 }

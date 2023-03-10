@@ -56,14 +56,18 @@ contract TAProxy is
 
     function _initialize(InitalizerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
+        TADStorage storage tds = getTADStorage();
 
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
         rms.withdrawDelay = _params.withdrawDelay;
         rms.relayersPerWindow = _params.relayersPerWindow;
-        rms.stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
+
+        // Initial State
+        rms.stakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
+        tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
     }
 
     /// @notice Adds a new module

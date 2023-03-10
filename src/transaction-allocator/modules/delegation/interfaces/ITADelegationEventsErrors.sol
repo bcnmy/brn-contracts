@@ -6,26 +6,23 @@ import "src/transaction-allocator/common/TATypes.sol";
 import "src/library/FixedPointArithmetic.sol";
 
 interface ITADelegationEventsErrors {
-    error PoolNotSupported(RelayerAddress relayerAddress, TokenAddress tokenAddress);
+    error PoolNotSupported(RelayerId relayerId, TokenAddress tokenAddress);
+    error NoSupportedGasTokens(RelayerId relayerId);
 
     event SharesMinted(
-        RelayerAddress indexed relayerAddress,
+        RelayerId indexed relayerId,
         DelegatorAddress indexed delegatorAddress,
         TokenAddress indexed pool,
         uint256 delegatedAmount,
         FixedPointType sharesMinted,
         FixedPointType sharePrice
     );
-    event DelegationAdded(
-        RelayerAddress indexed relayerAddress, DelegatorAddress indexed delegatorAddress, uint256 amount
-    );
+    event DelegationAdded(RelayerId indexed relayerId, DelegatorAddress indexed delegatorAddress, uint256 amount);
     event RewardSent(
-        RelayerAddress indexed relayerAddress,
+        RelayerId indexed relayerId,
         DelegatorAddress indexed delegatorAddress,
         TokenAddress indexed tokenAddress,
         uint256 amount
     );
-    event DelegationRemoved(
-        RelayerAddress indexed relayerAddress, DelegatorAddress indexed delegatorAddress, uint256 amount
-    );
+    event DelegationRemoved(RelayerId indexed relayerId, DelegatorAddress indexed delegatorAddress, uint256 amount);
 }

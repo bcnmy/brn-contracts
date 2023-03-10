@@ -9,7 +9,7 @@ abstract contract TATransactionAllocationStorage {
 
     struct TAStorage {
         // attendance: windowIndex -> relayer -> wasPresent?
-        mapping(uint256 => mapping(RelayerAddress => bool)) attendance;
+        mapping(uint256 => mapping(RelayerId => bool)) attendance;
     }
 
     /* solhint-disable no-inline-assembly */

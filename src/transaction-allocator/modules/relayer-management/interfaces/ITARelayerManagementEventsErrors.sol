@@ -14,25 +14,28 @@ interface ITARelayerManagementEventsErrors {
     error InvalidRelayerWindowForAbsentee();
     error AbsenteeWasPresent(uint256 absenteeWindowId);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
-    error ParameterLengthMismatch();
     error GasTokenAlreadySupported(TokenAddress token);
     error GasTokenNotSupported(TokenAddress token);
 
     event RelayerRegistered(
-        RelayerAddress indexed relayer, string indexed endpoint, RelayerAccountAddress[] accounts, uint256 indexed stake
+        RelayerId indexed relayer,
+        RelayerAddress indexed relayerAddress,
+        string endpoint,
+        RelayerAccountAddress[] accounts,
+        uint256 indexed stake
     );
     event RelayerAccountsUpdated(
-        RelayerAddress indexed relayer, RelayerAccountAddress[] indexed _accounts, bool[] indexed _status
+        RelayerId indexed relayer, RelayerAccountAddress[] indexed _accounts, bool[] indexed _status
     );
-    event RelayerUnRegistered(RelayerAddress indexed relayer);
-    event Withdraw(RelayerAddress indexed relayer, uint256 amount);
+    event RelayerUnRegistered(RelayerId indexed relayer);
+    event Withdraw(RelayerId indexed relayer, uint256 amount);
     event AbsenceProofProcessed(
         uint256 indexed windowId,
         address indexed reporter,
-        RelayerAddress indexed absentRelayer,
+        RelayerId indexed absentRelayer,
         uint256 absenceWindowId,
         uint256 penalty
     );
-    event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
-    event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
+    event GasTokensAdded(RelayerId indexed relayer, TokenAddress[] indexed tokens);
+    event GasTokensRemoved(RelayerId indexed relayer, TokenAddress[] indexed tokens);
 }

@@ -6,14 +6,16 @@ import "./TATypes.sol";
 // Relayer Information
 struct RelayerInfo {
     uint256 stake;
-    mapping(RelayerAccountAddress => bool) isAccount;
     string endpoint;
     uint256 index;
-    mapping(TokenAddress => bool) isGasTokenSupported;
+    RelayerAddress relayerAddress;
     TokenAddress[] supportedGasTokens;
+    mapping(TokenAddress => bool) isGasTokenSupported;
+    mapping(RelayerAccountAddress => bool) isAccount;
 }
 
 struct WithdrawalInfo {
+    RelayerAddress withdrawlAddress;
     uint256 amount;
     uint256 time;
 }
@@ -38,7 +40,7 @@ struct AbsenceProofReporterData {
 }
 
 struct AbsenceProofAbsenteeData {
-    RelayerAddress relayerAddress;
+    RelayerId relayerId;
     uint256 blockNumber;
     uint256 latestStakeUpdationCdfLogIndex;
     uint16[] cdf;
@@ -47,7 +49,7 @@ struct AbsenceProofAbsenteeData {
 }
 
 struct AllocateTransactionParams {
-    RelayerAddress relayer;
+    RelayerId relayerId;
     ForwardRequest[] requests;
     uint16[] cdf;
 }

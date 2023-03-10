@@ -43,4 +43,11 @@ function fixedPointInequality(FixedPointType _a, FixedPointType _b) pure returns
     return FixedPointType.unwrap(_a) != FixedPointType.unwrap(_b);
 }
 
-using { fixedPointAdd as +, fixedPointSubtract as -, fixedPointMultiply as *, fixedPointDivide as /, fixedPointEquality as ==, fixedPointInequality as != } for FixedPointType global;
+using {
+    fixedPointAdd as +,
+    fixedPointSubtract as -,
+    fixedPointMultiply as *,
+    fixedPointDivide as /,
+    fixedPointEquality as ==,
+    fixedPointInequality as !=
+} for FixedPointType global;

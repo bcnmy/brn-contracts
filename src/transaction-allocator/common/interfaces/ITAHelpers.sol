@@ -10,7 +10,9 @@ interface ITAHelpers {
     error InvalidDelegationArrayHash();
     error NativeTransferFailed(address to, uint256 amount);
     error InsufficientBalance(TokenAddress token, uint256 balance, uint256 amount);
-    error InvalidRelayer(RelayerAddress relayer);
+    error InvalidRelayer(RelayerId relayer);
+    error NotAuthorized(RelayerAddress relayerAddress, address caller);
+    error ParameterLengthMismatch();
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
     event CdfArrayUpdated(bytes32 indexed cdfArrayHash);

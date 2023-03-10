@@ -12,6 +12,8 @@ import "./TATypes.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 import "../modules/delegation/TADelegationStorage.sol";
 
+import "forge-std/console2.sol";
+
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -55,9 +57,17 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    modifier validRelayer(RelayerAddress _relayer) {
-        if (!_validRelayer(_relayer)) {
+    modifier onlyStakedRelayer(RelayerId _relayer) {
+        if (!_isStakedRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
+        }
+        _;
+    }
+
+    modifier onlyRelayerOwner(RelayerId _relayer) {
+        if (!_isRelayerOwner(_relayer)) {
+            RMStorage storage ds = getRMStorage();
+            revert NotAuthorized(ds.relayerInfo[_relayer].relayerAddress, msg.sender);
         }
         _;
     }
@@ -77,9 +87,14 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash == _hashUint16ArrayCalldata(_array);
     }
 
-    function _validRelayer(RelayerAddress _relayer) internal view returns (bool) {
+    function _isStakedRelayer(RelayerId _relayer) internal view returns (bool) {
         RMStorage storage ds = getRMStorage();
         return ds.relayerInfo[_relayer].stake > 0;
+    }
+
+    function _isRelayerOwner(RelayerId _relayer) internal view returns (bool) {
+        RMStorage storage ds = getRMStorage();
+        return ds.relayerInfo[_relayer].relayerAddress == RelayerAddress.wrap(msg.sender);
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
@@ -130,9 +145,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        RelayerAddress relayerAddress = ds.relayerIndexToRelayer[_cdfIndex];
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        if (!node.isAccount[RelayerAccountAddress.wrap(_relayer)] && relayerAddress != RelayerAddress.wrap(_relayer)) {
+        RelayerId relayerId = ds.relayerIndexToRelayer[_cdfIndex];
+        RelayerInfo storage node = ds.relayerInfo[relayerId];
+        if (
+            !node.isAccount[RelayerAccountAddress.wrap(_relayer)]
+                && node.relayerAddress != RelayerAddress.wrap(_relayer)
+        ) {
             return false;
         }
 
@@ -189,6 +207,10 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             emit DelegationArrayUpdated(tds.delegationArrayHash);
         }
 
+        if (_stakeArray.length != _delegationArray.length) {
+            revert ParameterLengthMismatch();
+        }
+
         // Update cdf hash
         (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
         uint256 currentWindowId = _windowIdentifier(block.number);
@@ -205,6 +227,10 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Misc //////////////////////////////
+    function _generateNewRelayerId(RelayerAddress _relayerAddress) internal view returns (RelayerId) {
+        return RelayerId.wrap(keccak256(abi.encodePacked(_relayerAddress, block.number)));
+    }
+
     function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
         if (_token == NATIVE_TOKEN) {
             uint256 balance = address(this).balance;
