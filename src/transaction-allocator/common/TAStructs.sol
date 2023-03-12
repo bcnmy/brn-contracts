@@ -8,13 +8,13 @@ struct RelayerInfo {
     uint256 stake;
     string endpoint;
     uint256 index;
-    RelayerAddress relayerAddress;
-    mapping(TokenAddress => bool) isGasTokenSupported;
+    RelayerAccountAddress[] relayerAccountAddresses;
     mapping(RelayerAccountAddress => bool) isAccount;
+    // TODO: Discuss
+    mapping(TokenAddress => bool) isGasTokenSupported;
 }
 
 struct WithdrawalInfo {
-    RelayerAddress withdrawlAddress;
     uint256 amount;
     uint256 time;
 }
@@ -39,7 +39,7 @@ struct AbsenceProofReporterData {
 }
 
 struct AbsenceProofAbsenteeData {
-    RelayerId relayerId;
+    RelayerAddress relayerAddress;
     uint256 blockNumber;
     uint256 latestStakeUpdationCdfLogIndex;
     uint16[] cdf;
@@ -48,7 +48,7 @@ struct AbsenceProofAbsenteeData {
 }
 
 struct AllocateTransactionParams {
-    RelayerId relayerId;
+    RelayerAddress relayerAddress;
     ForwardRequest[] requests;
     uint16[] cdf;
 }

@@ -9,38 +9,51 @@ interface ITADelegation is ITADelegationEventsErrors {
     function delegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerId _relayerId,
+        RelayerAddress _relayerAddress,
         uint256 _amount
     ) external;
 
     function unDelegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerId _relayerId
+        RelayerAddress _relayerAddress
     ) external;
 
-    function sharePrice(RelayerId _relayerId, TokenAddress _tokenAddress) external view returns (FixedPointType);
-
-    function rewardsEarned(RelayerId _relayerId, TokenAddress _tokenAddres, DelegatorAddress _delegatorAddress)
-        external
-        view
-        returns (uint256);
-
-    ////////////////////////// Getters //////////////////////////
-    function totalDelegation(RelayerId _relayerId) external view returns (uint256);
-
-    function delegation(RelayerId _relayerId, DelegatorAddress _delegatorAddress) external view returns (uint256);
-
-    function shares(RelayerId _relayerId, DelegatorAddress _delegatorAddress, TokenAddress _tokenAddress)
+    function sharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
         view
         returns (FixedPointType);
 
-    function totalShares(RelayerId _relayerId, TokenAddress _tokenAddress) external view returns (FixedPointType);
+    function rewardsEarned(
+        RelayerAddress _relayerAddress,
+        TokenAddress _tokenAddres,
+        DelegatorAddress _delegatorAddress
+    ) external view returns (uint256);
 
-    function unclaimedRewards(RelayerId _relayerId, TokenAddress _tokenAddress) external view returns (uint256);
+    ////////////////////////// Getters //////////////////////////
+    function totalDelegation(RelayerAddress _relayerAddress) external view returns (uint256);
 
-    function supportedPools(RelayerId _relayerId) external view returns (TokenAddress[] memory);
+    function delegation(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress)
+        external
+        view
+        returns (uint256);
+
+    function shares(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress, TokenAddress _tokenAddress)
+        external
+        view
+        returns (FixedPointType);
+
+    function totalShares(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+        external
+        view
+        returns (FixedPointType);
+
+    function unclaimedRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+        external
+        view
+        returns (uint256);
+
+    function supportedPools(RelayerAddress _relayerAddress) external view returns (TokenAddress[] memory);
 
     function getDelegationArray() external view returns (uint32[] memory);
 }

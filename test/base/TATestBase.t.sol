@@ -145,10 +145,6 @@ abstract contract TATestBase is Test {
         assertEq(_a.toUint256(), _b.toUint256());
     }
 
-    function _assertEqRid(RelayerId _a, RelayerId _b) internal {
-        assertEq(RelayerId.unwrap(_a), RelayerId.unwrap(_b));
-    }
-
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
     }

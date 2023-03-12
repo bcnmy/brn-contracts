@@ -17,8 +17,8 @@ abstract contract TARelayerManagementStorage {
         uint256 withdrawDelay;
         // No of registered relayers
         uint256 relayerCount;
-        mapping(RelayerId => RelayerInfo) relayerInfo;
-        mapping(uint256 => RelayerId) relayerIndexToRelayer;
+        mapping(RelayerAddress => RelayerInfo) relayerInfo;
+        mapping(uint256 => RelayerAddress) relayerIndexToRelayer;
         // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
@@ -26,7 +26,7 @@ abstract contract TARelayerManagementStorage {
         CdfHashUpdateInfo[] cdfHashUpdateLog;
         bytes32 stakeArrayHash;
         /// Maps relayer address to pending withdrawals
-        mapping(RelayerId => WithdrawalInfo) withdrawalInfo;
+        mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
     }
 
     /* solhint-disable no-inline-assembly */

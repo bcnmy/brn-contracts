@@ -18,24 +18,20 @@ interface ITARelayerManagementEventsErrors {
     error GasTokenNotSupported(TokenAddress token);
 
     event RelayerRegistered(
-        RelayerId indexed relayer,
-        RelayerAddress indexed relayerAddress,
-        string endpoint,
-        RelayerAccountAddress[] accounts,
-        uint256 indexed stake
+        RelayerAddress indexed relayer, string endpoint, RelayerAccountAddress[] accounts, uint256 indexed stake
     );
     event RelayerAccountsUpdated(
-        RelayerId indexed relayer, RelayerAccountAddress[] indexed _accounts, bool[] indexed _status
+        RelayerAddress indexed relayer, RelayerAccountAddress[] indexed _accounts, bool[] indexed _status
     );
-    event RelayerUnRegistered(RelayerId indexed relayer);
-    event Withdraw(RelayerId indexed relayer, uint256 amount);
+    event RelayerUnRegistered(RelayerAddress indexed relayer);
+    event Withdraw(RelayerAddress indexed relayer, uint256 indexed amount);
     event AbsenceProofProcessed(
         uint256 indexed windowId,
         address indexed reporter,
-        RelayerId indexed absentRelayer,
+        RelayerAddress indexed absentRelayer,
         uint256 absenceWindowId,
         uint256 penalty
     );
-    event GasTokensAdded(RelayerId indexed relayer, TokenAddress[] indexed tokens);
-    event GasTokensRemoved(RelayerId indexed relayer, TokenAddress[] indexed tokens);
+    event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
+    event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
 }

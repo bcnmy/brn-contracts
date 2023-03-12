@@ -153,7 +153,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         view
         override
         verifyCdfHash(_cdf)
-        returns (RelayerId[] memory, uint256[] memory)
+        returns (RelayerAddress[] memory, uint256[] memory)
     {
         RMStorage storage ds = getRMStorage();
 
@@ -162,7 +162,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Generate `relayersPerWindow` pseudo-random distinct relayers
-        RelayerId[] memory selectedRelayers = new RelayerId[](ds.relayersPerWindow);
+        RelayerAddress[] memory selectedRelayers = new RelayerAddress[](ds.relayersPerWindow);
         uint256[] memory cdfIndex = new uint256[](ds.relayersPerWindow);
 
         uint256 cdfLength = _cdf.length;
@@ -175,8 +175,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
             RelayerInfo storage relayer = ds.relayerInfo[ds.relayerIndexToRelayer[cdfIndex[i]]];
             uint256 relayerIndex = relayer.index;
-            RelayerId relayerId = ds.relayerIndexToRelayer[relayerIndex];
-            selectedRelayers[i] = relayerId;
+            RelayerAddress relayerAddress = ds.relayerIndexToRelayer[relayerIndex];
+            selectedRelayers[i] = relayerAddress;
 
             unchecked {
                 ++i;
@@ -197,7 +197,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         verifyCdfHash(_data.cdf)
         returns (ForwardRequest[] memory, uint256[] memory, uint256)
     {
-        (RelayerId[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
+        (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
             allocateRelayers(_data.cdf);
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
             revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
@@ -213,7 +213,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         for (uint256 i = 0; i < _data.requests.length;) {
             // If the transaction can be processed by this relayer, store it's info
             uint256 relayerIndex = _getHashedModIndex(_data.requests[i].data);
-            if (relayersAllocated[relayerIndex] == _data.relayerId) {
+            if (relayersAllocated[relayerIndex] == _data.relayerAddress) {
                 relayerGenerationIteration[j] = relayerIndex;
                 txnAllocated[j] = _data.requests[i];
                 selectedRelayerCdfIndex = relayerStakePrefixSumIndex[relayerIndex];
@@ -239,7 +239,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ////////////////////////// Getters //////////////////////////
 
-    function attendance(uint256 _windowIndex, RelayerId _relayerId) external view override returns (bool) {
-        return getTAStorage().attendance[_windowIndex][_relayerId];
+    function attendance(uint256 _windowIndex, RelayerAddress _relayerAddress) external view override returns (bool) {
+        return getTAStorage().attendance[_windowIndex][_relayerAddress];
     }
 }

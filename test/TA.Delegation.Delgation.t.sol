@@ -14,9 +14,6 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
     TokenAddress[] supportedTokens;
-    mapping(RelayerAddress => RelayerId) internal relayerIdMap;
-    mapping(RelayerId => RelayerAddress) internal relayerAddressMap;
-
     uint256 ERROR_TOLERANCE = 0.0001e18; // 0.001%
 
     function setUp() public override {
@@ -37,11 +34,10 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            relayerIdMap[relayerAddress] = ta.register(
+            ta.register(
                 ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
             );
-            relayerAddressMap[relayerIdMap[relayerAddress]] = relayerAddress;
-            ta.addSupportedGasTokens(relayerIdMap[relayerAddress], supportedTokens);
+            ta.addSupportedGasTokens(relayerAddress, supportedTokens);
             vm.stopPrank();
         }
 
@@ -52,7 +48,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         }
 
         // Test State
-        r0 = relayerIdMap[relayerMainAddress[0]];
+        r0 = relayerMainAddress[0];
         d0 = delegatorAddresses[0];
         d1 = delegatorAddresses[1];
         t0 = supportedTokens[0];
@@ -66,15 +62,15 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     // Test State
-    RelayerId r0;
+    RelayerAddress r0;
     DelegatorAddress d0;
     DelegatorAddress d1;
     TokenAddress t0;
     TokenAddress t1;
 
-    mapping(RelayerId => mapping(DelegatorAddress => uint256)) expDelegation;
-    mapping(RelayerId => uint256) expTotalDelegation;
-    mapping(RelayerId => mapping(DelegatorAddress => mapping(TokenAddress => uint256))) expRewards;
+    mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) expDelegation;
+    mapping(RelayerAddress => uint256) expTotalDelegation;
+    mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => uint256))) expRewards;
 
     uint256 totalDelegation = 0;
 
@@ -90,7 +86,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         assertApproxEqRel(ta.rewardsEarned(r0, t1, d1), expRewards[r0][d1][t1], ERROR_TOLERANCE, "Rewards R0 T1 D1");
     }
 
-    function delegate(RelayerId r, DelegatorAddress d, uint256 amount) internal {
+    function delegate(RelayerAddress r, DelegatorAddress d, uint256 amount) internal {
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _prankDa(d);
@@ -100,7 +96,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expTotalDelegation[r] += amount;
     }
 
-    function unDelegate(RelayerId r, DelegatorAddress d) internal {
+    function unDelegate(RelayerAddress r, DelegatorAddress d) internal {
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _prankDa(d);
@@ -112,7 +108,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expRewards[r][d][t1] = 0;
     }
 
-    function increaseRewards(RelayerId r, TokenAddress t, uint256 amount) internal {
+    function increaseRewards(RelayerAddress r, TokenAddress t, uint256 amount) internal {
         ta.increaseRewards(r, t, amount);
 
         if (t == NATIVE_TOKEN) {
@@ -204,8 +200,8 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
         expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
 
-        _startPrankRA(relayerAddressMap[r0]);
-        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray(), r0);
+        _startPrankRA(r0);
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
         vm.stopPrank();
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
@@ -222,8 +218,8 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
-        _startPrankRA(relayerAddressMap[r0]);
-        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray(), r0);
+        _startPrankRA(r0);
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
         vm.stopPrank();
 
         uint32[] memory stakeArray = ta.getStakeArray();

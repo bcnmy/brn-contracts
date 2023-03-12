@@ -49,15 +49,3 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 }
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
-
-type RelayerId is bytes32;
-
-function relayerIdEquality(RelayerId a, RelayerId b) pure returns (bool) {
-    return RelayerId.unwrap(a) == RelayerId.unwrap(b);
-}
-
-function relayerIdInquality(RelayerId a, RelayerId b) pure returns (bool) {
-    return RelayerId.unwrap(a) != RelayerId.unwrap(b);
-}
-
-using {relayerIdEquality as ==, relayerIdInquality as !=} for RelayerId global;
