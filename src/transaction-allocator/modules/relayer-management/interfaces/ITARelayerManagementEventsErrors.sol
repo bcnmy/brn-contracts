@@ -20,9 +20,7 @@ interface ITARelayerManagementEventsErrors {
     event RelayerRegistered(
         RelayerAddress indexed relayer, string endpoint, RelayerAccountAddress[] accounts, uint256 indexed stake
     );
-    event RelayerAccountsUpdated(
-        RelayerAddress indexed relayer, RelayerAccountAddress[] indexed _accounts, bool[] indexed _status
-    );
+    event RelayerAccountsUpdated(RelayerAddress indexed relayer, RelayerAccountAddress[] indexed _accounts);
     event RelayerUnRegistered(RelayerAddress indexed relayer);
     event Withdraw(RelayerAddress indexed relayer, uint256 indexed amount);
     event AbsenceProofProcessed(

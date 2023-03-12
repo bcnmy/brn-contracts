@@ -181,13 +181,7 @@ contract TARelayerManagement is
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.index = ds.relayerCount;
-        uint256 length = _accounts.length;
-        for (uint256 i = 0; i < length;) {
-            node.isAccount[_accounts[i]] = true;
-            unchecked {
-                ++i;
-            }
-        }
+        _setRelayerAccountAddresses(relayerAddress, _accounts);
         ds.relayerIndexToRelayer[node.index] = relayerAddress;
         ++ds.relayerCount;
 
@@ -202,20 +196,32 @@ contract TARelayerManagement is
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
-    // TODO: What happens if relayer has delegation?
     function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _previousDelegationArray)
         external
         override
         verifyStakeArrayHash(_previousStakeArray)
         verifyDelegationArrayHash(_previousDelegationArray)
+        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
     {
         RMStorage storage ds = getRMStorage();
+        TADStorage storage tad = getTADStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         ds.withdrawalInfo[relayerAddress] = WithdrawalInfo(node.stake, block.timestamp + ds.withdrawDelay);
         uint256 n = ds.relayerCount - 1;
         uint256 nodeIndex = node.index;
+        _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
+
+        TokenAddress[] storage supportedPools = tad.supportedPools[relayerAddress];
+        uint256 length = supportedPools.length;
+        for (uint256 i = 0; i < length;) {
+            delete node.isGasTokenSupported[supportedPools[i]];
+            unchecked {
+                ++i;
+            }
+        }
+
         delete ds.relayerInfo[relayerAddress];
 
         if (nodeIndex != n) {
@@ -247,28 +253,39 @@ contract TARelayerManagement is
         emit Withdraw(relayerAddress, w.amount);
     }
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status)
-        external
-        override
-        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
+    function _setRelayerAccountAddresses(RelayerAddress _relayerAddress, RelayerAccountAddress[] memory _accounts)
+        internal
     {
-        if (_accounts.length != _status.length) {
-            revert ParameterLengthMismatch();
-        }
+        RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
 
-        RMStorage storage ds = getRMStorage();
-        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-
-        uint256 length = _accounts.length;
+        // Delete old accounts
+        uint256 length = node.relayerAccountAddresses.length;
         for (uint256 i = 0; i < length;) {
-            node.isAccount[_accounts[i]] = _status[i];
+            node.isAccount[node.relayerAccountAddresses[i]] = false;
             unchecked {
                 ++i;
             }
         }
 
-        emit RelayerAccountsUpdated(relayerAddress, _accounts, _status);
+        // Add new accounts
+        length = _accounts.length;
+        for (uint256 i = 0; i < length;) {
+            node.isAccount[_accounts[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+        node.relayerAccountAddresses = _accounts;
+    }
+
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts)
+        external
+        override
+        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
+    {
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        _setRelayerAccountAddresses(relayerAddress, _accounts);
+        emit RelayerAccountsUpdated(relayerAddress, _accounts);
     }
 
     function processAbsenceProof(

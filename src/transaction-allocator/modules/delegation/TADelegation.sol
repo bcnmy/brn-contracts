@@ -49,11 +49,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         TokenAddress _pool
     ) internal {
         TADStorage storage ds = getTADStorage();
-        RMStorage storage rms = getRMStorage();
 
-        if (!rms.relayerInfo[_relayerAddress].isGasTokenSupported[_pool]) {
-            revert PoolNotSupported(_relayerAddress, _pool);
-        }
         FixedPointType sharePrice_ = sharePrice(_relayerAddress, _pool);
         FixedPointType sharesMinted = (_delegatedAmount.toFixedPointType() / sharePrice_);
 
@@ -112,11 +108,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         internal
     {
         TADStorage storage ds = getTADStorage();
-        RMStorage storage rms = getRMStorage();
-
-        if (!rms.relayerInfo[_relayerAddress].isGasTokenSupported[_pool]) {
-            revert PoolNotSupported(_relayerAddress, _pool);
-        }
 
         uint256 rewardsEarned_ = rewardsEarned(_relayerAddress, _pool, _delegatorAddress);
 

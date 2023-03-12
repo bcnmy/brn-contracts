@@ -31,7 +31,7 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
         uint32[] calldata _currentDelegationArray
     ) external;
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts) external;
 
     function addSupportedGasTokens(RelayerAddress _relayerAddress, TokenAddress[] calldata _tokens) external;
 

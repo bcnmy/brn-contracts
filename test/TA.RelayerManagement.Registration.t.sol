@@ -53,16 +53,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-
-            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
-
             _startPrankRA(relayerAddress);
-
-            // De Register Accounts
-            bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
-            vm.expectEmit(true, true, true, true);
-            emit RelayerAccountsUpdated(relayerAddress, accounts, accountUpdatedStatus);
-            ta.setRelayerAccountsStatus(accounts, accountUpdatedStatus);
 
             // De Register Relayer
             vm.expectEmit(true, true, true, true);
@@ -101,11 +92,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
-
             _startPrankRA(relayerAddress);
-            bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
-            ta.setRelayerAccountsStatus(accounts, accountUpdatedStatus);
             ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
             vm.stopPrank();
 
@@ -234,10 +221,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         );
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
-        ta.setRelayerAccountsStatus(
-            relayerAccountAddresses[relayerMainAddress[0]],
-            new bool[](relayerAccountAddresses[relayerMainAddress[0]].length)
-        );
+        ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
         vm.stopPrank();
     }
 
@@ -250,10 +234,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         ta.register(
             ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint
         );
-        ta.setRelayerAccountsStatus(
-            relayerAccountAddresses[relayerMainAddress[0]],
-            new bool[](relayerAccountAddresses[relayerMainAddress[0]].length)
-        );
+        ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
         uint256 withdrawTime = block.timestamp + ta.withdrawDelay();
         skip(1);
