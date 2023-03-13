@@ -14,6 +14,8 @@ interface ITAHelpers {
     error ParameterLengthMismatch();
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
-    event CdfArrayUpdated(bytes32 indexed cdfArrayHash);
+    event CdfArrayUpdateQueued(
+        bytes32 indexed cdfArrayHash, uint256 indexed effectiveWindowIndex, uint256 indexed cdfLogIndex
+    );
     event DelegationArrayUpdated(bytes32 indexed delegationArrayHash);
 }

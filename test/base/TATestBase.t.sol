@@ -22,7 +22,6 @@ abstract contract TATestBase is Test {
 
     InitalizerParams deployParams = InitalizerParams({
         blocksPerWindow: 10,
-        withdrawDelay: 10,
         relayersPerWindow: 10,
         penaltyDelayBlocks: 10,
         bondTokenAddress: TokenAddress.wrap(address(0))

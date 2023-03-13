@@ -7,6 +7,8 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 import "src/transaction-allocator/modules/delegation/interfaces/ITADelegationEventsErrors.sol";
 
+// TODO: Add tests related to delayed CDF Updation
+
 contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;

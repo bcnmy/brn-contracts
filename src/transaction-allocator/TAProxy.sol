@@ -60,7 +60,6 @@ contract TAProxy is
 
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
-        rms.withdrawDelay = _params.withdrawDelay;
         rms.relayersPerWindow = _params.relayersPerWindow;
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));

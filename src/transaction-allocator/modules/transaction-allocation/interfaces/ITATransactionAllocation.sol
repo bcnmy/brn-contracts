@@ -11,10 +11,11 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
-        uint256 _cdfIndex
+        uint256 _cdfIndex,
+        uint256 _currentCdfLogIndex
     ) external returns (bool[] memory, bytes[] memory);
 
-    function allocateRelayers(uint16[] calldata _cdf)
+    function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
         external
         view
         returns (RelayerAddress[] memory, uint256[] memory);

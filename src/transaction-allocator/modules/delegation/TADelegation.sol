@@ -98,7 +98,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             _prevDelegationArray, rms.relayerInfo[_relayerAddress].index, _scaleDelegation(_amount)
         );
 
-        // TODO: Update CDF after Delay
         _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
 
         emit DelegationAdded(_relayerAddress, delegatorAddress, _amount);
@@ -138,7 +137,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         TokenAddress[] storage supportedPools_ = ds.supportedPools[_relayerAddress];
         uint256 length = supportedPools_.length;
 
-        // TODO: What if relayer removes support for a token once rewards are accrued?
         for (uint256 i = 0; i < length;) {
             _processRewards(_relayerAddress, supportedPools_[i], delegatorAddress);
             unchecked {

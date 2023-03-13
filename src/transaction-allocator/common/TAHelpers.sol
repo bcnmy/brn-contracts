@@ -50,8 +50,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    modifier verifyCdfHash(uint16[] calldata _array) {
-        if (!_verifyLatestCdfHash(_array)) {
+    modifier verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex) {
+        if (!_verifyCdfHashAtWindow(_array, __windowIndex, _cdfLogIndex)) {
             revert InvalidCdfArrayHash();
         }
         _;
@@ -74,25 +74,43 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return ds.stakeArrayHash == _hashUint32ArrayCalldata(_array);
     }
 
-    function _verifyLatestCdfHash(uint16[] calldata _array) internal view returns (bool) {
+    function _verifyCdfHashAtWindow(uint16[] calldata _array, uint256 _windowId, uint256 _cdfLogIndex)
+        internal
+        view
+        returns (bool)
+    {
         RMStorage storage ds = getRMStorage();
-        return ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash == _hashUint16ArrayCalldata(_array);
+        if (
+            !(
+                ds.cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId
+                    && (
+                        _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
+                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowId > _windowId
+                    )
+            )
+        ) {
+            return false;
+        }
+
+        return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }
 
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-        return ds.relayerInfo[_relayer].stake > 0;
+        return getRMStorage().relayerInfo[_relayer].stake > 0;
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
-    function _windowIdentifier(uint256 _blockNumber) internal view returns (uint256) {
-        RMStorage storage ds = getRMStorage();
-        return _blockNumber / ds.blocksPerWindow;
+    function _windowIndex(uint256 _blockNumber) internal view returns (uint256) {
+        return _blockNumber / getRMStorage().blocksPerWindow;
+    }
+
+    function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
+        return __windowIndex * getRMStorage().blocksPerWindow;
     }
 
     function _randomCdfNumber(uint256 _blockNumber, uint256 _iter, uint256 _max) internal view returns (uint256) {
         // The seed for jth iteration is a function of the base seed and j
-        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIdentifier(_blockNumber))));
+        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
         return (seed % _max);
     }
@@ -175,7 +193,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         bool _shouldUpdateStakeAccounting,
         uint32[] memory _delegationArray,
         bool _shouldUpdateDelegationAccounting
-    ) internal {
+    ) internal returns (uint256) {
         RMStorage storage ds = getRMStorage();
 
         // Update Stake Array Hash
@@ -197,17 +215,19 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update cdf hash
         (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
-        uint256 currentWindowId = _windowIdentifier(block.number);
+        uint256 updateEffectiveAtWindowId = _windowIndex(block.number) + CDF_UPDATE_DELAY_IN_WINDOWS;
         if (
-            ds.cdfHashUpdateLog.length == 0
-                || ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowId != currentWindowId
+            ds.cdfHashUpdateLog.length > 0
+                && ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowId == updateEffectiveAtWindowId
         ) {
-            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowId: _windowIdentifier(block.number), cdfHash: cdfHash}));
-        } else {
             ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
+            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtWindowId, ds.cdfHashUpdateLog.length - 1);
+        } else {
+            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowId: updateEffectiveAtWindowId, cdfHash: cdfHash}));
+            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtWindowId, ds.cdfHashUpdateLog.length);
         }
 
-        emit CdfArrayUpdated(cdfHash);
+        return updateEffectiveAtWindowId;
     }
 
     ////////////////////////////// Misc //////////////////////////////

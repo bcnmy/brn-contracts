@@ -7,7 +7,8 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-// TODO: Relayer Ownership Checks
+// TODO: Add tests related to delayed CDF Updation
+
 contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     function testRelayerRegistration() external atSnapshot {
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -89,6 +90,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         }
 
         // De-register all Relayers
+        uint256 maxWithdrawalBlock;
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
@@ -96,12 +98,19 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
             vm.stopPrank();
 
+            uint256 expectedWithdrawBlock = (
+                (block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
+                    / deployParams.blocksPerWindow
+            ) * deployParams.blocksPerWindow;
+
             assertEq(ta.withdrawalInfo(relayerAddress).amount, MINIMUM_STAKE_AMOUNT);
-            assertEq(ta.withdrawalInfo(relayerAddress).time, block.timestamp + ta.withdrawDelay());
+            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, expectedWithdrawBlock);
+
+            maxWithdrawalBlock = expectedWithdrawBlock > maxWithdrawalBlock ? expectedWithdrawBlock : maxWithdrawalBlock;
         }
 
         // Withdraw
-        skip(ta.withdrawDelay() + 1);
+        vm.roll(maxWithdrawalBlock);
 
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
@@ -116,7 +125,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             vm.stopPrank();
 
             assertEq(ta.withdrawalInfo(relayerAddress).amount, 0);
-            assertEq(ta.withdrawalInfo(relayerAddress).time, 0);
+            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, 0);
             assertEq(bico.balanceOf(RelayerAddress.unwrap(relayerAddress)), balanceBefore + stake);
         }
     }
@@ -236,9 +245,11 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         );
         ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
-        uint256 withdrawTime = block.timestamp + ta.withdrawDelay();
-        skip(1);
-        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.timestamp, withdrawTime));
+
+        uint256 expectedWithdrawBlock = (
+            (block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow) / deployParams.blocksPerWindow
+        ) * deployParams.blocksPerWindow;
+        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.number, expectedWithdrawBlock));
         ta.withdraw();
         vm.stopPrank();
     }

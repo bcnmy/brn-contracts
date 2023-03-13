@@ -7,7 +7,7 @@ import "src/transaction-allocator/common/TATypes.sol";
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
-    error InvalidWithdrawal(uint256 amount, uint256 currentTime, uint256 minValidTime);
+    error InvalidWithdrawal(uint256 amount, uint256 currentBlock, uint256 minValidBlock);
     error InvalidRelayerWindowForReporter();
     error InvalidAbsenteeBlockNumber();
     error InvalidAbsenteeCdfArrayHash();

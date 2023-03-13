@@ -16,7 +16,7 @@ struct RelayerInfo {
 
 struct WithdrawalInfo {
     uint256 amount;
-    uint256 time;
+    uint256 minBlockNumber;
 }
 
 struct CdfHashUpdateInfo {
@@ -26,7 +26,6 @@ struct CdfHashUpdateInfo {
 
 struct InitalizerParams {
     uint256 blocksPerWindow;
-    uint256 withdrawDelay;
     uint256 relayersPerWindow;
     uint256 penaltyDelayBlocks;
     TokenAddress bondTokenAddress;
@@ -51,6 +50,7 @@ struct AllocateTransactionParams {
     RelayerAddress relayerAddress;
     ForwardRequest[] requests;
     uint16[] cdf;
+    uint256 currentCdfLogIndex;
 }
 
 struct ForwardRequest {

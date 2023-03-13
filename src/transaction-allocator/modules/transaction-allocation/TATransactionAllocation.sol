@@ -72,15 +72,15 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
     // TODO: Why payable? to save gas?
-    // TODO: Batching
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
-        uint256 _cdfIndex
+        uint256 _cdfIndex,
+        uint256 _currentCdfLogIndex
     ) public override returns (bool[] memory successes, bytes[] memory returndatas) {
         uint256 gasLeft = gasleft();
-        if (!_verifyLatestCdfHash(_cdf)) {
+        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)) {
             revert InvalidCdfArrayHash();
         }
         if (!_verifyTransactionAllocation(_cdf, _cdfIndex, _relayerGenerationIterations, block.number, _reqs)) {
@@ -119,7 +119,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         gasLeft = gasleft();
         TAStorage storage ts = getTAStorage();
         RMStorage storage ds = getRMStorage();
-        ts.attendance[_windowIdentifier(block.number)][ds.relayerIndexToRelayer[_cdfIndex]] = true;
+        ts.attendance[_windowIndex(block.number)][ds.relayerIndexToRelayer[_cdfIndex]] = true;
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         return (successes, returndatas);
@@ -148,11 +148,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
     /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
-    function allocateRelayers(uint16[] calldata _cdf)
+    function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
         public
         view
         override
-        verifyCdfHash(_cdf)
+        verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)
         returns (RelayerAddress[] memory, uint256[] memory)
     {
         RMStorage storage ds = getRMStorage();
@@ -194,11 +194,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         external
         view
         override
-        verifyCdfHash(_data.cdf)
+        verifyCdfHashAtWindow(_data.cdf, _windowIndex(block.number), _data.currentCdfLogIndex)
         returns (ForwardRequest[] memory, uint256[] memory, uint256)
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
-            allocateRelayers(_data.cdf);
+            allocateRelayers(_data.cdf, _data.currentCdfLogIndex);
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
             revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
         }

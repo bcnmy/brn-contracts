@@ -14,7 +14,6 @@ abstract contract TARelayerManagementStorage {
         // Config
         IERC20 bondToken;
         uint256 penaltyDelayBlocks;
-        uint256 withdrawDelay;
         // No of registered relayers
         uint256 relayerCount;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;

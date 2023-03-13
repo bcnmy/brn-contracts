@@ -28,7 +28,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
         AbsenceProofReporterData calldata _reporterData,
         AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray
+        uint32[] calldata _currentDelegationArray,
+        uint256 _currentCdfLogIndex
     ) external;
 
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts) external;
@@ -62,8 +63,6 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function penaltyDelayBlocks() external view returns (uint256);
 
     function withdrawalInfo(RelayerAddress) external view returns (WithdrawalInfo memory);
-
-    function withdrawDelay() external view returns (uint256);
 
     function bondTokenAddress() external view returns (TokenAddress);
 }

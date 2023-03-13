@@ -23,28 +23,6 @@ contract TARelayerManagement is
     using SafeCast for uint256;
     using SafeERC20 for IERC20;
 
-    function _verifyPrevCdfHash(uint16[] calldata _array, uint256 _windowId, uint256 _cdfLogIndex)
-        internal
-        view
-        returns (bool)
-    {
-        // Validate _cdfLogIndex
-        RMStorage storage ds = getRMStorage();
-        if (
-            !(
-                ds.cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId
-                    && (
-                        _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
-                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowId > _windowId
-                    )
-            )
-        ) {
-            return false;
-        }
-
-        return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == keccak256(abi.encodePacked(_array));
-    }
-
     function _scaleStake(uint256 _stake) internal pure returns (uint32) {
         return (_stake / STAKE_SCALING_FACTOR).toUint32();
     }
@@ -57,7 +35,6 @@ contract TARelayerManagement is
         uint256 delegationArrayLength = _delegationArray.length;
         uint32[] memory newDelegationArrayLength = new uint32[](delegationArrayLength + 1);
 
-        // TODO: can this be optimized using calldatacopy?
         for (uint256 i = 0; i < delegationArrayLength;) {
             newDelegationArrayLength[i] = _delegationArray[i];
             unchecked {
@@ -77,7 +54,6 @@ contract TARelayerManagement is
         uint256 stakeArrayLength = _stakeArray.length;
         uint32[] memory newStakeArray = new uint32[](stakeArrayLength + 1);
 
-        // TODO: can this be optimized using calldatacopy?
         for (uint256 i = 0; i < stakeArrayLength;) {
             newStakeArray[i] = _stakeArray[i];
             unchecked {
@@ -145,7 +121,6 @@ contract TARelayerManagement is
         return newStakeArray;
     }
 
-    // TODO: Cooldown before relayer is allowed to transact
     // TODO: Implement a way to increase the relayer's stake
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
@@ -208,9 +183,9 @@ contract TARelayerManagement is
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        ds.withdrawalInfo[relayerAddress] = WithdrawalInfo(node.stake, block.timestamp + ds.withdrawDelay);
         uint256 n = ds.relayerCount - 1;
         uint256 nodeIndex = node.index;
+        uint256 stake = node.stake;
         _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
 
         TokenAddress[] storage supportedPools = tad.supportedPools[relayerAddress];
@@ -236,7 +211,9 @@ contract TARelayerManagement is
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _removeRelayerFromStakeArray(_previousStakeArray, nodeIndex);
         uint32[] memory newDelegationArray = _removeRelayerFromDelegationArray(_previousDelegationArray, nodeIndex);
-        _updateAccountingState(newStakeArray, true, newDelegationArray, true);
+        uint256 updateEffectiveAtWindowId = _updateAccountingState(newStakeArray, true, newDelegationArray, true);
+        ds.withdrawalInfo[relayerAddress] =
+            WithdrawalInfo(stake, _windowIndexToStartingBlock(updateEffectiveAtWindowId));
         emit RelayerUnRegistered(relayerAddress);
     }
 
@@ -244,11 +221,13 @@ contract TARelayerManagement is
         RMStorage storage ds = getRMStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+
         WithdrawalInfo memory w = ds.withdrawalInfo[relayerAddress];
-        if (!(w.amount > 0 && w.time < block.timestamp)) {
-            revert InvalidWithdrawal(w.amount, block.timestamp, w.time);
-        }
         delete ds.withdrawalInfo[relayerAddress];
+
+        if (w.amount == 0 || w.minBlockNumber > block.number) {
+            revert InvalidWithdrawal(w.amount, block.number, w.minBlockNumber);
+        }
         _transfer(TokenAddress.wrap(address(ds.bondToken)), msg.sender, w.amount);
         emit Withdraw(relayerAddress, w.amount);
     }
@@ -292,11 +271,12 @@ contract TARelayerManagement is
         AbsenceProofReporterData calldata _reporterData,
         AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray
+        uint32[] calldata _currentDelegationArray,
+        uint256 _currentCdfLogIndex
     )
         public
         override
-        verifyCdfHash(_reporterData.cdf)
+        verifyCdfHashAtWindow(_reporterData.cdf, _windowIndex(block.number), _currentCdfLogIndex)
         verifyStakeArrayHash(_currentStakeArray)
         verifyDelegationArrayHash(_currentDelegationArray)
     {
@@ -344,9 +324,12 @@ contract TARelayerManagement is
 
         {
             // Verify CDF hash of the Absentee Window
-            uint256 absentee_windowId = _windowIdentifier(_absenteeData.blockNumber);
-            if (!_verifyPrevCdfHash(_absenteeData.cdf, absentee_windowId, _absenteeData.latestStakeUpdationCdfLogIndex))
-            {
+            uint256 absentee_windowId = _windowIndex(_absenteeData.blockNumber);
+            if (
+                !_verifyCdfHashAtWindow(
+                    _absenteeData.cdf, absentee_windowId, _absenteeData.latestStakeUpdationCdfLogIndex
+                )
+            ) {
                 revert InvalidAbsenteeCdfArrayHash();
             }
 
@@ -375,9 +358,17 @@ contract TARelayerManagement is
 
         // Process penalty
         uint256 penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / 10000;
-        uint32[] memory newStakeArray =
-            _decreaseRelayerStakeInStakeArray(_currentStakeArray, _absenteeData.cdfIndex, _scaleStake(penalty));
-        _updateAccountingState(newStakeArray, true, _currentDelegationArray, false);
+        if (_isStakedRelayer(_absenteeData.relayerAddress)) {
+            // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
+            uint32[] memory newStakeArray =
+                _decreaseRelayerStakeInStakeArray(_currentStakeArray, _absenteeData.cdfIndex, _scaleStake(penalty));
+            _updateAccountingState(newStakeArray, true, _currentDelegationArray, false);
+            getRMStorage().relayerInfo[_absenteeData.relayerAddress].stake -= penalty;
+        } else {
+            // If the relayer un-registerd itself, then we just subtract from their withdrawl info
+            // TODO: Test
+            getRMStorage().withdrawalInfo[_absenteeData.relayerAddress].amount -= penalty;
+        }
         _transfer(
             TokenAddress.wrap(address(getRMStorage().bondToken)),
             RelayerAccountAddress.unwrap(reporter_relayerAddress),
@@ -385,10 +376,10 @@ contract TARelayerManagement is
         );
 
         emit AbsenceProofProcessed(
-            _windowIdentifier(block.number),
+            _windowIndex(block.number),
             RelayerAccountAddress.unwrap(reporter_relayerAddress),
             _absenteeData.relayerAddress,
-            _windowIdentifier(_absenteeData.blockNumber),
+            _windowIndex(_absenteeData.blockNumber),
             penalty
         );
 
@@ -533,10 +524,6 @@ contract TARelayerManagement is
 
     function withdrawalInfo(RelayerAddress _relayerAddress) external view override returns (WithdrawalInfo memory) {
         return getRMStorage().withdrawalInfo[_relayerAddress];
-    }
-
-    function withdrawDelay() external view override returns (uint256) {
-        return getRMStorage().withdrawDelay;
     }
 
     function bondTokenAddress() external view override returns (TokenAddress) {
