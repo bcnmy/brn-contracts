@@ -27,17 +27,29 @@ contract TADeploymentScript is Script {
         }
         string memory deploymentConfigStr = vm.readFile(deployConfigPath);
         console2.log("Deployment Config Path: ", deployConfigPath);
+
+        address[] memory supportedTokenAddresses = vm.parseJsonAddressArray(deploymentConfigStr, ".supportedTokens");
+        TokenAddress[] memory supportedTokens = new TokenAddress[](supportedTokenAddresses.length);
+        for (uint256 i = 0; i < supportedTokenAddresses.length; i++) {
+            supportedTokens[i] = TokenAddress.wrap(supportedTokenAddresses[i]);
+        }
+
         InitalizerParams memory params = InitalizerParams({
             blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
             relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
             penaltyDelayBlocks: vm.parseJsonUint(deploymentConfigStr, ".penaltyDelayBlocks"),
-            bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken"))
+            bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
+            supportedTokens: supportedTokens
         });
         console2.log("Deployment Config: ");
         console2.log("  blocksPerWindow: ", params.blocksPerWindow);
         console2.log("  relayersPerWindow: ", params.relayersPerWindow);
         console2.log("  penaltyDelayBlocks: ", params.penaltyDelayBlocks);
         console2.log("  bondToken: ", TokenAddress.unwrap(params.bondTokenAddress));
+        console2.log("  supportedTokens: ");
+        for (uint256 i = 0; i < params.supportedTokens.length; i++) {
+            console2.log("    ", TokenAddress.unwrap(params.supportedTokens[i]));
+        }
 
         // Deploy
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");

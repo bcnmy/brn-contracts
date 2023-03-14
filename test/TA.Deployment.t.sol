@@ -9,6 +9,7 @@ contract TADeploymentTest is Test {
     TADeploymentScript script;
     uint256 privateKey;
     string constant mnemonic = "test test test test test test test test test test test junk";
+    TokenAddress[] supportedTokens;
 
     function setUp() external {
         script = new TADeploymentScript();
@@ -16,11 +17,13 @@ contract TADeploymentTest is Test {
     }
 
     function testDeployment() external {
+        supportedTokens.push(TokenAddress.wrap(address(this)));
         InitalizerParams memory params = InitalizerParams({
             blocksPerWindow: 1,
             relayersPerWindow: 3,
             penaltyDelayBlocks: 4,
-            bondTokenAddress: TokenAddress.wrap(address(this))
+            bondTokenAddress: TokenAddress.wrap(address(this)),
+            supportedTokens: supportedTokens
         });
 
         ITransactionAllocator ta = script.deploy(privateKey, params, false);

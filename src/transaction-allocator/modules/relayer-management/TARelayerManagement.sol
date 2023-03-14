@@ -179,7 +179,6 @@ contract TARelayerManagement is
         onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
     {
         RMStorage storage ds = getRMStorage();
-        TADStorage storage tad = getTADStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
@@ -187,15 +186,6 @@ contract TARelayerManagement is
         uint256 nodeIndex = node.index;
         uint256 stake = node.stake;
         _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
-
-        TokenAddress[] storage supportedPools = tad.supportedPools[relayerAddress];
-        uint256 length = supportedPools.length;
-        for (uint256 i = 0; i < length;) {
-            delete node.isGasTokenSupported[supportedPools[i]];
-            unchecked {
-                ++i;
-            }
-        }
 
         delete ds.relayerInfo[relayerAddress];
 
@@ -389,85 +379,7 @@ contract TARelayerManagement is
     ////////////////////////// Relayer Configuration //////////////////////////
     // TODO: Jailed relayers should not be able to update their configuration
 
-    function addSupportedGasTokens(RelayerAddress _relayerAddress, TokenAddress[] calldata _tokens)
-        external
-        override
-        onlyStakedRelayer(_relayerAddress)
-    {
-        RMStorage storage ds = getRMStorage();
-        TADStorage storage tds = getTADStorage();
-
-        RelayerInfo storage node = ds.relayerInfo[_relayerAddress];
-
-        uint256 length = _tokens.length;
-        for (uint256 i = 0; i < length;) {
-            TokenAddress token = _tokens[i];
-
-            if (node.isGasTokenSupported[token]) {
-                revert GasTokenAlreadySupported(token);
-            }
-
-            // Update Mapping
-            node.isGasTokenSupported[token] = true;
-
-            // TODO: Optimize? One time operation, Max length of this array is 4-5
-            // Update supported pools array
-            uint256 _length = tds.supportedPools[_relayerAddress].length;
-            bool found = false;
-            for (uint256 j = 0; j < _length;) {
-                if (tds.supportedPools[_relayerAddress][j] == token) {
-                    found = true;
-                    break;
-                }
-
-                unchecked {
-                    ++j;
-                }
-            }
-            if (!found) {
-                tds.supportedPools[_relayerAddress].push(token);
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        emit GasTokensAdded(_relayerAddress, _tokens);
-    }
-
-    function removeSupportedGasTokens(RelayerAddress _relayerAddress, TokenAddress[] calldata _tokens)
-        external
-        override
-        onlyStakedRelayer(_relayerAddress)
-    {
-        RMStorage storage ds = getRMStorage();
-        RelayerInfo storage node = ds.relayerInfo[_relayerAddress];
-
-        uint256 length = _tokens.length;
-        for (uint256 i = 0; i < length;) {
-            TokenAddress token = _tokens[i];
-
-            if (!node.isGasTokenSupported[token]) {
-                revert GasTokenNotSupported(token);
-            }
-
-            // Update Mapping
-            node.isGasTokenSupported[token] = false;
-
-            // Do not remove the token from the suppported pools array
-            // since it is used to keep track of delegator rewards
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        emit GasTokensRemoved(_relayerAddress, _tokens);
-    }
-
     ////////////////////////// Getters //////////////////////////
-
     function relayerCount() external view override returns (uint256) {
         return getRMStorage().relayerCount;
     }
@@ -493,13 +405,8 @@ contract TARelayerManagement is
         return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
     }
 
-    function relayerInfo_isGasTokenSupported(RelayerAddress _relayerAddress, TokenAddress _token)
-        external
-        view
-        override
-        returns (bool)
-    {
-        return getRMStorage().relayerInfo[_relayerAddress].isGasTokenSupported[_token];
+    function isGasTokenSupported(TokenAddress _token) external view override returns (bool) {
+        return getRMStorage().isGasTokenSupported[_token];
     }
 
     function relayersPerWindow() external view override returns (uint256) {

@@ -20,11 +20,13 @@ abstract contract TATestBase is Test {
     uint256 constant initialRelayerAccountFunds = 1 ether;
     uint256 constant initialDelegatorFunds = 1 ether;
 
+    TokenAddress[] internal supportedTokens;
     InitalizerParams deployParams = InitalizerParams({
         blocksPerWindow: 10,
         relayersPerWindow: 10,
         penaltyDelayBlocks: 10,
-        bondTokenAddress: TokenAddress.wrap(address(0))
+        bondTokenAddress: TokenAddress.wrap(address(0)),
+        supportedTokens: supportedTokens
     });
 
     ITransactionAllocatorDebug internal ta;
@@ -48,7 +50,10 @@ abstract contract TATestBase is Test {
         // Deploy the bico token
         bico = new ERC20("BICO", "BICO");
         vm.label(address(bico), "ERC20(BICO)");
+        supportedTokens.push(TokenAddress.wrap(address(bico)));
+        supportedTokens.push(NATIVE_TOKEN);
         deployParams.bondTokenAddress = TokenAddress.wrap(address(bico));
+        deployParams.supportedTokens = supportedTokens;
 
         uint32 keyIndex = 0;
 

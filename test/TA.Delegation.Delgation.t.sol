@@ -8,14 +8,13 @@ import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 import "src/transaction-allocator/modules/delegation/interfaces/ITADelegationEventsErrors.sol";
 
 // TODO: Add tests related to delayed CDF Updation
-
+// TODO: Testing mechanism needs to change
 contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
 
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
-    TokenAddress[] supportedTokens;
     uint256 ERROR_TOLERANCE = 0.0001e18; // 0.001%
 
     function setUp() public override {
@@ -39,7 +38,6 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
             ta.register(
                 ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
             );
-            ta.addSupportedGasTokens(relayerAddress, supportedTokens);
             vm.stopPrank();
         }
 

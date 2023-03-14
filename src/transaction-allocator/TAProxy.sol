@@ -63,6 +63,15 @@ contract TAProxy is
         rms.relayersPerWindow = _params.relayersPerWindow;
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
+        tds.supportedPools = _params.supportedTokens;
+
+        uint256 length = _params.supportedTokens.length;
+        for (uint256 i = 0; i < length;) {
+            rms.isGasTokenSupported[_params.supportedTokens[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
 
         // Initial State
         rms.stakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));

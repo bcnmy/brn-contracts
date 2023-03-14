@@ -78,14 +78,13 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
-        TokenAddress[] storage supportedPools_ = ds.supportedPools[_relayerAddress];
-        uint256 length = supportedPools_.length;
+        uint256 length = ds.supportedPools.length;
         if (length == 0) {
             revert NoSupportedGasTokens(_relayerAddress);
         }
 
         for (uint256 i = 0; i < length;) {
-            _mintPoolShares(_relayerAddress, delegatorAddress, _amount, supportedPools_[i]);
+            _mintPoolShares(_relayerAddress, delegatorAddress, _amount, ds.supportedPools[i]);
             unchecked {
                 ++i;
             }
@@ -134,11 +133,10 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
-        TokenAddress[] storage supportedPools_ = ds.supportedPools[_relayerAddress];
-        uint256 length = supportedPools_.length;
+        uint256 length = ds.supportedPools.length;
 
         for (uint256 i = 0; i < length;) {
-            _processRewards(_relayerAddress, supportedPools_[i], delegatorAddress);
+            _processRewards(_relayerAddress, ds.supportedPools[i], delegatorAddress);
             unchecked {
                 ++i;
             }
@@ -254,8 +252,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return delegationArray;
     }
 
-    function supportedPools(RelayerAddress _relayerAddress) external view override returns (TokenAddress[] memory) {
-        TADStorage storage ds = getTADStorage();
-        return ds.supportedPools[_relayerAddress];
+    function supportedPools() external view override returns (TokenAddress[] memory) {
+        return getTADStorage().supportedPools;
     }
 }

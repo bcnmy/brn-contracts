@@ -26,6 +26,7 @@ abstract contract TARelayerManagementStorage {
         bytes32 stakeArrayHash;
         /// Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
+        mapping(TokenAddress => bool) isGasTokenSupported;
     }
 
     /* solhint-disable no-inline-assembly */
