@@ -16,7 +16,7 @@ abstract contract TATestBase is Test {
     uint256 constant relayerCount = 10;
     uint256 constant relayerAccountsPerRelayer = 10;
     uint256 constant delegatorCount = 10;
-    uint256 constant initialMainAccountFunds = 10 ether;
+    uint256 constant initialMainAccountFunds = MINIMUM_STAKE_AMOUNT + 10 ether;
     uint256 constant initialRelayerAccountFunds = 1 ether;
     uint256 constant initialDelegatorFunds = 1 ether;
 

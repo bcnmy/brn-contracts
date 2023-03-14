@@ -76,6 +76,9 @@ contract TAProxy is
         // Initial State
         rms.stakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
         tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
+        rms.cdfHashUpdateLog.push(
+            CdfHashUpdateInfo({cdfHash: keccak256(abi.encodePacked(new uint32[](0))), windowId: 0})
+        );
     }
 
     /// @notice Adds a new module

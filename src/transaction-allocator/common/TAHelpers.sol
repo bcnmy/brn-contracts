@@ -80,6 +80,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         returns (bool)
     {
         RMStorage storage ds = getRMStorage();
+
+        if (_cdfLogIndex >= ds.cdfHashUpdateLog.length) {
+            return false;
+        }
+
+        console2.log("windowId", _windowId);
+        console2.log("ds.cdfHashUpdateLog.length", ds.cdfHashUpdateLog.length);
+        console2.log("ds.cdfHashUpdateLog[_cdfLogIndex].windowId", ds.cdfHashUpdateLog[_cdfLogIndex].windowId);
+
         if (
             !(
                 ds.cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId
@@ -91,6 +100,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         ) {
             return false;
         }
+
+        console2.log("Bound check");
 
         return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }

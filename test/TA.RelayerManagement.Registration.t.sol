@@ -7,10 +7,11 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-// TODO: Add tests related to delayed CDF Updation
-
 contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     function testRelayerRegistration() external atSnapshot {
+        uint16[] memory cdf = ta.getCdfArray();
+        assertEq(cdf.length, 0);
+
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
             string memory endpoint = "test";
@@ -34,6 +35,19 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), true);
             }
         }
+
+        uint16[] memory newCdf = ta.getCdfArray();
+        assertEq(newCdf.length, relayerCount);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 0), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 0), false);
+
+        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), true);
     }
 
     function testRelayerUnRegistration() external atSnapshot {
@@ -50,6 +64,9 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             );
             vm.stopPrank();
         }
+
+        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        uint16[] memory cdf = ta.getCdfArray();
 
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -72,6 +89,19 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), false);
             }
         }
+
+        uint16[] memory newCdf = ta.getCdfArray();
+        assertEq(newCdf.length, 0);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
+
+        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 2), true);
     }
 
     function testWithdrawal() external atSnapshot {

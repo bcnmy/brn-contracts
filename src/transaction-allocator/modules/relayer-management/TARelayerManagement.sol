@@ -111,13 +111,13 @@ contract TARelayerManagement is
         return newDelegationArray;
     }
 
-    function _decreaseRelayerStakeInStakeArray(uint32[] calldata _stakeArray, uint256 _index, uint32 _scaledAmount)
+    function _updateRelayerStakeInStakeArray(uint32[] calldata _stakeArray, uint256 _index, uint32 _scaledAmount)
         internal
         pure
         returns (uint32[] memory)
     {
         uint32[] memory newStakeArray = _stakeArray;
-        newStakeArray[_index] = newStakeArray[_index] - _scaledAmount;
+        newStakeArray[_index] = _scaledAmount;
         return newStakeArray;
     }
 
@@ -273,7 +273,6 @@ contract TARelayerManagement is
         uint256 gas = gasleft();
 
         RelayerAccountAddress reporter_relayerAddress = RelayerAccountAddress.wrap(msg.sender);
-        RelayerInfo storage absence_relayerInfo = getRMStorage().relayerInfo[_absenteeData.relayerAddress];
 
         if (
             !(_reporterData.relayerGenerationIterations.length == 1)
@@ -347,17 +346,24 @@ contract TARelayerManagement is
         gas = gasleft();
 
         // Process penalty
-        uint256 penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / 10000;
+        uint256 penalty;
+
         if (_isStakedRelayer(_absenteeData.relayerAddress)) {
             // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
-            uint32[] memory newStakeArray =
-                _decreaseRelayerStakeInStakeArray(_currentStakeArray, _absenteeData.cdfIndex, _scaleStake(penalty));
+            RelayerInfo storage absence_relayerInfo = getRMStorage().relayerInfo[_absenteeData.relayerAddress];
+            penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / 10000;
+            absence_relayerInfo.stake -= penalty;
+
+            uint32[] memory newStakeArray = _updateRelayerStakeInStakeArray(
+                _currentStakeArray, _absenteeData.cdfIndex, _scaleStake(absence_relayerInfo.stake)
+            );
             _updateAccountingState(newStakeArray, true, _currentDelegationArray, false);
-            getRMStorage().relayerInfo[_absenteeData.relayerAddress].stake -= penalty;
         } else {
-            // If the relayer un-registerd itself, then we just subtract from their withdrawl info
+            // If the relayer un-registered itself, then we just subtract from their withdrawl info
             // TODO: Test
-            getRMStorage().withdrawalInfo[_absenteeData.relayerAddress].amount -= penalty;
+            WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[_absenteeData.relayerAddress];
+            penalty = (withdrawalInfo_.amount * ABSENCE_PENALTY) / 10000;
+            withdrawalInfo_.amount -= penalty;
         }
         _transfer(
             TokenAddress.wrap(address(getRMStorage().bondToken)),

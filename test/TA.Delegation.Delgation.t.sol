@@ -109,7 +109,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function increaseRewards(RelayerAddress r, TokenAddress t, uint256 amount) internal {
-        ta.increaseRewards(r, t, amount);
+        ta.debug_increaseRewards(r, t, amount);
 
         if (t == NATIVE_TOKEN) {
             deal(address(ta), address(ta).balance + amount);

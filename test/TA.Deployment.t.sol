@@ -32,5 +32,6 @@ contract TADeploymentTest is Test {
         assertEq(ta.relayersPerWindow(), params.relayersPerWindow);
         assertEq(ta.penaltyDelayBlocks(), block.number + params.penaltyDelayBlocks);
         assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);
+        assertEq(ta.supportedPools()[0] == params.supportedTokens[0], true);
     }
 }
