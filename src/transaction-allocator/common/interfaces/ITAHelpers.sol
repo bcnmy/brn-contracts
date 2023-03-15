@@ -13,6 +13,9 @@ interface ITAHelpers {
     error InvalidRelayer(RelayerAddress relayer);
     error InvalidRelayerUpdationLogIndex();
     error ParameterLengthMismatch();
+    error InvalidRelayerGenerationIteration();
+    error RelayerIndexDoesNotPointToSelectedCdfInterval();
+    error RelayerAddressDoesNotMatchSelectedRelayer();
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
     event CdfArrayUpdateQueued(

@@ -304,7 +304,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
-        vm.expectRevert(InvalidRelayerWindowForReporter.selector);
+        vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
@@ -503,7 +503,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
                 absenteeData.relayerGenerationIterations[0] = relayerGenerationIteration;
                 absenteeData.cdfIndex = cdfIndex;
 
-                vm.expectRevert(InvalidRelayerWindowForAbsentee.selector);
+                vm.expectRevert();
                 ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
             }
         }

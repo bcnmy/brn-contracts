@@ -36,7 +36,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
-    // TODO: These modifiers should just be the part of the verification functions
     modifier verifyDelegationArrayHash(uint32[] calldata _array) {
         if (!_verifyDelegationArrayHash(_array)) {
             revert InvalidDelegationArrayHash();
@@ -51,27 +50,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    modifier verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex) {
-        if (!_verifyCdfHashAtWindow(_array, __windowIndex, _cdfLogIndex)) {
-            revert InvalidCdfArrayHash();
-        }
-        _;
-    }
-
     modifier onlyStakedRelayer(RelayerAddress _relayer) {
         if (!_isStakedRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
-        }
-        _;
-    }
-
-    modifier verifyRelayerUpdationLogIndexAtBlock(
-        uint256 _relayerIndex,
-        uint256 _blockNumber,
-        uint256 _relayerIndexUpdationLogIndex
-    ) {
-        if (!_verifyRelayerUpdationLogIndexAtBlock(_relayerIndex, _blockNumber, _relayerIndexUpdationLogIndex)) {
-            revert InvalidRelayerUpdationLogIndex();
         }
         _;
     }
@@ -156,27 +137,36 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (seed % _max);
     }
 
-    // Assume _cdf is correct for the given block number
-    // Assume _relayerIndexUpdationLogIndex is correct for the given block number and _relayerIndex
     function _verifyRelayerSelection(
         address _relayer,
         uint16[] calldata _cdf,
+        uint256 _cdfUpdationLogIndex,
         uint256 _relayerIndex,
+        uint256 _relayerIndexUpdationLogIndex,
         uint256[] calldata _relayerGenerationIterations,
-        uint256 _blockNumber,
-        uint256 _relayerIndexUpdationLogIndex
+        uint256 _blockNumber
     ) internal view returns (bool) {
         RMStorage storage ds = getRMStorage();
 
         uint256 iterationCount = _relayerGenerationIterations.length;
         uint256 stakeSum = _cdf[_cdf.length - 1];
 
+        // Verify CDF
+        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(_blockNumber), _cdfUpdationLogIndex)) {
+            revert InvalidCdfArrayHash();
+        }
+
+        // Verify Relayer Index Updation Log Index
+        if (!_verifyRelayerUpdationLogIndexAtBlock(_relayerIndex, _blockNumber, _relayerIndexUpdationLogIndex)) {
+            revert InvalidRelayerUpdationLogIndex();
+        }
+
         // Verify Each Iteration against _cdfIndex in _cdf
         for (uint256 i = 0; i < iterationCount;) {
             uint256 relayerGenerationIteration = _relayerGenerationIterations[i];
 
             if (relayerGenerationIteration >= ds.relayersPerWindow) {
-                return false;
+                revert InvalidRelayerGenerationIteration();
             }
 
             // Verify if correct stake prefix sum index has been provided
@@ -189,7 +179,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
                 )
             ) {
                 // The supplied index does not point to the correct interval
-                return false;
+                revert RelayerIndexDoesNotPointToSelectedCdfInterval();
             }
 
             unchecked {
@@ -200,7 +190,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         RelayerAddress relayerAddress =
             ds.relayerIndexToRelayerUpdationLog[_relayerIndex][_relayerIndexUpdationLogIndex].relayerAddress;
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        return relayerAddress == RelayerAddress.wrap(_relayer) || node.isAccount[RelayerAccountAddress.wrap(_relayer)];
+        if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
+            revert RelayerAddressDoesNotMatchSelectedRelayer();
+        }
+
+        return true;
     }
 
     ////////////////////////////// Relayer State //////////////////////////////

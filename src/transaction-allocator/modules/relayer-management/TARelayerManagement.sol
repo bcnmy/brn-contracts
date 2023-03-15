@@ -282,23 +282,7 @@ contract TARelayerManagement is
         AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _currentDelegationArray
-    )
-        public
-        override
-        verifyRelayerUpdationLogIndexAtBlock(
-            _reporterData.cdfIndex,
-            block.number,
-            _reporterData.relayerIndexToRelayerLogIndex
-        )
-        verifyCdfHashAtWindow(_reporterData.cdf, _windowIndex(block.number), _reporterData.currentCdfLogIndex)
-        verifyCdfHashAtWindow(
-            _absenteeData.cdf,
-            _windowIndex(_absenteeData.blockNumber),
-            _absenteeData.latestStakeUpdationCdfLogIndex
-        )
-        verifyStakeArrayHash(_currentStakeArray)
-        verifyDelegationArrayHash(_currentDelegationArray)
-    {
+    ) public override verifyStakeArrayHash(_currentStakeArray) verifyDelegationArrayHash(_currentDelegationArray) {
         uint256 gas = gasleft();
 
         RelayerAccountAddress reporter_relayerAddress = RelayerAccountAddress.wrap(msg.sender);
@@ -316,10 +300,11 @@ contract TARelayerManagement is
             !_verifyRelayerSelection(
                 RelayerAccountAddress.unwrap(reporter_relayerAddress),
                 _reporterData.cdf,
+                _reporterData.currentCdfLogIndex,
                 _reporterData.cdfIndex,
+                _reporterData.relayerIndexToRelayerLogIndex,
                 _reporterData.relayerGenerationIterations,
-                block.number,
-                ds.relayerIndexToRelayerUpdationLog[_reporterData.cdfIndex].length - 1
+                block.number
             )
         ) {
             revert InvalidRelayerWindowForReporter();
@@ -355,10 +340,11 @@ contract TARelayerManagement is
             !_verifyRelayerSelection(
                 RelayerAddress.unwrap(_absenteeData.relayerAddress),
                 _absenteeData.cdf,
+                _absenteeData.latestStakeUpdationCdfLogIndex,
                 _absenteeData.cdfIndex,
+                _absenteeData.relayerIndexToRelayerLogIndex,
                 _absenteeData.relayerGenerationIterations,
-                _absenteeData.blockNumber,
-                _absenteeData.relayerIndexToRelayerLogIndex
+                _absenteeData.blockNumber
             )
         ) {
             revert InvalidRelayerWindowForAbsentee();

@@ -17,22 +17,23 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     /// @notice returns true if the current sender is allowed to relay transaction in this block
     function _verifyTransactionAllocation(
+        ForwardRequest[] calldata _txs,
         uint16[] calldata _cdf,
+        uint256 _cdfUpdationLogIndex,
         uint256 _cdfIndex,
-        uint256[] calldata _relayerGenerationIteration,
-        uint256 _blockNumber,
-        ForwardRequest[] calldata _txs
+        uint256 _relayerIndexUpdationLogIndex,
+        uint256[] calldata _relayerGenerationIterations,
+        uint256 _blockNumber
     ) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-
         if (
             !_verifyRelayerSelection(
                 msg.sender,
                 _cdf,
+                _cdfUpdationLogIndex,
                 _cdfIndex,
-                _relayerGenerationIteration,
-                _blockNumber,
-                ds.relayerIndexToRelayerUpdationLog[_cdfIndex].length - 1
+                _relayerIndexUpdationLogIndex,
+                _relayerGenerationIterations,
+                _blockNumber
             )
         ) {
             return false;
@@ -41,9 +42,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Store all relayerGenerationIterations in a bitmap to efficiently check for existence in _relayerGenerationIteration
         // ASSUMPTION: Max no. of iterations required to generate 'relayersPerWindow' unique relayers <= 256
         uint256 bitmap = 0;
-        uint256 length = _relayerGenerationIteration.length;
+        uint256 length = _relayerGenerationIterations.length;
         for (uint256 i = 0; i < length;) {
-            bitmap |= (1 << _relayerGenerationIteration[i]);
+            bitmap |= (1 << _relayerGenerationIterations[i]);
             unchecked {
                 ++i;
             }
@@ -82,6 +83,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @param _cdfIndex index of relayer in cdf
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
+    // TODO: check if _cdfIndex is needed, since it's always going to be relayer.index
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
@@ -91,15 +93,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerIndexUpdationLogIndex
     ) public override returns (bool[] memory successes, bytes[] memory returndatas) {
         uint256 gasLeft = gasleft();
-        // TODO: convert to modifier
-        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)) {
-            revert InvalidCdfArrayHash();
-        }
-        // TODO: convert to modifier
-        if (!_verifyRelayerUpdationLogIndexAtBlock(_cdfIndex, block.number, _relayerIndexUpdationLogIndex)) {
-            revert InvalidRelayerUpdationLogIndex();
-        }
-        if (!_verifyTransactionAllocation(_cdf, _cdfIndex, _relayerGenerationIterations, block.number, _reqs)) {
+        if (
+            !_verifyTransactionAllocation(
+                _reqs,
+                _cdf,
+                _currentCdfLogIndex,
+                _cdfIndex,
+                _relayerIndexUpdationLogIndex,
+                _relayerGenerationIterations,
+                block.number
+            )
+        ) {
             revert InvalidRelayerWindow();
         }
         emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
@@ -172,10 +176,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         public
         view
         override
-        verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)
         returns (RelayerAddress[] memory, uint256[] memory)
     {
         RMStorage storage ds = getRMStorage();
+
+        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)) {
+            revert InvalidCdfArrayHash();
+        }
 
         if (_cdf.length == 0) {
             revert NoRelayersRegistered();
@@ -193,8 +200,25 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         for (uint256 i = 0; i < ds.relayersPerWindow;) {
             uint256 randomCdfNumber = _randomCdfNumber(block.number, i, _cdf[cdfLength - 1]);
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
+
+            // Find the relayer address corresponding to the cdf index
             RelayerIndexToRelayerUpdateInfo[] storage updateInfo = ds.relayerIndexToRelayerUpdationLog[cdfIndex[i]];
-            RelayerAddress relayerAddress = updateInfo[updateInfo.length - 1].relayerAddress;
+            RelayerAddress relayerAddress;
+            for (uint256 j = updateInfo.length - 1; j >= 0;) {
+                if (_verifyRelayerUpdationLogIndexAtBlock(cdfIndex[i], block.number, j)) {
+                    relayerAddress = updateInfo[j].relayerAddress;
+                    break;
+                }
+
+                if (j == 0) {
+                    revert UnknownError();
+                }
+
+                unchecked {
+                    --j;
+                }
+            }
+
             selectedRelayers[i] = relayerAddress;
             unchecked {
                 ++i;
@@ -212,7 +236,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         external
         view
         override
-        verifyCdfHashAtWindow(_data.cdf, _windowIndex(block.number), _data.currentCdfLogIndex)
         returns (ForwardRequest[] memory, uint256[] memory, uint256)
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =

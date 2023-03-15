@@ -11,4 +11,5 @@ interface ITATransactionAllocationEventsErrors {
     error InvalidRelayerWindow();
     error GasLimitExceeded(uint256 gasLimit, uint256 gasUsed);
     error InvalidSignature(ForwardRequest request);
+    error UnknownError();
 }

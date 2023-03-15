@@ -188,7 +188,7 @@ contract TATransactionAllocationTest is
             }
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
-            vm.expectRevert(InvalidRelayerWindow.selector);
+            vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
             ta.execute(
                 allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1, 0
             );
@@ -230,7 +230,7 @@ contract TATransactionAllocationTest is
             testRun = true;
 
             _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
-            vm.expectRevert(InvalidRelayerWindow.selector);
+            vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
             ta.execute(
                 allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1, 0
             );
