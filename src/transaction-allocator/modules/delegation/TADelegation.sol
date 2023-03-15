@@ -121,8 +121,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     // TODO: Non Reentrant
-    // TODO: Partial Claim?
-    // TODO: Implement delay
     function unDelegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
@@ -146,7 +144,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         ds.totalDelegation[_relayerAddress] -= delegation_;
         ds.delegation[_relayerAddress][delegatorAddress] = 0;
 
-        // TODO: Update CDF after Delay
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
         if (_isStakedRelayer(_relayerAddress)) {

@@ -40,6 +40,7 @@ struct AbsenceProofReporterData {
     uint256 cdfIndex;
     uint256[] relayerGenerationIterations;
     uint256 currentCdfLogIndex;
+    uint256 relayerIndexToRelayerLogIndex;
 }
 
 struct AbsenceProofAbsenteeData {

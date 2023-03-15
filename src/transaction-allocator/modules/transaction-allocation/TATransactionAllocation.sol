@@ -82,17 +82,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @param _cdfIndex index of relayer in cdf
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
-    // TODO: Why payable? to save gas?
     function execute(
         ForwardRequest[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex,
-        uint256 _currentCdfLogIndex
+        uint256 _currentCdfLogIndex,
+        uint256 _relayerIndexUpdationLogIndex
     ) public override returns (bool[] memory successes, bytes[] memory returndatas) {
         uint256 gasLeft = gasleft();
+        // TODO: convert to modifier
         if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)) {
             revert InvalidCdfArrayHash();
+        }
+        // TODO: convert to modifier
+        if (!_verifyRelayerUpdationLogIndexAtBlock(_cdfIndex, block.number, _relayerIndexUpdationLogIndex)) {
+            revert InvalidRelayerUpdationLogIndex();
         }
         if (!_verifyTransactionAllocation(_cdf, _cdfIndex, _relayerGenerationIterations, block.number, _reqs)) {
             revert InvalidRelayerWindow();

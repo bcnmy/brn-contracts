@@ -75,6 +75,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         _startPrankRA(reporter);
         vm.expectEmit(true, true, true, true);
 
@@ -156,6 +157,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = cdf;
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         _startPrankRA(reporter);
         vm.expectEmit(true, true, true, true);
 
@@ -211,6 +213,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         // Corrupt the reporter's CDF
@@ -252,6 +255,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         // Corrupt the reporter's Stake Array
@@ -296,6 +300,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
@@ -333,6 +338,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
@@ -374,10 +380,12 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
-        vm.expectRevert(InvalidAbsenteeCdfArrayHash.selector);
+        // TODO: vm.expectRevert(InvalidAbsenteeCdfArrayHash.selector);
+        vm.expectRevert(InvalidCdfArrayHash.selector);
         ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
@@ -405,7 +413,8 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
             absenteeData.cdf,
             absenteeData.relayerGenerationIterations,
             absenteeData.cdfIndex,
-            1
+            1,
+            0
         );
         vm.stopPrank();
 
@@ -424,6 +433,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
@@ -479,6 +489,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
         reporterData.currentCdfLogIndex = 1;
+        reporterData.relayerIndexToRelayerLogIndex = 0;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         uint256 relayerCount = ta.relayerCount();

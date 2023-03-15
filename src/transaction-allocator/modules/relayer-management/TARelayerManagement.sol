@@ -285,7 +285,17 @@ contract TARelayerManagement is
     )
         public
         override
+        verifyRelayerUpdationLogIndexAtBlock(
+            _reporterData.cdfIndex,
+            block.number,
+            _reporterData.relayerIndexToRelayerLogIndex
+        )
         verifyCdfHashAtWindow(_reporterData.cdf, _windowIndex(block.number), _reporterData.currentCdfLogIndex)
+        verifyCdfHashAtWindow(
+            _absenteeData.cdf,
+            _windowIndex(_absenteeData.blockNumber),
+            _absenteeData.latestStakeUpdationCdfLogIndex
+        )
         verifyStakeArrayHash(_currentStakeArray)
         verifyDelegationArrayHash(_currentDelegationArray)
     {
@@ -331,15 +341,7 @@ contract TARelayerManagement is
         }
 
         {
-            // Verify CDF hash of the Absentee Window
             uint256 absentee_windowIndex = _windowIndex(_absenteeData.blockNumber);
-            if (
-                !_verifyCdfHashAtWindow(
-                    _absenteeData.cdf, absentee_windowIndex, _absenteeData.latestStakeUpdationCdfLogIndex
-                )
-            ) {
-                revert InvalidAbsenteeCdfArrayHash();
-            }
 
             // Verify Absence of the relayer
             TAStorage storage ts = getTAStorage();

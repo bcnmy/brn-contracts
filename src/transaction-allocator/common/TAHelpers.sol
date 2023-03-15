@@ -36,6 +36,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
+    // TODO: These modifiers should just be the part of the verification functions
     modifier verifyDelegationArrayHash(uint32[] calldata _array) {
         if (!_verifyDelegationArrayHash(_array)) {
             revert InvalidDelegationArrayHash();
@@ -60,6 +61,17 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     modifier onlyStakedRelayer(RelayerAddress _relayer) {
         if (!_isStakedRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
+        }
+        _;
+    }
+
+    modifier verifyRelayerUpdationLogIndexAtBlock(
+        uint256 _relayerIndex,
+        uint256 _blockNumber,
+        uint256 _relayerIndexUpdationLogIndex
+    ) {
+        if (!_verifyRelayerUpdationLogIndexAtBlock(_relayerIndex, _blockNumber, _relayerIndexUpdationLogIndex)) {
+            revert InvalidRelayerUpdationLogIndex();
         }
         _;
     }
@@ -100,6 +112,30 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }
 
+    function _verifyRelayerUpdationLogIndexAtBlock(
+        uint256 _relayerIndex,
+        uint256 _blockNumber,
+        uint256 _relayerIndexUpdationLogIndex
+    ) internal view returns (bool) {
+        RMStorage storage ds = getRMStorage();
+
+        uint256 windowIndexAtBlock = _windowIndex(_blockNumber);
+        RelayerIndexToRelayerUpdateInfo[] storage relayerIndexUpdateLog =
+            ds.relayerIndexToRelayerUpdationLog[_relayerIndex];
+
+        if (_relayerIndexUpdationLogIndex >= relayerIndexUpdateLog.length) {
+            return false;
+        }
+
+        return (
+            relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
+                && (
+                    _relayerIndexUpdationLogIndex == relayerIndexUpdateLog.length - 1
+                        || relayerIndexUpdateLog[_relayerIndexUpdationLogIndex + 1].windowIndex > windowIndexAtBlock
+                )
+        );
+    }
+
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
         return getRMStorage().relayerInfo[_relayer].stake > 0;
     }
@@ -120,34 +156,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (seed % _max);
     }
 
-    function _verifyRelayerUpdationLogIndexAtBlock(
-        uint256 _relayerIndex,
-        uint256 _blockNumber,
-        uint256 _relayerIndexUpdationLogIndex
-    ) internal view returns (bool, RelayerAddress) {
-        RMStorage storage ds = getRMStorage();
-
-        uint256 windowIndexAtBlock = _windowIndex(_blockNumber);
-        RelayerIndexToRelayerUpdateInfo[] storage relayerIndexUpdateLog =
-            ds.relayerIndexToRelayerUpdationLog[_relayerIndex];
-        bool isIndexLastElementAndValid = (
-            relayerIndexUpdateLog.length - 1 == _relayerIndexUpdationLogIndex
-                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
-        );
-        bool isIndexNotLastElementAndValid = (
-            relayerIndexUpdateLog.length - 1 > _relayerIndexUpdationLogIndex
-                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
-                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex + 1].windowIndex > windowIndexAtBlock
-        );
-
-        bool status = isIndexLastElementAndValid || isIndexNotLastElementAndValid;
-        return (status, relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].relayerAddress);
-    }
-
+    // Assume _cdf is correct for the given block number
+    // Assume _relayerIndexUpdationLogIndex is correct for the given block number and _relayerIndex
     function _verifyRelayerSelection(
         address _relayer,
         uint16[] calldata _cdf,
-        uint256 _cdfIndex,
+        uint256 _relayerIndex,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _blockNumber,
         uint256 _relayerIndexUpdationLogIndex
@@ -169,7 +183,10 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             uint256 randomRelayerStake = _randomCdfNumber(_blockNumber, relayerGenerationIteration, stakeSum);
 
             if (
-                !((_cdfIndex == 0 || _cdf[_cdfIndex - 1] < randomRelayerStake) && randomRelayerStake <= _cdf[_cdfIndex])
+                !(
+                    (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
+                        && randomRelayerStake <= _cdf[_relayerIndex]
+                )
             ) {
                 // The supplied index does not point to the correct interval
                 return false;
@@ -180,13 +197,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        (bool status, RelayerAddress relayerAddress) =
-            _verifyRelayerUpdationLogIndexAtBlock(_cdfIndex, _blockNumber, _relayerIndexUpdationLogIndex);
-
-        if (!status) {
-            return false;
-        }
-
+        RelayerAddress relayerAddress =
+            ds.relayerIndexToRelayerUpdationLog[_relayerIndex][_relayerIndexUpdationLogIndex].relayerAddress;
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         return relayerAddress == RelayerAddress.wrap(_relayer) || node.isAccount[RelayerAccountAddress.wrap(_relayer)];
     }

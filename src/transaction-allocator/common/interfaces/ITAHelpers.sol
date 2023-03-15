@@ -11,6 +11,7 @@ interface ITAHelpers {
     error NativeTransferFailed(address to, uint256 amount);
     error InsufficientBalance(TokenAddress token, uint256 balance, uint256 amount);
     error InvalidRelayer(RelayerAddress relayer);
+    error InvalidRelayerUpdationLogIndex();
     error ParameterLengthMismatch();
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);

@@ -108,7 +108,7 @@ contract TATransactionAllocationTest is
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             (bool[] memory successes, bytes[] memory returndatas) = ta.execute(
-                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex, 1
+                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex, 1, 0
             );
             vm.stopPrank();
 
@@ -157,7 +157,7 @@ contract TATransactionAllocationTest is
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidCdfArrayHash.selector);
             ta.execute(
-                allotedTransactions, cdf2, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1
+                allotedTransactions, cdf2, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1, 0
             );
             assertEq(ta.attendance(block.number / ta.blocksPerWindow(), relayerAddress), false);
             vm.stopPrank();
@@ -190,7 +190,7 @@ contract TATransactionAllocationTest is
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
             vm.expectRevert(InvalidRelayerWindow.selector);
             ta.execute(
-                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1
+                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1, 0
             );
             assertEq(ta.attendance(block.number / ta.blocksPerWindow(), relayerAddress), false);
             vm.stopPrank();
@@ -232,7 +232,7 @@ contract TATransactionAllocationTest is
             _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
             vm.expectRevert(InvalidRelayerWindow.selector);
             ta.execute(
-                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1
+                allotedTransactions, cdf, _deDuplicate(relayerGenerationIteration), selectedRelayerCdfIndex + 1, 1, 0
             );
             vm.stopPrank();
         }
