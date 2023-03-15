@@ -17,7 +17,8 @@ abstract contract TARelayerManagementStorage {
         // No of registered relayers
         uint256 relayerCount;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        mapping(uint256 => RelayerAddress) relayerIndexToRelayer;
+        // Update log of a relayer's index in the CDF -> Relayer Address over time
+        mapping(uint256 => RelayerIndexToRelayerUpdateInfo[]) relayerIndexToRelayerUpdationLog;
         // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;

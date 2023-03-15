@@ -121,6 +121,25 @@ contract TARelayerManagement is
         return newStakeArray;
     }
 
+    function _updateRelayerIndexToRelayer(uint256 _index, RelayerAddress _relayerAddress) internal {
+        RelayerIndexToRelayerUpdateInfo[] storage updationLog = getRMStorage().relayerIndexToRelayerUpdationLog[_index];
+        uint256 updateEffectiveAtWindowIndex =
+            _windowIndex(block.number) + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS;
+
+        if (updationLog.length > 0 && updationLog[updationLog.length - 1].windowIndex == updateEffectiveAtWindowIndex) {
+            updationLog[updationLog.length - 1].relayerAddress = _relayerAddress;
+        } else {
+            updationLog.push(
+                RelayerIndexToRelayerUpdateInfo({
+                    windowIndex: updateEffectiveAtWindowIndex,
+                    relayerAddress: _relayerAddress
+                })
+            );
+        }
+
+        emit RelayerIndexToRelayerInfoUpdateQueued(updationLog[updationLog.length - 1]);
+    }
+
     // TODO: Implement a way to increase the relayer's stake
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
@@ -157,7 +176,7 @@ contract TARelayerManagement is
         node.endpoint = _endpoint;
         node.index = ds.relayerCount;
         _setRelayerAccountAddresses(relayerAddress, _accounts);
-        ds.relayerIndexToRelayer[node.index] = relayerAddress;
+        _updateRelayerIndexToRelayer(node.index, relayerAddress);
         ++ds.relayerCount;
 
         // Update stake array and hash
@@ -190,10 +209,11 @@ contract TARelayerManagement is
         delete ds.relayerInfo[relayerAddress];
 
         if (nodeIndex != n) {
-            RelayerAddress lastRelayer = ds.relayerIndexToRelayer[n];
-            ds.relayerIndexToRelayer[nodeIndex] = lastRelayer;
+            RelayerAddress lastRelayer =
+                ds.relayerIndexToRelayerUpdationLog[n][ds.relayerIndexToRelayerUpdationLog[n].length - 1].relayerAddress;
+            _updateRelayerIndexToRelayer(nodeIndex, lastRelayer);
             ds.relayerInfo[lastRelayer].index = nodeIndex;
-            ds.relayerIndexToRelayer[n] = RelayerAddress.wrap(address(0));
+            _updateRelayerIndexToRelayer(n, RelayerAddress.wrap(address(0)));
         }
 
         --ds.relayerCount;
@@ -201,9 +221,9 @@ contract TARelayerManagement is
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _removeRelayerFromStakeArray(_previousStakeArray, nodeIndex);
         uint32[] memory newDelegationArray = _removeRelayerFromDelegationArray(_previousDelegationArray, nodeIndex);
-        uint256 updateEffectiveAtWindowId = _updateAccountingState(newStakeArray, true, newDelegationArray, true);
+        uint256 updateEffectiveAtwindowIndex = _updateAccountingState(newStakeArray, true, newDelegationArray, true);
         ds.withdrawalInfo[relayerAddress] =
-            WithdrawalInfo(stake, _windowIndexToStartingBlock(updateEffectiveAtWindowId));
+            WithdrawalInfo(stake, _windowIndexToStartingBlock(updateEffectiveAtwindowIndex));
         emit RelayerUnRegistered(relayerAddress);
     }
 
@@ -261,18 +281,18 @@ contract TARelayerManagement is
         AbsenceProofReporterData calldata _reporterData,
         AbsenceProofAbsenteeData calldata _absenteeData,
         uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray,
-        uint256 _currentCdfLogIndex
+        uint32[] calldata _currentDelegationArray
     )
         public
         override
-        verifyCdfHashAtWindow(_reporterData.cdf, _windowIndex(block.number), _currentCdfLogIndex)
+        verifyCdfHashAtWindow(_reporterData.cdf, _windowIndex(block.number), _reporterData.currentCdfLogIndex)
         verifyStakeArrayHash(_currentStakeArray)
         verifyDelegationArrayHash(_currentDelegationArray)
     {
         uint256 gas = gasleft();
 
         RelayerAccountAddress reporter_relayerAddress = RelayerAccountAddress.wrap(msg.sender);
+        RMStorage storage ds = getRMStorage();
 
         if (
             !(_reporterData.relayerGenerationIterations.length == 1)
@@ -288,15 +308,14 @@ contract TARelayerManagement is
                 _reporterData.cdf,
                 _reporterData.cdfIndex,
                 _reporterData.relayerGenerationIterations,
-                block.number
+                block.number,
+                ds.relayerIndexToRelayerUpdationLog[_reporterData.cdfIndex].length - 1
             )
         ) {
             revert InvalidRelayerWindowForReporter();
         }
 
         {
-            RMStorage storage ds = getRMStorage();
-
             // Absentee block must not be in a point before the contract was deployed
             if (_absenteeData.blockNumber < ds.penaltyDelayBlocks) {
                 revert InvalidAbsenteeBlockNumber();
@@ -313,10 +332,10 @@ contract TARelayerManagement is
 
         {
             // Verify CDF hash of the Absentee Window
-            uint256 absentee_windowId = _windowIndex(_absenteeData.blockNumber);
+            uint256 absentee_windowIndex = _windowIndex(_absenteeData.blockNumber);
             if (
                 !_verifyCdfHashAtWindow(
-                    _absenteeData.cdf, absentee_windowId, _absenteeData.latestStakeUpdationCdfLogIndex
+                    _absenteeData.cdf, absentee_windowIndex, _absenteeData.latestStakeUpdationCdfLogIndex
                 )
             ) {
                 revert InvalidAbsenteeCdfArrayHash();
@@ -324,8 +343,8 @@ contract TARelayerManagement is
 
             // Verify Absence of the relayer
             TAStorage storage ts = getTAStorage();
-            if (ts.attendance[absentee_windowId][_absenteeData.relayerAddress]) {
-                revert AbsenteeWasPresent(absentee_windowId);
+            if (ts.attendance[absentee_windowIndex][_absenteeData.relayerAddress]) {
+                revert AbsenteeWasPresent(absentee_windowIndex);
             }
         }
 
@@ -336,7 +355,8 @@ contract TARelayerManagement is
                 _absenteeData.cdf,
                 _absenteeData.cdfIndex,
                 _absenteeData.relayerGenerationIterations,
-                _absenteeData.blockNumber
+                _absenteeData.blockNumber,
+                _absenteeData.relayerIndexToRelayerLogIndex
             )
         ) {
             revert InvalidRelayerWindowForAbsentee();
@@ -360,7 +380,6 @@ contract TARelayerManagement is
             _updateAccountingState(newStakeArray, true, _currentDelegationArray, false);
         } else {
             // If the relayer un-registered itself, then we just subtract from their withdrawl info
-            // TODO: Test
             WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[_absenteeData.relayerAddress];
             penalty = (withdrawalInfo_.amount * ABSENCE_PENALTY) / 10000;
             withdrawalInfo_.amount -= penalty;
@@ -411,6 +430,15 @@ contract TARelayerManagement is
         return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
     }
 
+    function getRelayerIndexUpdationLog(uint256 _index)
+        external
+        view
+        override
+        returns (RelayerIndexToRelayerUpdateInfo[] memory)
+    {
+        return getRMStorage().relayerIndexToRelayerUpdationLog[_index];
+    }
+
     function isGasTokenSupported(TokenAddress _token) external view override returns (bool) {
         return getRMStorage().isGasTokenSupported[_token];
     }
@@ -450,7 +478,9 @@ contract TARelayerManagement is
         uint256 length = ds.relayerCount;
         uint32[] memory stakeArray = new uint32[](length);
         for (uint256 i = 0; i < length;) {
-            stakeArray[i] = _scaleStake(ds.relayerInfo[ds.relayerIndexToRelayer[i]].stake);
+            RelayerAddress relayerAddress =
+                ds.relayerIndexToRelayerUpdationLog[i][ds.relayerIndexToRelayerUpdationLog[i].length - 1].relayerAddress;
+            stakeArray[i] = _scaleStake(ds.relayerInfo[relayerAddress].stake);
             unchecked {
                 ++i;
             }

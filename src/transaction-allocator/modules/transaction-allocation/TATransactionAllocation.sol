@@ -23,7 +23,18 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _blockNumber,
         ForwardRequest[] calldata _txs
     ) internal view returns (bool) {
-        if (!_verifyRelayerSelection(msg.sender, _cdf, _cdfIndex, _relayerGenerationIteration, _blockNumber)) {
+        RMStorage storage ds = getRMStorage();
+
+        if (
+            !_verifyRelayerSelection(
+                msg.sender,
+                _cdf,
+                _cdfIndex,
+                _relayerGenerationIteration,
+                _blockNumber,
+                ds.relayerIndexToRelayerUpdationLog[_cdfIndex].length - 1
+            )
+        ) {
             return false;
         }
 
@@ -119,7 +130,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         gasLeft = gasleft();
         TAStorage storage ts = getTAStorage();
         RMStorage storage ds = getRMStorage();
-        ts.attendance[_windowIndex(block.number)][ds.relayerIndexToRelayer[_cdfIndex]] = true;
+
+        // Mark Attendance
+        RelayerIndexToRelayerUpdateInfo[] storage updateInfo = ds.relayerIndexToRelayerUpdationLog[_cdfIndex];
+        RelayerAddress relayerAddress = updateInfo[updateInfo.length - 1].relayerAddress;
+        ts.attendance[_windowIndex(block.number)][relayerAddress] = true;
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         return (successes, returndatas);
@@ -173,11 +188,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         for (uint256 i = 0; i < ds.relayersPerWindow;) {
             uint256 randomCdfNumber = _randomCdfNumber(block.number, i, _cdf[cdfLength - 1]);
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
-            RelayerInfo storage relayer = ds.relayerInfo[ds.relayerIndexToRelayer[cdfIndex[i]]];
-            uint256 relayerIndex = relayer.index;
-            RelayerAddress relayerAddress = ds.relayerIndexToRelayer[relayerIndex];
+            RelayerIndexToRelayerUpdateInfo[] storage updateInfo = ds.relayerIndexToRelayerUpdationLog[cdfIndex[i]];
+            RelayerAddress relayerAddress = updateInfo[updateInfo.length - 1].relayerAddress;
             selectedRelayers[i] = relayerAddress;
-
             unchecked {
                 ++i;
             }

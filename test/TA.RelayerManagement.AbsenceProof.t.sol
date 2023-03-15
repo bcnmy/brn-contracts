@@ -56,6 +56,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         vm.roll(block.number + ta.blocksPerWindow());
 
@@ -73,6 +74,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         _startPrankRA(reporter);
         vm.expectEmit(true, true, true, true);
 
@@ -86,7 +88,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
             absenteeData.blockNumber / ta.blocksPerWindow(),
             expectedPenalty
         );
-        ta.processAbsenceProof(reporterData, absenteeData, ta.getStakeArray(), ta.getDelegationArray(), 1);
+        ta.processAbsenceProof(reporterData, absenteeData, ta.getStakeArray(), ta.getDelegationArray());
         vm.stopPrank();
 
         assertEq(ta.relayerInfo_Stake(absenteeData.relayerAddress), _initialStakeAmount - expectedPenalty);
@@ -107,11 +109,75 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
         assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
 
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
 
         // CDF hash should be updated now
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
         assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 2), true);
+    }
+
+    function testAbsenceProofSubmissionPostRelayerUnRegistrationDuringWithdrawDelay() external atSnapshot {
+        vm.roll(block.number + ta.penaltyDelayBlocks() * 2);
+
+        // Select a relayer in the current window to miss tx submission in current window
+        AbsenceProofAbsenteeData memory absenteeData;
+        absenteeData.blockNumber = block.number;
+        (RelayerAddress[] memory absence_selectedRelayers, uint256[] memory absence_cdfIndex) =
+            ta.allocateRelayers(ta.getCdfArray(), 1);
+        absenteeData.relayerAddress = absence_selectedRelayers[0];
+        absenteeData.cdf = ta.getCdfArray();
+        absenteeData.cdfIndex = absence_cdfIndex[0];
+        absenteeData.relayerGenerationIterations = new uint256[](1);
+        absenteeData.relayerGenerationIterations[0] = 0;
+        absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
+
+        vm.roll(block.number + ta.blocksPerWindow());
+
+        uint16[] memory cdf = ta.getCdfArray();
+
+        // Unregister the relayer
+        _startPrankRA(absenteeData.relayerAddress);
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
+        vm.stopPrank();
+
+        uint16[] memory postDeregistrationCdf = ta.getCdfArray();
+
+        // Submit the absence proof
+        (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
+            ta.allocateRelayers(cdf, 1);
+        AbsenceProofReporterData memory reporterData;
+        RelayerAddress reporter = reporter_selectedRelayers[0];
+        if (reporter == absenteeData.relayerAddress) {
+            fail("Reporter and Absentee cannot be the same relayer");
+        }
+        reporterData.cdfIndex = reporter_cdfIndex[0];
+        reporterData.relayerGenerationIterations = new uint256[](1);
+        reporterData.relayerGenerationIterations[0] = 0;
+        reporterData.cdf = cdf;
+        reporterData.currentCdfLogIndex = 1;
+        _startPrankRA(reporter);
+        vm.expectEmit(true, true, true, true);
+
+        uint256 expectedPenalty = _initialStakeAmount * ABSENCE_PENALTY / 10000;
+        uint256 reporterBalance = bico.balanceOf(RelayerAddress.unwrap(reporter));
+
+        emit AbsenceProofProcessed(
+            block.number / ta.blocksPerWindow(),
+            RelayerAddress.unwrap(reporter),
+            absenteeData.relayerAddress,
+            absenteeData.blockNumber / ta.blocksPerWindow(),
+            expectedPenalty
+        );
+        ta.processAbsenceProof(reporterData, absenteeData, ta.getStakeArray(), ta.getDelegationArray());
+        vm.stopPrank();
+
+        assertEq(ta.withdrawalInfo(absenteeData.relayerAddress).amount, _initialStakeAmount - expectedPenalty);
+        assertEq(bico.balanceOf(RelayerAddress.unwrap(reporter)), reporterBalance + expectedPenalty);
+
+        // There should be no change in CDF, since the absentee relayer had already de-registered
+        uint16[] memory newCdf = ta.getCdfArray();
+        assertEq(ta.debug_cdfHash(postDeregistrationCdf) == ta.debug_cdfHash(newCdf), true);
     }
 
     function testCannotSubmitAbsenceProofWithIncorrectReporterCdf() external atSnapshot {
@@ -128,6 +194,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         vm.roll(block.number + ta.blocksPerWindow());
 
@@ -143,13 +210,14 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         // Corrupt the reporter's CDF
         reporterData.cdf[0] += 1;
         _startPrankRA(reporter);
         vm.expectRevert(InvalidCdfArrayHash.selector);
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -167,6 +235,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         vm.roll(block.number + ta.blocksPerWindow());
 
@@ -182,13 +251,14 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         // Corrupt the reporter's Stake Array
         stakeArray[0] += 1;
         _startPrankRA(reporter);
         vm.expectRevert(InvalidStakeArrayHash.selector);
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -206,6 +276,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         vm.roll(block.number + ta.blocksPerWindow());
 
@@ -224,11 +295,12 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
         vm.expectRevert(InvalidRelayerWindowForReporter.selector);
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -246,6 +318,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 1;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         // Submit the absence proof
         (RelayerAddress[] memory reporter_selectedRelayers, uint256[] memory reporter_cdfIndex) =
@@ -259,11 +332,12 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
         vm.expectRevert(InvalidAbsenteeBlockNumber.selector);
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -283,6 +357,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         vm.roll(block.number + ta.blocksPerWindow());
 
@@ -298,11 +373,12 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
         vm.expectRevert(InvalidAbsenteeCdfArrayHash.selector);
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -320,6 +396,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         absenteeData.relayerGenerationIterations = new uint256[](1);
         absenteeData.relayerGenerationIterations[0] = 0;
         absenteeData.latestStakeUpdationCdfLogIndex = 1;
+        absenteeData.relayerIndexToRelayerLogIndex = 0;
 
         // Mark the absentee as not absent
         _startPrankRA(absenteeData.relayerAddress);
@@ -346,13 +423,14 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         _startPrankRA(reporter);
         vm.expectRevert(
             abi.encodeWithSelector(AbsenteeWasPresent.selector, absenteeData.blockNumber / ta.blocksPerWindow())
         );
-        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+        ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
         vm.stopPrank();
     }
 
@@ -376,6 +454,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
                 absenteeData.cdf = ta.getCdfArray();
                 absenteeData.relayerGenerationIterations = new uint256[](1);
                 absenteeData.latestStakeUpdationCdfLogIndex = 1;
+                absenteeData.relayerIndexToRelayerLogIndex = 0;
 
                 break;
             }
@@ -399,6 +478,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
         reporterData.relayerGenerationIterations = new uint256[](1);
         reporterData.relayerGenerationIterations[0] = 0;
         reporterData.cdf = ta.getCdfArray();
+        reporterData.currentCdfLogIndex = 1;
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         uint256 relayerCount = ta.relayerCount();
@@ -413,7 +493,7 @@ contract TARelayerManagementAbsenceProofTest is TATestBase, ITARelayerManagement
                 absenteeData.cdfIndex = cdfIndex;
 
                 vm.expectRevert(InvalidRelayerWindowForAbsentee.selector);
-                ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray, 1);
+                ta.processAbsenceProof(reporterData, absenteeData, stakeArray, delegationArray);
             }
         }
         vm.stopPrank();

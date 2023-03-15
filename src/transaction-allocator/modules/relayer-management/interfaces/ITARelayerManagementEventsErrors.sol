@@ -3,6 +3,7 @@
 pragma solidity 0.8.19;
 
 import "src/transaction-allocator/common/TATypes.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
 
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
@@ -12,7 +13,7 @@ interface ITARelayerManagementEventsErrors {
     error InvalidAbsenteeBlockNumber();
     error InvalidAbsenteeCdfArrayHash();
     error InvalidRelayerWindowForAbsentee();
-    error AbsenteeWasPresent(uint256 absenteeWindowId);
+    error AbsenteeWasPresent(uint256 absenteewindowIndex);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error GasTokenAlreadySupported(TokenAddress token);
     error GasTokenNotSupported(TokenAddress token);
@@ -24,12 +25,13 @@ interface ITARelayerManagementEventsErrors {
     event RelayerUnRegistered(RelayerAddress indexed relayer);
     event Withdraw(RelayerAddress indexed relayer, uint256 indexed amount);
     event AbsenceProofProcessed(
-        uint256 indexed windowId,
+        uint256 indexed windowIndex,
         address indexed reporter,
         RelayerAddress indexed absentRelayer,
-        uint256 absenceWindowId,
+        uint256 absencewindowIndex,
         uint256 penalty
     );
     event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
+    event RelayerIndexToRelayerInfoUpdateQueued(RelayerIndexToRelayerUpdateInfo indexed info);
 }

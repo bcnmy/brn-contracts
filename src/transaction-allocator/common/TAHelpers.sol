@@ -74,7 +74,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return ds.stakeArrayHash == _hashUint32ArrayCalldata(_array);
     }
 
-    function _verifyCdfHashAtWindow(uint16[] calldata _array, uint256 _windowId, uint256 _cdfLogIndex)
+    function _verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex)
         internal
         view
         returns (bool)
@@ -85,23 +85,17 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             return false;
         }
 
-        console2.log("windowId", _windowId);
-        console2.log("ds.cdfHashUpdateLog.length", ds.cdfHashUpdateLog.length);
-        console2.log("ds.cdfHashUpdateLog[_cdfLogIndex].windowId", ds.cdfHashUpdateLog[_cdfLogIndex].windowId);
-
         if (
             !(
-                ds.cdfHashUpdateLog[_cdfLogIndex].windowId <= _windowId
+                ds.cdfHashUpdateLog[_cdfLogIndex].windowIndex <= __windowIndex
                     && (
                         _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
-                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowId > _windowId
+                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowIndex > __windowIndex
                     )
             )
         ) {
             return false;
         }
-
-        console2.log("Bound check");
 
         return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }
@@ -126,12 +120,37 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (seed % _max);
     }
 
+    function _verifyRelayerUpdationLogIndexAtBlock(
+        uint256 _relayerIndex,
+        uint256 _blockNumber,
+        uint256 _relayerIndexUpdationLogIndex
+    ) internal view returns (bool, RelayerAddress) {
+        RMStorage storage ds = getRMStorage();
+
+        uint256 windowIndexAtBlock = _windowIndex(_blockNumber);
+        RelayerIndexToRelayerUpdateInfo[] storage relayerIndexUpdateLog =
+            ds.relayerIndexToRelayerUpdationLog[_relayerIndex];
+        bool isIndexLastElementAndValid = (
+            relayerIndexUpdateLog.length - 1 == _relayerIndexUpdationLogIndex
+                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
+        );
+        bool isIndexNotLastElementAndValid = (
+            relayerIndexUpdateLog.length - 1 > _relayerIndexUpdationLogIndex
+                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
+                && relayerIndexUpdateLog[_relayerIndexUpdationLogIndex + 1].windowIndex > windowIndexAtBlock
+        );
+
+        bool status = isIndexLastElementAndValid || isIndexNotLastElementAndValid;
+        return (status, relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].relayerAddress);
+    }
+
     function _verifyRelayerSelection(
         address _relayer,
         uint16[] calldata _cdf,
         uint256 _cdfIndex,
         uint256[] calldata _relayerGenerationIterations,
-        uint256 _blockNumber
+        uint256 _blockNumber,
+        uint256 _relayerIndexUpdationLogIndex
     ) internal view returns (bool) {
         RMStorage storage ds = getRMStorage();
 
@@ -161,13 +180,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        RelayerAddress relayerAddress = ds.relayerIndexToRelayer[_cdfIndex];
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        if (!node.isAccount[RelayerAccountAddress.wrap(_relayer)] && relayerAddress != RelayerAddress.wrap(_relayer)) {
+        (bool status, RelayerAddress relayerAddress) =
+            _verifyRelayerUpdationLogIndexAtBlock(_cdfIndex, _blockNumber, _relayerIndexUpdationLogIndex);
+
+        if (!status) {
             return false;
         }
 
-        return true;
+        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
+        return relayerAddress == RelayerAddress.wrap(_relayer) || node.isAccount[RelayerAccountAddress.wrap(_relayer)];
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
@@ -226,19 +247,20 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update cdf hash
         (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
-        uint256 updateEffectiveAtWindowId = _windowIndex(block.number) + CDF_UPDATE_DELAY_IN_WINDOWS;
+        uint256 updateEffectiveAtwindowIndex =
+            _windowIndex(block.number) + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS;
         if (
             ds.cdfHashUpdateLog.length > 0
-                && ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowId == updateEffectiveAtWindowId
+                && ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowIndex == updateEffectiveAtwindowIndex
         ) {
             ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtWindowId, ds.cdfHashUpdateLog.length - 1);
+            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length - 1);
         } else {
-            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowId: updateEffectiveAtWindowId, cdfHash: cdfHash}));
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtWindowId, ds.cdfHashUpdateLog.length);
+            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowIndex: updateEffectiveAtwindowIndex, cdfHash: cdfHash}));
+            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length);
         }
 
-        return updateEffectiveAtWindowId;
+        return updateEffectiveAtwindowIndex;
     }
 
     ////////////////////////////// Misc //////////////////////////////

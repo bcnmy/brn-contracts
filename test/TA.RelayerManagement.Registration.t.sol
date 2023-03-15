@@ -7,6 +7,7 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
+// TODO: check delayed update for relayer index
 contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     function testRelayerRegistration() external atSnapshot {
         uint16[] memory cdf = ta.getCdfArray();
@@ -43,7 +44,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 0), true);
         assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 0), false);
 
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
 
         // CDF hash should be updated now
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), false);
@@ -65,7 +66,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             vm.stopPrank();
         }
 
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
         uint16[] memory cdf = ta.getCdfArray();
 
         // De-register all Relayers
@@ -97,7 +98,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
         assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
 
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
 
         // CDF hash should be updated now
         assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
@@ -129,7 +130,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             vm.stopPrank();
 
             uint256 expectedWithdrawBlock = (
-                (block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
+                (block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
                     / deployParams.blocksPerWindow
             ) * deployParams.blocksPerWindow;
 
@@ -277,7 +278,8 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
 
         uint256 expectedWithdrawBlock = (
-            (block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow) / deployParams.blocksPerWindow
+            (block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
+                / deployParams.blocksPerWindow
         ) * deployParams.blocksPerWindow;
         vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.number, expectedWithdrawBlock));
         ta.withdraw();

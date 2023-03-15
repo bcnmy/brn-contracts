@@ -83,7 +83,7 @@ contract TATransactionAllocationTest is
     }
 
     function testTransactionExecution() external atSnapshot {
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
 
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray();
@@ -128,7 +128,7 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray();
         uint16[] memory cdf2 = ta.getCdfArray();
@@ -165,7 +165,7 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
         uint16[] memory cdf = ta.getCdfArray();
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -198,7 +198,7 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
-        vm.roll(block.number + CDF_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray();
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1);

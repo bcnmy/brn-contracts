@@ -18,8 +18,13 @@ struct WithdrawalInfo {
 }
 
 struct CdfHashUpdateInfo {
-    uint256 windowId;
+    uint256 windowIndex;
     bytes32 cdfHash;
+}
+
+struct RelayerIndexToRelayerUpdateInfo {
+    uint256 windowIndex;
+    RelayerAddress relayerAddress;
 }
 
 struct InitalizerParams {
@@ -34,6 +39,7 @@ struct AbsenceProofReporterData {
     uint16[] cdf;
     uint256 cdfIndex;
     uint256[] relayerGenerationIterations;
+    uint256 currentCdfLogIndex;
 }
 
 struct AbsenceProofAbsenteeData {
@@ -43,6 +49,7 @@ struct AbsenceProofAbsenteeData {
     uint16[] cdf;
     uint256[] relayerGenerationIterations;
     uint256 cdfIndex;
+    uint256 relayerIndexToRelayerLogIndex;
 }
 
 struct AllocateTransactionParams {
