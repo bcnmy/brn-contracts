@@ -17,7 +17,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     /// @notice returns true if the current sender is allowed to relay transaction in this block
     function _verifyTransactionAllocation(
-        ForwardRequest[] calldata _txs,
+        Transaction[] calldata _txs,
         uint16[] calldata _cdf,
         uint256 _cdfUpdationLogIndex,
         uint256 _cdfIndex,
@@ -66,15 +66,124 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
-    function _executeTx(ForwardRequest calldata _req) internal returns (bool, bytes memory, uint256) {
+    function _executeTx(Transaction calldata _req, uint256 _index)
+        internal
+        returns (
+            bool success,
+            bool refundSuccess,
+            bytes memory returndata,
+            uint256 totalGasConsumed,
+            uint256 relayerPayment,
+            uint256 premiumsGenerated,
+            TokenAddress paymentTokenAddress
+        )
+    {
         uint256 gas = gasleft();
 
-        (bool success, bytes memory returndata) = _req.to.call{gas: _req.gasLimit}(_req.data);
-        uint256 executionGas = gas - gasleft();
-        emit GenericGasConsumed("executionGas", executionGas);
+        // TODO: Non native token support
+        // TODO: Study ERC4337 EP implementation to get any insights on this process
 
-        // TODO: Verify reimbursement and forward to relayer
-        return (success, returndata, executionGas);
+        uint256 expectedGasConsumed = _req.gasLimit + _req.prePaymentGasLimit + _req.fixedGas;
+        uint256 gasPremium = expectedGasConsumed * RELAYER_PREMIUM_PERCENTAGE / (100 * PERCENTAGE_MULTIPLIER);
+        uint256 expectedPrepayment = (expectedGasConsumed + gasPremium) * tx.gasprice;
+
+        // Ask the application to prepay gas
+        relayerPayment = address(this).balance;
+        try _req.to.prepayGas{gas: _req.prePaymentGasLimit}(_req, expectedGasConsumed + gasPremium) returns (
+            address _paymentTokenAddress
+        ) {
+            paymentTokenAddress = TokenAddress.wrap(_paymentTokenAddress);
+
+            if (!getRMStorage().isGasTokenSupported[paymentTokenAddress]) {
+                success = false;
+                refundSuccess = false;
+                returndata = abi.encodeWithSelector(GasTokenNotSuported.selector, paymentTokenAddress);
+                totalGasConsumed = gas - gasleft();
+                premiumsGenerated = 0;
+                return (
+                    success,
+                    refundSuccess,
+                    returndata,
+                    totalGasConsumed,
+                    relayerPayment,
+                    premiumsGenerated,
+                    paymentTokenAddress
+                );
+            }
+
+            // TODO: Non native token support
+            relayerPayment = address(this).balance - relayerPayment;
+            if (relayerPayment < expectedPrepayment) {
+                success = false;
+                refundSuccess = false;
+                returndata = abi.encodeWithSelector(InsufficientPrepayment.selector, expectedPrepayment, relayerPayment);
+                totalGasConsumed = gas - gasleft();
+                premiumsGenerated = 0;
+                return (
+                    success,
+                    refundSuccess,
+                    returndata,
+                    totalGasConsumed,
+                    relayerPayment,
+                    premiumsGenerated,
+                    paymentTokenAddress
+                );
+            }
+
+            emit PrepaymentReceived(_index, relayerPayment, paymentTokenAddress);
+        } catch (bytes memory reason) {
+            success = false;
+            refundSuccess = false;
+            returndata = abi.encodeWithSelector(PrepaymentFailed.selector, reason);
+            totalGasConsumed = gas - gasleft();
+            premiumsGenerated = 0;
+            paymentTokenAddress = TokenAddress.wrap(address(0));
+            return (
+                success,
+                refundSuccess,
+                returndata,
+                totalGasConsumed,
+                relayerPayment,
+                premiumsGenerated,
+                paymentTokenAddress
+            );
+        }
+
+        premiumsGenerated = gasPremium * tx.gasprice;
+        // Execute the transaction
+        (success, returndata) = address(_req.to).call{gas: _req.gasLimit}(_req.data);
+
+        // Refund the excess gas if needed
+        uint256 actualGasConsumed = gas - gasleft() + _req.fixedGas + gasPremium;
+        if (expectedGasConsumed > actualGasConsumed + _req.refundGasLimit) {
+            uint256 refundAmount = (expectedGasConsumed - actualGasConsumed) * tx.gasprice;
+
+            try _req.to.refundGas{value: refundAmount, gas: _req.refundGasLimit}() {
+                refundSuccess = true;
+                relayerPayment -= refundAmount;
+                emit GasFeeRefunded(_index, expectedGasConsumed - actualGasConsumed, refundAmount, paymentTokenAddress);
+            } catch (bytes memory reason) {
+                refundSuccess = false;
+                returndata = abi.encodeWithSelector(GasFeeRefundFailed.selector, reason);
+                totalGasConsumed = gas - gasleft();
+                return (
+                    success,
+                    refundSuccess,
+                    returndata,
+                    totalGasConsumed,
+                    relayerPayment,
+                    premiumsGenerated,
+                    paymentTokenAddress
+                );
+            }
+        }
+
+        totalGasConsumed = gas - gasleft();
+
+        emit GenericGasConsumed("executionGas", totalGasConsumed);
+        return (
+            success, refundSuccess, returndata, totalGasConsumed, relayerPayment, premiumsGenerated, paymentTokenAddress
+        );
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
@@ -85,7 +194,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     // TODO: Non Reentrant?
     // TODO: check if _cdfIndex is needed, since it's always going to be relayer.index
     function execute(
-        ForwardRequest[] calldata _reqs,
+        Transaction[] calldata _reqs,
         uint16[] calldata _cdf,
         uint256[] calldata _relayerGenerationIterations,
         uint256 _cdfIndex,
@@ -109,31 +218,43 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
         gasLeft = gasleft();
 
-        // Execute all transactions
         uint256 length = _reqs.length;
         uint256 totalGas = 0;
+        // TODO: Non native token support
+        uint256 totalRefund = 0;
+        uint256 totalPremiums = 0;
+
         successes = new bool[](length);
         returndatas = new bytes[](length);
-        for (uint256 i = 0; i < length;) {
-            ForwardRequest calldata _req = _reqs[i];
 
-            (bool success, bytes memory returndata, uint256 executionGas) = _executeTx(_req);
+        // Execute all transactions
+        for (uint256 i = 0; i < length;) {
+            Transaction calldata _req = _reqs[i];
+
+            // TODO: Relayer Premiums and relayer refund
+            (
+                bool success,
+                bool refundSuccess,
+                bytes memory returndata,
+                uint256 totalGasConsumed,
+                uint256 relayerRefund,
+                uint256 premiumsGenerated,
+            ) = _executeTx(_req, i);
 
             successes[i] = success;
             returndatas[i] = returndata;
-            totalGas += executionGas;
+            totalGas += totalGasConsumed;
+
+            if (refundSuccess) {
+                totalRefund += relayerRefund;
+                totalPremiums += premiumsGenerated;
+            }
 
             unchecked {
                 ++i;
             }
         }
 
-        // Validate that the relayer has sent enough gas for the call.
-        if (gasleft() <= totalGas / 63) {
-            assembly {
-                invalid()
-            }
-        }
         emit GenericGasConsumed("ExecutionGas", gasLeft - gasleft());
 
         gasLeft = gasleft();
@@ -144,7 +265,26 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerIndexToRelayerUpdateInfo[] storage updateInfo = ds.relayerIndexToRelayerUpdationLog[_cdfIndex];
         RelayerAddress relayerAddress = updateInfo[updateInfo.length - 1].relayerAddress;
         ts.attendance[_windowIndex(block.number)][relayerAddress] = true;
+
+        // Split the premiums b/w the relayer and the delegator
+        uint256 delegatorPremiums =
+            totalPremiums * ds.relayerInfo[relayerAddress].delegatorPoolPremiumShare / (100 * PERCENTAGE_MULTIPLIER);
+
+        // Refund the relayer. TODO: Non native token support
+        _transfer(NATIVE_TOKEN, msg.sender, totalRefund + (totalPremiums - delegatorPremiums));
+
+        // Add the premiums to the delegator pool
+        _addDelegatorRewards(relayerAddress, NATIVE_TOKEN, delegatorPremiums);
+
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
+
+        // TODO: Check how to update this logic
+        // Validate that the relayer has sent enough gas for the call.
+        // if (gasleft() <= totalGas / 63) {
+        //     assembly {
+        //         invalid()
+        //     }
+        // }
 
         return (successes, returndatas);
     }
@@ -236,7 +376,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         external
         view
         override
-        returns (ForwardRequest[] memory, uint256[] memory, uint256)
+        returns (Transaction[] memory, uint256[] memory, uint256)
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
             allocateRelayers(_data.cdf, _data.currentCdfLogIndex);
@@ -246,7 +386,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Filter the transactions
         uint256 selectedRelayerCdfIndex;
-        ForwardRequest[] memory txnAllocated = new ForwardRequest[](_data.requests.length);
+        Transaction[] memory txnAllocated = new Transaction[](_data.requests.length);
         uint256[] memory relayerGenerationIteration = new uint256[](
             _data.requests.length
         );

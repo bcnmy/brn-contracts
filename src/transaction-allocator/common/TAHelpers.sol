@@ -269,6 +269,13 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return updateEffectiveAtwindowIndex;
     }
 
+    ////////////////////////////// Delegation ////////////////////////
+    function _addDelegatorRewards(RelayerAddress _relayer, TokenAddress _token, uint256 _amount) internal {
+        getTADStorage().unclaimedRewards[_relayer][_token] += _amount;
+
+        emit DelegatorRewardsAdded(_relayer, _token, _amount);
+    }
+
     ////////////////////////////// Misc //////////////////////////////
     function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
         if (_token == NATIVE_TOKEN) {

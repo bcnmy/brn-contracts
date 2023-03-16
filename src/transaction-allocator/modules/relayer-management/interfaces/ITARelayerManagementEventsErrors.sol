@@ -19,7 +19,11 @@ interface ITARelayerManagementEventsErrors {
     error GasTokenNotSupported(TokenAddress token);
 
     event RelayerRegistered(
-        RelayerAddress indexed relayer, string endpoint, RelayerAccountAddress[] accounts, uint256 indexed stake
+        RelayerAddress indexed relayer,
+        string endpoint,
+        RelayerAccountAddress[] accounts,
+        uint256 indexed stake,
+        uint256 delegatorPoolPremiumShare
     );
     event RelayerAccountsUpdated(RelayerAddress indexed relayer, RelayerAccountAddress[] indexed _accounts);
     event RelayerUnRegistered(RelayerAddress indexed relayer);

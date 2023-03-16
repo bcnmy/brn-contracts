@@ -1,7 +1,7 @@
 import { BigNumber, BigNumberish, ContractReceipt, Wallet } from 'ethers';
 import { hexValue, parseEther } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { ITransactionAllocator, TransactionMock } from '../typechain-types';
+import { ITransactionAllocator, ApplicationMock } from '../typechain-types';
 import { deploy } from './deploy';
 import { createObjectCsvWriter } from 'csv-writer';
 import { resolve } from 'path';
@@ -92,7 +92,7 @@ const getGasConsumption = (
 
 const generateTransactions = async (
   txnAllocator: ITransactionAllocator,
-  txMock: TransactionMock,
+  txMock: ApplicationMock,
   count: number
 ) => {
   const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);

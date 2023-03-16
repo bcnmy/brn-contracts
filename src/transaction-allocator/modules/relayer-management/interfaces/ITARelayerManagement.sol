@@ -17,7 +17,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
         uint32[] calldata _currentDelegationArray,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
-        string memory _endpoint
+        string memory _endpoint,
+        uint256 _delegatorPoolPremiumShare
     ) external returns (RelayerAddress);
 
     function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _currentDelegationArray) external;
@@ -44,6 +45,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function relayerInfo_Index(RelayerAddress) external view returns (uint256);
 
     function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
+
+    function relayerInfo_delegatorPoolPremiumShare(RelayerAddress) external view returns (uint256);
 
     function isGasTokenSupported(TokenAddress) external view returns (bool);
 

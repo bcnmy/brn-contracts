@@ -3,8 +3,8 @@
 pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
-import "src/mocks/TransactionMock.sol";
-import "src/mocks/interfaces/ITransactionMockEventsErrors.sol";
+import "src/mocks/ApplicationMock.sol";
+import "src/mocks/interfaces/IApplicationMockEventsErrors.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
@@ -13,12 +13,14 @@ contract TATransactionAllocationTest is
     TATestBase,
     ITATransactionAllocationEventsErrors,
     ITAHelpers,
-    ITransactionMockEventsErrors
+    IApplicationMockEventsErrors
 {
+    uint256 constant initialApplicationFunds = 10 ether;
+
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
-    TransactionMock private tm;
-    ForwardRequest[] private txns;
+    ApplicationMock private tm;
+    Transaction[] private txns;
 
     function setUp() public override {
         if (_postRegistrationSnapshotId != 0) {
@@ -31,24 +33,35 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
+            uint256 delegatorPoolPremiumShare = 1000;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
             ta.register(
-                ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
             );
             vm.stopPrank();
         }
 
-        tm = new TransactionMock();
+        tm = new ApplicationMock();
+        vm.deal(address(tm), initialApplicationFunds);
+        vm.label(address(tm), "ApplicationMock");
 
         for (uint256 i = 0; i < 10; i++) {
             txns.push(
-                ForwardRequest({
-                    to: address(tm),
+                Transaction({
+                    to: tm,
                     data: abi.encodeWithSelector(tm.mockUpdate.selector, i),
-                    gasLimit: 10 ** 6
+                    fixedGas: 25000,
+                    prePaymentGasLimit: 10 ** 5,
+                    gasLimit: 10 ** 5,
+                    refundGasLimit: 10 ** 5
                 })
             );
         }
@@ -82,6 +95,37 @@ contract TATransactionAllocationTest is
         return _result;
     }
 
+    function _getRelayerAssignedToTx(Transaction memory _tx, uint16[] memory _cdf, uint256 _currentCdfLogIndex)
+        internal
+        returns (RelayerAddress, uint256[] memory, uint256)
+    {
+        Transaction[] memory txns_ = new Transaction[](1);
+        txns_[0] = _tx;
+
+        for (uint256 i = 0; i < relayerMainAddress.length; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            (
+                Transaction[] memory allotedTransactions,
+                uint256[] memory relayerGenerationIteration,
+                uint256 selectedRelayerCdfIndex
+            ) = ta.allocateTransaction(
+                AllocateTransactionParams({
+                    relayerAddress: relayerAddress,
+                    requests: txns_,
+                    cdf: _cdf,
+                    currentCdfLogIndex: _currentCdfLogIndex
+                })
+            );
+
+            if (allotedTransactions.length == 1) {
+                return (relayerAddress, relayerGenerationIteration, selectedRelayerCdfIndex);
+            }
+        }
+
+        fail("No relayer found");
+        return (RelayerAddress.wrap(address(0)), new uint256[](0), 0);
+    }
+
     function testTransactionExecution() external atSnapshot {
         vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
 
@@ -90,7 +134,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                ForwardRequest[] memory allotedTransactions,
+                Transaction[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(
@@ -138,7 +182,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                ForwardRequest[] memory allotedTransactions,
+                Transaction[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(
@@ -171,7 +215,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                ForwardRequest[] memory allotedTransactions,
+                Transaction[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(
@@ -207,7 +251,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                ForwardRequest[] memory allotedTransactions,
+                Transaction[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(

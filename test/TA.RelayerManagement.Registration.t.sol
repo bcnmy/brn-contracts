@@ -9,21 +9,31 @@ import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
 // TODO: check delayed update for relayer index
 contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
+    string endpoint = "test";
+    uint256 delegatorPoolPremiumShare = 1000;
+
     function testRelayerRegistration() external atSnapshot {
         uint16[] memory cdf = ta.getCdfArray();
         assertEq(cdf.length, 0);
 
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
             vm.expectEmit(true, true, true, true);
-            emit RelayerRegistered(relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake);
+            emit RelayerRegistered(
+                relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake, delegatorPoolPremiumShare
+            );
             ta.register(
-                ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
             );
             vm.stopPrank();
 
@@ -55,13 +65,18 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
             ta.register(
-                ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
             );
             vm.stopPrank();
         }
@@ -109,13 +124,18 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
             ta.register(
-                ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
             );
             vm.stopPrank();
         }
@@ -163,7 +183,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
     function testCannotRegisterWithNoRelayAccounts() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
+
         RelayerAccountAddress[] memory accounts;
 
         _startPrankRA(relayerMainAddress[0]);
@@ -171,26 +191,31 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         uint32[] memory delegationArray = ta.getDelegationArray();
         bico.approve(address(ta), stake);
         vm.expectRevert(NoAccountsProvided.selector);
-        ta.register(stakeArray, delegationArray, stake, accounts, endpoint);
+        ta.register(stakeArray, delegationArray, stake, accounts, endpoint, delegatorPoolPremiumShare);
         vm.stopPrank();
     }
 
     function testCannotRegisterWithInsufficientStake() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT - 1;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = ta.getDelegationArray();
         bico.approve(address(ta), stake);
         vm.expectRevert(abi.encodeWithSelector(InsufficientStake.selector, stake, MINIMUM_STAKE_AMOUNT));
-        ta.register(stakeArray, delegationArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         vm.stopPrank();
     }
 
     function testCannotRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = new uint32[](1);
@@ -198,13 +223,19 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         stakeArray[0] = 0xb1c0;
         bico.approve(address(ta), stake);
         vm.expectRevert(InvalidStakeArrayHash.selector);
-        ta.register(stakeArray, delegationArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         vm.stopPrank();
     }
 
     function testCannotRegisterWithInvalidDelegationArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
@@ -212,18 +243,29 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         delegationArray[0] = 0xb1c0;
         bico.approve(address(ta), stake);
         vm.expectRevert(InvalidDelegationArrayHash.selector);
-        ta.register(stakeArray, delegationArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         vm.stopPrank();
     }
 
     function testCannotUnRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         bico.approve(address(ta), stake);
         ta.register(
-            ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
         );
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
@@ -235,12 +277,16 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
     function testCannotUnRegisterWithInvalidDelegationArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         bico.approve(address(ta), stake);
         ta.register(
-            ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
         );
         uint32[] memory stakeArray = ta.getStakeArray();
         uint32[] memory delegationArray = new uint32[](1);
@@ -252,12 +298,16 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
     function testCannotSetAccountsStateAfterUnRegistering() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         bico.approve(address(ta), stake);
         ta.register(
-            ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
         );
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
@@ -267,12 +317,16 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
     function testCannotWithdrawBeforeWithdrawTime() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         bico.approve(address(ta), stake);
         ta.register(
-            ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
         );
         ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
         ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());

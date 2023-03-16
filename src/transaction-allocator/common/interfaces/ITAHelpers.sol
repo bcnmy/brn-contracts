@@ -22,4 +22,5 @@ interface ITAHelpers {
         bytes32 indexed cdfArrayHash, uint256 indexed effectiveWindowIndex, uint256 indexed cdfLogIndex
     );
     event DelegationArrayUpdated(bytes32 indexed delegationArrayHash);
+    event DelegatorRewardsAdded(RelayerAddress indexed _relayer, TokenAddress indexed _token, uint256 indexed _amount);
 }

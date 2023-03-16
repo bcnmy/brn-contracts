@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import "src/interfaces/IApplication.sol";
 import "./TATypes.sol";
 
 // Relayer Information
@@ -8,6 +9,7 @@ struct RelayerInfo {
     uint256 stake;
     string endpoint;
     uint256 index;
+    uint256 delegatorPoolPremiumShare; // *100
     RelayerAccountAddress[] relayerAccountAddresses;
     mapping(RelayerAccountAddress => bool) isAccount;
 }
@@ -55,19 +57,16 @@ struct AbsenceProofAbsenteeData {
 
 struct AllocateTransactionParams {
     RelayerAddress relayerAddress;
-    ForwardRequest[] requests;
+    Transaction[] requests;
     uint16[] cdf;
     uint256 currentCdfLogIndex;
 }
 
-struct ForwardRequest {
-    // address from;
-    address to;
-    // address paymaster;
-    // uint256 value;
-    // uint256 fixedGas;
+struct Transaction {
+    IApplication to;
+    uint256 fixedGas; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily large value to drain funds
+    uint256 prePaymentGasLimit;
     uint256 gasLimit;
-    // uint256 nonce;
+    uint256 refundGasLimit; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily small value to prevent refund
     bytes data;
 }
-// bytes signature;

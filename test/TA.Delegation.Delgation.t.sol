@@ -31,12 +31,18 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
+            uint256 delegatorPoolPremiumShare = 1000;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
             ta.register(
-                ta.getStakeArray(), ta.getDelegationArray(), stake, relayerAccountAddresses[relayerAddress], endpoint
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
             );
             vm.stopPrank();
         }

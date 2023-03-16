@@ -151,7 +151,8 @@ contract TARelayerManagement is
         uint32[] calldata _currentDelegationArray,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
-        string memory _endpoint
+        string memory _endpoint,
+        uint256 _delegatorPoolPremiumShare
     )
         external
         override
@@ -174,6 +175,7 @@ contract TARelayerManagement is
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
         node.stake += _stake;
         node.endpoint = _endpoint;
+        node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
         node.index = ds.relayerCount;
         _setRelayerAccountAddresses(relayerAddress, _accounts);
         _updateRelayerIndexToRelayer(node.index, relayerAddress);
@@ -184,7 +186,7 @@ contract TARelayerManagement is
         uint32[] memory newDelegationArray = _addNewRelayerToDelegationArray(_currentDelegationArray);
         _updateAccountingState(newStakeArray, true, newDelegationArray, true);
 
-        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake);
+        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
 
         return relayerAddress;
     }
@@ -359,7 +361,7 @@ contract TARelayerManagement is
         if (_isStakedRelayer(_absenteeData.relayerAddress)) {
             // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
             RelayerInfo storage absence_relayerInfo = getRMStorage().relayerInfo[_absenteeData.relayerAddress];
-            penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / 10000;
+            penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
             absence_relayerInfo.stake -= penalty;
 
             uint32[] memory newStakeArray = _updateRelayerStakeInStakeArray(
@@ -369,7 +371,7 @@ contract TARelayerManagement is
         } else {
             // If the relayer un-registered itself, then we just subtract from their withdrawl info
             WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[_absenteeData.relayerAddress];
-            penalty = (withdrawalInfo_.amount * ABSENCE_PENALTY) / 10000;
+            penalty = (withdrawalInfo_.amount * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
             withdrawalInfo_.amount -= penalty;
         }
         _transfer(
@@ -416,6 +418,10 @@ contract TARelayerManagement is
         returns (bool)
     {
         return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
+    }
+
+    function relayerInfo_delegatorPoolPremiumShare(RelayerAddress _relayerAddress) external view returns (uint256) {
+        return getRMStorage().relayerInfo[_relayerAddress].delegatorPoolPremiumShare;
     }
 
     function getRelayerIndexUpdationLog(uint256 _index)

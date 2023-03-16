@@ -4,7 +4,7 @@ import {
   TAProxy__factory,
   TARelayerManagement__factory,
   TATransactionAllocation__factory,
-  TransactionMock__factory,
+  ApplicationMock__factory,
 } from '../typechain-types';
 import { ITransactionAllocator__factory } from '../typechain-types/factories/src/transaction-allocator/interfaces';
 import { InitalizerParamsStruct } from '../typechain-types/src/transaction-allocator/TAProxy';
@@ -33,7 +33,7 @@ export const deploy = async (params: InitalizerParamsStruct = deploymentConfig) 
   const txnAllocator = ITransactionAllocator__factory.connect(proxy.address, deployer);
 
   // Deploy Mock
-  const txMock = await new TransactionMock__factory(deployer).deploy();
+  const txMock = await new ApplicationMock__factory(deployer).deploy();
 
   return { txnAllocator, txMock };
 };
