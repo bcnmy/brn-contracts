@@ -66,7 +66,7 @@ struct Transaction {
     IApplication to;
     uint256 fixedGas; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily large value to drain funds
     uint256 prePaymentGasLimit;
-    uint256 gasLimit;
+    uint256 gasLimit; // TODO: Relayer can manipulate this value, for ex set it to 0
     uint256 refundGasLimit; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily small value to prevent refund
     bytes data;
 }

@@ -27,13 +27,17 @@ contract TATransactionAllocationTest is
             return;
         }
 
+        if (tx.gasprice == 0) {
+            fail("Gas Price is 0. Please set it to 1 gwei or more.");
+        }
+
         super.setUp();
 
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
-            uint256 delegatorPoolPremiumShare = 1000;
+            uint256 delegatorPoolPremiumShare = 100;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
@@ -57,10 +61,10 @@ contract TATransactionAllocationTest is
             txns.push(
                 Transaction({
                     to: tm,
-                    data: abi.encodeWithSelector(tm.mockUpdate.selector, i),
-                    fixedGas: 25000,
-                    prePaymentGasLimit: 10 ** 5,
-                    gasLimit: 10 ** 5,
+                    data: abi.encodeWithSelector(tm.incrementA.selector, i + 1),
+                    fixedGas: 21000,
+                    prePaymentGasLimit: 10000,
+                    gasLimit: 10 ** 6,
                     refundGasLimit: 10 ** 5
                 })
             );
@@ -128,6 +132,7 @@ contract TATransactionAllocationTest is
 
     function testTransactionExecution() external atSnapshot {
         vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        console2.log("gasprice", tx.gasprice);
 
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray();
@@ -169,6 +174,7 @@ contract TATransactionAllocationTest is
         }
 
         assertEq(executionCount, txns.length);
+        assertEq(tm.getA(), 55);
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {

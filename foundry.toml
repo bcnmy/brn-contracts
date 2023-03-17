@@ -6,4 +6,7 @@ via_ir = true
 fs_permissions = [{ access = "read-write", path = "./" }]
 ffi = true
 
+[profile.test]
+gas_price = 20000000000
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config

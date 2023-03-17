@@ -25,6 +25,15 @@ contract ApplicationMock is IApplicationMockEventsErrors, Ownable, IApplication 
         return true;
     }
 
+    function incrementA(uint256 _i) external returns (bool) {
+        a += _i;
+        return true;
+    }
+
+    function getA() external view returns (uint256) {
+        return a;
+    }
+
     // add this to be excluded from coverage report
     function test() public {}
 

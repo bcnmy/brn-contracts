@@ -9,6 +9,8 @@ import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
 
+import "forge-std/console.sol";
+
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     function _getHashedModIndex(bytes calldata _calldata) internal view returns (uint256 relayerIndex) {
         RMStorage storage ds = getRMStorage();
@@ -69,120 +71,116 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     function _executeTx(Transaction calldata _req, uint256 _index)
         internal
         returns (
-            bool success,
-            bool refundSuccess,
-            bytes memory returndata,
-            uint256 totalGasConsumed,
-            uint256 relayerPayment,
-            uint256 premiumsGenerated,
-            TokenAddress paymentTokenAddress
+            bool, /* success */
+            bool, /* refundSuccess */
+            bytes memory, /* returndata */
+            uint256, /* totalGasConsumed */
+            uint256, /* relayerPayment */
+            uint256, /* premiumsGenerated */
+            TokenAddress /* paymentTokenAddress */
         )
     {
         uint256 gas = gasleft();
+        uint256 preExecutionGas = gasleft();
 
         // TODO: Non native token support
         // TODO: Study ERC4337 EP implementation to get any insights on this process
 
-        uint256 expectedGasConsumed = _req.gasLimit + _req.prePaymentGasLimit + _req.fixedGas;
+        uint256 expectedGasConsumed = _req.gasLimit + _req.prePaymentGasLimit + _req.fixedGas + _req.refundGasLimit;
         uint256 gasPremium = expectedGasConsumed * RELAYER_PREMIUM_PERCENTAGE / (100 * PERCENTAGE_MULTIPLIER);
-        uint256 expectedPrepayment = (expectedGasConsumed + gasPremium) * tx.gasprice;
+        TokenAddress paymentTokenAddress;
 
         // Ask the application to prepay gas
-        relayerPayment = address(this).balance;
+        uint256 prePayment = address(this).balance;
+        uint256 relayerRefund = 0;
         try _req.to.prepayGas{gas: _req.prePaymentGasLimit}(_req, expectedGasConsumed + gasPremium) returns (
             address _paymentTokenAddress
         ) {
+            uint256 expectedPrepayment = (expectedGasConsumed + gasPremium) * tx.gasprice;
             paymentTokenAddress = TokenAddress.wrap(_paymentTokenAddress);
 
             if (!getRMStorage().isGasTokenSupported[paymentTokenAddress]) {
-                success = false;
-                refundSuccess = false;
-                returndata = abi.encodeWithSelector(GasTokenNotSuported.selector, paymentTokenAddress);
-                totalGasConsumed = gas - gasleft();
-                premiumsGenerated = 0;
                 return (
-                    success,
-                    refundSuccess,
-                    returndata,
-                    totalGasConsumed,
-                    relayerPayment,
-                    premiumsGenerated,
+                    false,
+                    false,
+                    abi.encodeWithSelector(GasTokenNotSuported.selector, paymentTokenAddress),
+                    gas - gasleft(),
+                    0,
+                    0,
                     paymentTokenAddress
                 );
             }
 
             // TODO: Non native token support
-            relayerPayment = address(this).balance - relayerPayment;
-            if (relayerPayment < expectedPrepayment) {
-                success = false;
-                refundSuccess = false;
-                returndata = abi.encodeWithSelector(InsufficientPrepayment.selector, expectedPrepayment, relayerPayment);
-                totalGasConsumed = gas - gasleft();
-                premiumsGenerated = 0;
+            prePayment = address(this).balance - prePayment;
+            if (prePayment != expectedPrepayment) {
                 return (
-                    success,
-                    refundSuccess,
-                    returndata,
-                    totalGasConsumed,
-                    relayerPayment,
-                    premiumsGenerated,
+                    false,
+                    false,
+                    abi.encodeWithSelector(InsufficientPrepayment.selector, expectedPrepayment, prePayment),
+                    gas - gasleft(),
+                    prePayment,
+                    0,
                     paymentTokenAddress
                 );
             }
-
-            emit PrepaymentReceived(_index, relayerPayment, paymentTokenAddress);
+            relayerRefund = prePayment - gasPremium * tx.gasprice;
+            emit PrepaymentReceived(_index, prePayment, paymentTokenAddress);
         } catch (bytes memory reason) {
-            success = false;
-            refundSuccess = false;
-            returndata = abi.encodeWithSelector(PrepaymentFailed.selector, reason);
-            totalGasConsumed = gas - gasleft();
-            premiumsGenerated = 0;
-            paymentTokenAddress = TokenAddress.wrap(address(0));
             return (
-                success,
-                refundSuccess,
-                returndata,
-                totalGasConsumed,
-                relayerPayment,
-                premiumsGenerated,
-                paymentTokenAddress
+                false,
+                false,
+                abi.encodeWithSelector(PrepaymentFailed.selector, reason),
+                gas - gasleft(),
+                0,
+                0,
+                TokenAddress.wrap(address(0))
             );
         }
 
-        premiumsGenerated = gasPremium * tx.gasprice;
+        emit GenericGasConsumed("PrepaymentGas", gas - gasleft());
+        gas = gasleft();
+
         // Execute the transaction
-        (success, returndata) = address(_req.to).call{gas: _req.gasLimit}(_req.data);
+        (bool success, bytes memory returndata) = address(_req.to).call{gas: _req.gasLimit}(_req.data);
+
+        emit GenericGasConsumed("ExecutionGas", gas - gasleft());
+        gas = gasleft();
 
         // Refund the excess gas if needed
-        uint256 actualGasConsumed = gas - gasleft() + _req.fixedGas + gasPremium;
-        if (expectedGasConsumed > actualGasConsumed + _req.refundGasLimit) {
+        uint256 actualGasConsumed = preExecutionGas - gasleft() + _req.fixedGas + gasPremium + _req.refundGasLimit;
+        bool refundSuccess;
+        if (expectedGasConsumed > actualGasConsumed) {
             uint256 refundAmount = (expectedGasConsumed - actualGasConsumed) * tx.gasprice;
 
             try _req.to.refundGas{value: refundAmount, gas: _req.refundGasLimit}() {
                 refundSuccess = true;
-                relayerPayment -= refundAmount;
-                emit GasFeeRefunded(_index, expectedGasConsumed - actualGasConsumed, refundAmount, paymentTokenAddress);
+                relayerRefund -= refundAmount;
+                emit GasFeeRefunded(_index, expectedGasConsumed, actualGasConsumed, paymentTokenAddress);
             } catch (bytes memory reason) {
-                refundSuccess = false;
                 returndata = abi.encodeWithSelector(GasFeeRefundFailed.selector, reason);
-                totalGasConsumed = gas - gasleft();
                 return (
                     success,
                     refundSuccess,
                     returndata,
-                    totalGasConsumed,
-                    relayerPayment,
-                    premiumsGenerated,
+                    gas - gasleft(),
+                    relayerRefund,
+                    gasPremium * tx.gasprice,
                     paymentTokenAddress
                 );
             }
         }
 
-        totalGasConsumed = gas - gasleft();
+        emit GenericGasConsumed("RefundGas", gas - gasleft());
 
-        emit GenericGasConsumed("executionGas", totalGasConsumed);
         return (
-            success, refundSuccess, returndata, totalGasConsumed, relayerPayment, premiumsGenerated, paymentTokenAddress
+            success,
+            refundSuccess,
+            returndata,
+            gas - gasleft(),
+            relayerRefund,
+            gasPremium * tx.gasprice,
+            paymentTokenAddress
         );
     }
 
@@ -241,6 +239,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 uint256 premiumsGenerated,
             ) = _executeTx(_req, i);
 
+            emit TransactionStatus(
+                i, success, refundSuccess, returndata, totalGasConsumed, relayerRefund, premiumsGenerated
+            );
+
             successes[i] = success;
             returndatas[i] = returndata;
             totalGas += totalGasConsumed;
@@ -254,8 +256,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 ++i;
             }
         }
-
-        emit GenericGasConsumed("ExecutionGas", gasLeft - gasleft());
 
         gasLeft = gasleft();
         TAStorage storage ts = getTAStorage();

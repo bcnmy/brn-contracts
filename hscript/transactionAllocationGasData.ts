@@ -1,28 +1,31 @@
 import { BigNumber, BigNumberish, ContractReceipt, Wallet } from 'ethers';
-import { hexValue, parseEther } from 'ethers/lib/utils';
+import { formatUnits, hexValue, parseEther } from 'ethers/lib/utils';
 import { ethers, network } from 'hardhat';
-import { ITransactionAllocator, ApplicationMock } from '../typechain-types';
+import { ITransactionAllocator, ApplicationMock, MockERC20 } from '../typechain-types';
 import { deploy } from './deploy';
 import { createObjectCsvWriter } from 'csv-writer';
 import { resolve } from 'path';
 import { mkdirSync, existsSync } from 'fs';
-import { ForwardRequestStruct } from '../typechain-types/src/transaction-allocator/interfaces/ITransactionAllocator';
+import { TransactionStruct } from '../typechain-types/src/interfaces/IApplication';
+import { mine } from '@nomicfoundation/hardhat-network-helpers';
 
-const totalTransactions = 50;
-const totalRelayers = 15;
+const totalTransactions = 100;
+const totalRelayers = 20;
 
 const blocksPerWindow = 1000000;
 const relayersPerWindow = 10;
 const penaltyDelayBlocks = 10;
-const withdrawDelay = 10;
+const delegatorSharePercent = 1 * 100; // 1%
+const supportedTokens = ['0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'];
 
 let stakeArray: BigNumberish[] = [];
+let delegationArray: BigNumberish[] = [];
 let cdfArray: BigNumberish[] = [];
 
 const getGenericGasConsumption = (
   txnAllocator: ITransactionAllocator,
   transactionReceipt: ContractReceipt
-): Record<string, string> => {
+): [string, BigNumber][] => {
   const logs = transactionReceipt.logs
     .map((log) => {
       try {
@@ -32,31 +35,58 @@ const getGenericGasConsumption = (
     .filter((log) => log);
   const gasLogs = logs.filter((log) => log!.name === 'GenericGasConsumed');
   if (gasLogs.length == 0) throw new Error(`Gas Log array not found in logs:${logs}`);
-  return Object.fromEntries(
-    gasLogs.map((log) => [log!.args.label, log!.args.gasConsumed.toString()])
-  );
+  // return Object.fromEntries(
+  //   gasLogs.map((log) => [log!.args.label, log!.args.gasConsumed.toString()])
+  // );
+  const uniqueLabels = [...new Set(gasLogs.map((log) => log!.args.label))];
+  return uniqueLabels.map((label) => {
+    const gas = gasLogs
+      .filter((log) => log!.args.label === label)
+      .reduce((acc, log) => acc.add(log!.args.gasConsumed), BigNumber.from(0));
+    return [label, gas];
+  });
 };
 
-const setupRelayers = async (txnAllocator: ITransactionAllocator, count: number) => {
+const setupRelayers = async (
+  txnAllocator: ITransactionAllocator,
+  bondToken: MockERC20,
+  count: number
+) => {
   console.log('Setting up relayers...');
-  const amount = ethers.utils.parseEther('10');
+  const amount = ethers.utils.parseEther('10000');
   const wallets = [];
   const gasConsumed = [];
   for (let i = 0; i < count; i++) {
     try {
       const multiplier = Math.floor(Math.random() * 10) + 1;
+      const stake = amount.mul(multiplier);
       const randomWallet = new Wallet(ethers.Wallet.createRandom().privateKey, ethers.provider);
       await network.provider.send('hardhat_setBalance', [
         randomWallet.address,
         hexValue(parseEther('100')),
       ]);
+      await bondToken.mint(randomWallet.address, stake);
+      await bondToken.connect(randomWallet).approve(txnAllocator.address, stake);
       const { wait } = await txnAllocator
         .connect(randomWallet)
-        .register(stakeArray, amount.mul(multiplier), [randomWallet.address], 'test');
+        .register(
+          stakeArray,
+          delegationArray,
+          amount.mul(multiplier),
+          [randomWallet.address],
+          'test',
+          delegatorSharePercent
+        );
       const receipt = await wait();
       stakeArray = await txnAllocator.getStakeArray();
-      cdfArray = await txnAllocator.getCdf();
-      console.log(`Relayer ${i} registered successfully with ${multiplier} ETH`);
+      cdfArray = await txnAllocator.getCdfArray();
+      delegationArray = await txnAllocator.getDelegationArray();
+      console.log(
+        `Relayer ${i} registered successfully with ${formatUnits(
+          stake,
+          await bondToken.decimals()
+        )} BICO`
+      );
       console.log(`Stake array: ${stakeArray}`);
       console.log(`CDF array: ${cdfArray}`);
 
@@ -68,13 +98,14 @@ const setupRelayers = async (txnAllocator: ITransactionAllocator, count: number)
       console.log(e);
     }
   }
+  await mine(10 * blocksPerWindow);
   return { wallets, gasConsumed };
 };
 
 const getGasConsumption = (
   txnAllocator: ITransactionAllocator,
   transactionReceipt: ContractReceipt
-): Record<string, BigNumberish> => {
+) => {
   const totalGas = transactionReceipt.gasUsed;
   const logs = transactionReceipt.logs
     .map((log) => {
@@ -85,9 +116,37 @@ const getGasConsumption = (
     .filter((log) => log);
   const genericGasConsumedData = getGenericGasConsumption(txnAllocator, transactionReceipt);
   return {
-    ...genericGasConsumedData,
     totalGas,
+    genericGasConsumedData,
   };
+};
+
+const getInternalTxResult = (
+  txnAllocator: ITransactionAllocator,
+  transactionReceipt: ContractReceipt
+) => {
+  const logs = transactionReceipt.logs
+    .map((log) => {
+      try {
+        return txnAllocator.interface.parseLog(log);
+      } catch (e) {}
+    })
+    .filter((log) => log)
+    .filter((log) => log?.name === 'TransactionStatus');
+
+  if (logs.length === 0) {
+    throw new Error(`TransactionStatus log not found`);
+  }
+
+  return logs.map((log) => ({
+    index: log?.args[0],
+    success: log?.args[1],
+    refundSuccess: log?.args[2],
+    returndata: log?.args[3],
+    totalGasConsumed: log?.args[4],
+    relayerRefund: log?.args[5],
+    premiumsGenerated: log?.args[6],
+  }));
 };
 
 const generateTransactions = async (
@@ -95,7 +154,6 @@ const generateTransactions = async (
   txMock: ApplicationMock,
   count: number
 ) => {
-  const chainId = await ethers.provider.getNetwork().then((n) => n.chainId);
   return Promise.all(
     new Array(count).fill(0).map(async (_, i) => {
       const randomWallet = new Wallet(ethers.Wallet.createRandom().privateKey, ethers.provider);
@@ -103,10 +161,13 @@ const generateTransactions = async (
         randomWallet.address,
         hexValue(parseEther('10')),
       ]);
-      const tx: ForwardRequestStruct = {
+      const tx: TransactionStruct = {
         to: txMock.address,
         data: txMock.interface.encodeFunctionData('mockUpdate', [i]),
         gasLimit: 1000000,
+        fixedGas: 21000,
+        prePaymentGasLimit: 10000,
+        refundGasLimit: 10000,
       };
       return tx;
     })
@@ -115,22 +176,24 @@ const generateTransactions = async (
 
 (async () => {
   const allocationCsvData: any[] = [];
-  const absenceProofCsvData: any[] = [];
-
   const today: string = new Date().toLocaleDateString('en-GB').split('/').reverse().join('-');
   existsSync(resolve(__dirname, today)) || mkdirSync(resolve(__dirname, today));
 
-  const { txnAllocator, txMock } = await deploy({
+  const { txnAllocator, txMock, token } = await deploy({
     blocksPerWindow,
     relayersPerWindow,
     penaltyDelayBlocks,
-    withdrawDelay,
+    bondTokenAddress: ethers.constants.AddressZero,
+    supportedTokens,
   });
+  await network.provider.send('hardhat_setBalance', [txMock.address, hexValue(parseEther('100'))]);
+
   console.log('Generating transactions...');
   const txns = await generateTransactions(txnAllocator, txMock, totalTransactions);
   console.log('Transactions generated');
   const { wallets: relayers, gasConsumed: registrationGasConsumed } = await setupRelayers(
     txnAllocator,
+    token,
     totalRelayers
   );
 
@@ -148,12 +211,12 @@ const generateTransactions = async (
   console.log('Executing transactions...');
   for (let i = 0; i < relayers.length; i++) {
     const relayer = relayers[i];
-    const blockNumber = await ethers.provider.getBlockNumber();
     const [txnAllocated, relayerGenerationIteration, selectedRelayerCdfIndex] =
       await txnAllocator.allocateTransaction({
-        relayer: relayer.address,
+        relayerAddress: relayer.address,
         requests: txns,
         cdf: cdfArray,
+        currentCdfLogIndex: 1,
       });
 
     console.log(`Alloted ${txnAllocated.length} transactions to ${i}th relayer ${relayer.address}`);
@@ -172,40 +235,49 @@ const generateTransactions = async (
 
     console.log(`Transaction batch of length ${txnAllocated.length} for ${i}th relayer`);
 
-    const { wait, hash } = await txnAllocator
+    const { wait } = await txnAllocator
       .connect(relayer)
       .execute(
         txnAllocated,
         cdfArray,
         relayerGenerationIterationDeduplicated,
-        selectedRelayerCdfIndex
+        selectedRelayerCdfIndex,
+        1,
+        0
       );
     const receipt = await wait();
     if (receipt.status === 0) throw new Error(`Transaction failed: ${receipt}`);
-    const { totalGas, VerificationGas, ExecutionGas, OtherOverhead } = getGasConsumption(
-      txnAllocator,
-      receipt
-    );
-    console.log(
-      `Verification Gas used for transaction batch of length ${
-        txnAllocated.length
-      } for ${i}th relayer: ${VerificationGas.toString()}. Tx Hash: ${hash}`
-    );
+
+    const internalTxResults = getInternalTxResult(txnAllocator, receipt);
+
+    if (internalTxResults.length !== txnAllocated.length) {
+      throw new Error(
+        `Internal tx count mismatch: ${internalTxResults.length} vs ${txnAllocated.length}`
+      );
+    }
+    for (const tx of internalTxResults) {
+      if (!tx.success) throw new Error(`Transaction failed: ${JSON.stringify(tx, null, 2)}`);
+    }
+
+    console.log(`Transaction batch of length ${txnAllocated.length} for ${i}th relayer executed`);
+
+    const { totalGas, genericGasConsumedData } = getGasConsumption(txnAllocator, receipt);
+    const genericGasConsumed = genericGasConsumedData.map(([label, gas]) => [
+      label,
+      gas.toString(),
+    ]);
+    const genericGasConsumedPerTx = genericGasConsumedData.map(([label, gas]) => [
+      `${label}PerTx`,
+      gas.div(txnAllocated.length).toString(),
+    ]);
 
     allocationCsvData.push({
       relayerCount: totalRelayers,
       generationIterationCount: relayerGenerationIterationDeduplicated.length,
       txCount: txnAllocated.length,
       totalGas: totalGas.toString(),
-      executionGas: ExecutionGas.toString(),
-      verificationGas: VerificationGas.toString(),
-      verificationGasPerTx: BigNumber.from(VerificationGas).div(txnAllocated.length).toString(),
-      otherOverhead: OtherOverhead.toString(),
-      totalOverhead: BigNumber.from(VerificationGas).add(OtherOverhead).toString(),
-      totalOverheadPerTx: BigNumber.from(VerificationGas)
-        .add(OtherOverhead)
-        .div(txnAllocated.length)
-        .toString(),
+      ...Object.fromEntries(genericGasConsumed),
+      ...Object.fromEntries(genericGasConsumedPerTx),
     });
   }
   await createObjectCsvWriter({
