@@ -3,6 +3,8 @@
 pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
+import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
 
@@ -17,6 +19,7 @@ abstract contract TARelayerManagementStorage {
         // No of registered relayers
         uint256 relayerCount;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
+        uint256 totalStake;
         // Update log of a relayer's index in the CDF -> Relayer Address over time
         mapping(uint256 => RelayerIndexToRelayerUpdateInfo[]) relayerIndexToRelayerUpdationLog;
         // TODO: Dynamic?
@@ -28,6 +31,10 @@ abstract contract TARelayerManagementStorage {
         /// Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
         mapping(TokenAddress => bool) isGasTokenSupported;
+        // Constant Rate Rewards
+        uint256 unpaidProtocolRewards;
+        uint256 lastUnpaidRewardUpdatedTimestamp;
+        FixedPointType totalShares;
     }
 
     /* solhint-disable no-inline-assembly */

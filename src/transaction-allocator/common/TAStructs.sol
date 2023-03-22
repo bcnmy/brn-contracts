@@ -2,6 +2,7 @@
 pragma solidity 0.8.19;
 
 import "src/interfaces/IApplication.sol";
+import "src/library/FixedPointArithmetic.sol";
 import "./TATypes.sol";
 
 // Relayer Information
@@ -10,6 +11,8 @@ struct RelayerInfo {
     string endpoint;
     uint256 index;
     uint256 delegatorPoolPremiumShare; // *100
+    uint256 unpaidProtocolRewards;
+    FixedPointType rewardShares;
     RelayerAccountAddress[] relayerAccountAddresses;
     mapping(RelayerAccountAddress => bool) isAccount;
 }

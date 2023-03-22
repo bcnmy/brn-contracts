@@ -79,6 +79,7 @@ contract TAProxy is
         rms.cdfHashUpdateLog.push(
             CdfHashUpdateInfo({cdfHash: keccak256(abi.encodePacked(new uint32[](0))), windowIndex: 0})
         );
+        rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
 
     /// @notice Adds a new module

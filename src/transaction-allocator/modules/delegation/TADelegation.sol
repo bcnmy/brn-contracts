@@ -50,7 +50,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     ) internal {
         TADStorage storage ds = getTADStorage();
 
-        FixedPointType sharePrice_ = sharePrice(_relayerAddress, _pool);
+        FixedPointType sharePrice_ = delegationSharePrice(_relayerAddress, _pool);
         FixedPointType sharesMinted = (_delegatedAmount.toFixedPointType() / sharePrice_);
 
         ds.shares[_relayerAddress][_delegatorAddress][_pool] =
@@ -58,6 +58,25 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         ds.totalShares[_relayerAddress][_pool] = ds.totalShares[_relayerAddress][_pool] + sharesMinted;
 
         emit SharesMinted(_relayerAddress, _delegatorAddress, _pool, _delegatedAmount, sharesMinted, sharePrice_);
+    }
+
+    function _updateRelayerProtocolRewards(RelayerAddress _relayer) internal {
+        if (_isStakedRelayer(_relayer)) {
+            _updateProtocolRewards();
+            (uint256 relayerRewards, uint256 delegatorRewards) = _burnRewardSharesForRelayerAndGetRewards(_relayer);
+
+            // Process delegator rewards
+            RMStorage storage rs = getRMStorage();
+            if (delegatorRewards > 0) {
+                _addDelegatorRewards(_relayer, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
+            }
+
+            // Process relayer rewards
+            if (relayerRewards > 0) {
+                rs.relayerInfo[_relayer].unpaidProtocolRewards += relayerRewards;
+                emit RelayerProtocolRewardsGenerated(_relayer, relayerRewards);
+            }
+        }
     }
 
     function delegate(
@@ -74,6 +93,8 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     {
         RMStorage storage rms = getRMStorage();
         TADStorage storage ds = getTADStorage();
+
+        _updateRelayerProtocolRewards(_relayerAddress);
 
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
@@ -107,7 +128,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     {
         TADStorage storage ds = getTADStorage();
 
-        uint256 rewardsEarned_ = rewardsEarned(_relayerAddress, _pool, _delegatorAddress);
+        uint256 rewardsEarned_ = delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
 
         if (rewardsEarned_ != 0) {
             ds.unclaimedRewards[_relayerAddress][_pool] -= rewardsEarned_;
@@ -128,6 +149,8 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     ) external override verifyStakeArrayHash(_currentStakeArray) verifyDelegationArrayHash(_prevDelegationArray) {
         TADStorage storage ds = getTADStorage();
         RMStorage storage rms = getRMStorage();
+
+        _updateRelayerProtocolRewards(_relayerAddress);
 
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
@@ -156,7 +179,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         emit DelegationRemoved(_relayerAddress, delegatorAddress, delegation_);
     }
 
-    function sharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+    function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         public
         view
         override
@@ -173,7 +196,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return (totalDelegation_ + unclaimedRewards_) / totalShares_;
     }
 
-    function rewardsEarned(
+    function delegationRewardsEarned(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddres,
         DelegatorAddress _delegatorAddress
@@ -182,7 +205,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
         FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].toFixedPointType();
-        FixedPointType rewards = shares_ * sharePrice(_relayerAddress, _tokenAddres) - delegation_;
+        FixedPointType rewards = shares_ * delegationSharePrice(_relayerAddress, _tokenAddres) - delegation_;
 
         return rewards.toUint256();
     }

@@ -29,4 +29,5 @@ interface ITADelegationEventsErrors {
     event DelegationRemoved(
         RelayerAddress indexed relayerAddress, DelegatorAddress indexed delegatorAddress, uint256 amount
     );
+    event RelayerProtocolRewardsGenerated(RelayerAddress indexed relayerAddress, uint256 indexed amount);
 }

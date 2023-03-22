@@ -17,6 +17,8 @@ import "forge-std/console2.sol";
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+    using Uint256WrapperHelper for uint256;
+    using FixedPointTypeHelper for FixedPointType;
 
     ////////////////////////////// Hash Functions //////////////////////////////
     function _hashUint32ArrayCalldata(uint32[] calldata _array) internal pure returns (bytes32) {
@@ -276,6 +278,94 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         emit DelegatorRewardsAdded(_relayer, _token, _amount);
     }
 
+    ////////////////////////// Constant Rate Rewards //////////////////////////
+    function _protocolRewardRate() internal view returns (uint256) {
+        return (
+            BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.toFixedPointType() * MINIMUM_STAKE_AMOUNT.toFixedPointType()
+                * fixedPointSqrt(getRMStorage().relayerCount.toFixedPointType())
+        ).toUint256();
+    }
+
+    function _getUpdatedUnpaidProtocolRewards() internal view returns (uint256) {
+        RMStorage storage rs = getRMStorage();
+        return
+            rs.unpaidProtocolRewards + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
+    }
+
+    function _updateProtocolRewards() internal {
+        // Update unpaid rewards
+        RMStorage storage rs = getRMStorage();
+
+        if (block.timestamp == rs.lastUnpaidRewardUpdatedTimestamp) {
+            return;
+        }
+
+        // console2.log("Updating Protocol Rewards", block.timestamp, rs.lastUnpaidRewardUpdatedTimestamp);
+
+        rs.unpaidProtocolRewards = _getUpdatedUnpaidProtocolRewards();
+        rs.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+    }
+
+    function _protocolRewardRelayerSharePrice() internal view returns (FixedPointType) {
+        RMStorage storage rs = getRMStorage();
+
+        if (rs.totalShares == uint256(0).toFixedPointType()) {
+            return uint256(1).toFixedPointType();
+        }
+
+        // console2.log("Total Stake", FixedPointType.unwrap(rs.totalStake.toFixedPointType()));
+        // console2.log("Unpaid Rewards", FixedPointType.unwrap(rs.unpaidProtocolRewards.toFixedPointType()));
+        // console2.log("Total Shares", FixedPointType.unwrap(rs.totalShares));
+
+        return (rs.totalStake.toFixedPointType() + rs.unpaidProtocolRewards.toFixedPointType()) / rs.totalShares;
+    }
+
+    function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
+        RMStorage storage rs = getRMStorage();
+
+        FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
+        // console2.log("Reward Shares", FixedPointType.unwrap(rs.relayerInfo[_relayer].rewardShares));
+        // console2.log("Share Price", FixedPointType.unwrap(_protocolRewardRelayerSharePrice()));
+        // console2.log("Total value", FixedPointType.unwrap(totalValue));
+        // console2.log("Stake", FixedPointType.unwrap(rs.relayerInfo[_relayer].stake.toFixedPointType()));
+
+        FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.toFixedPointType();
+        return rewards.toUint256();
+    }
+
+    function _splitRewards(uint256 _totalRewards, uint256 _delegatorRewardSharePercentage)
+        internal
+        pure
+        returns (uint256, uint256)
+    {
+        uint256 delegatorRewards = (_totalRewards * _delegatorRewardSharePercentage) / (100 * PERCENTAGE_MULTIPLIER);
+        return (_totalRewards - delegatorRewards, delegatorRewards);
+    }
+
+    function _burnRewardSharesForRelayerAndGetRewards(RelayerAddress _relayer) internal returns (uint256, uint256) {
+        RMStorage storage rs = getRMStorage();
+
+        // console2.log("Pre rewards check", block.timestamp);
+
+        uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer);
+        if (rewards == 0) {
+            return (0, 0);
+        }
+
+        // console2.log("Post rewards check", block.timestamp, rewards);
+
+        FixedPointType rewardShares = rewards.toFixedPointType() / _protocolRewardRelayerSharePrice();
+        rs.relayerInfo[_relayer].rewardShares = rs.relayerInfo[_relayer].rewardShares - rewardShares;
+        rs.totalShares = rs.totalShares - rewardShares;
+
+        (uint256 relayerRewards, uint256 delegatorRewards) =
+            _splitRewards(rewards, rs.relayerInfo[_relayer].delegatorPoolPremiumShare);
+
+        emit RelayerProtocolRewardSharesBurnt(_relayer, rewardShares, rewards, relayerRewards, delegatorRewards);
+
+        return (relayerRewards, delegatorRewards);
+    }
+
     ////////////////////////////// Misc //////////////////////////////
     function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
         if (_token == NATIVE_TOKEN) {
@@ -297,5 +387,13 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
             token.safeTransfer(_to, _amount);
         }
+    }
+
+    function _scaleStake(uint256 _stake) internal pure returns (uint32) {
+        return (_stake / STAKE_SCALING_FACTOR).toUint32();
+    }
+
+    function _unscaleStake(uint32 _scaledStake) internal pure returns (uint256) {
+        return _scaledStake * STAKE_SCALING_FACTOR;
     }
 }

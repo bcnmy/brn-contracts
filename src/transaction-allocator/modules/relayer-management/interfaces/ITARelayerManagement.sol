@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.19;
 
+import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/interfaces/IDebug_GasConsumption.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
@@ -12,6 +13,7 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function getCdfArray() external view returns (uint16[] memory);
 
+    ////////////////////////// Relayer Registration //////////////////////////
     function register(
         uint32[] calldata _previousStakeArray,
         uint32[] calldata _currentDelegationArray,
@@ -33,6 +35,9 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     ) external;
 
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts) external;
+
+    ////////////////////////// Constant Rate Rewards //////////////////////////
+    function claimProtocolReward() external;
 
     ////////////////////// Getters //////////////////////
 

@@ -3,6 +3,7 @@
 pragma solidity 0.8.19;
 
 import "../TATypes.sol";
+import "src/library/FixedPointArithmetic.sol";
 
 interface ITAHelpers {
     error InvalidStakeArrayHash();
@@ -18,6 +19,14 @@ interface ITAHelpers {
     error RelayerAddressDoesNotMatchSelectedRelayer();
 
     event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
+    event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);
+    event RelayerProtocolRewardSharesBurnt(
+        RelayerAddress indexed relayer,
+        FixedPointType indexed sharesBurnt,
+        uint256 indexed rewards,
+        uint256 relayerRewards,
+        uint256 delegatorRewards
+    );
     event CdfArrayUpdateQueued(
         bytes32 indexed cdfArrayHash, uint256 indexed effectiveWindowIndex, uint256 indexed cdfLogIndex
     );

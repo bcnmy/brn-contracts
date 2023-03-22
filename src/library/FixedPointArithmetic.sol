@@ -2,7 +2,15 @@
 
 pragma solidity 0.8.19;
 
-uint256 constant MULTIPLIER = 10 ** 24;
+import "openzeppelin-contracts/contracts/utils/math/Math.sol";
+
+using Math for uint256;
+using Uint256WrapperHelper for uint256;
+using FixedPointTypeHelper for FixedPointType;
+
+uint256 constant PRECISION = 24;
+uint256 constant MULTIPLIER = 10 ** PRECISION;
+uint256 constant MULTIPLIER_SQRT = 10 ** (PRECISION / 2);
 
 type FixedPointType is uint256;
 
@@ -33,6 +41,10 @@ function fixedPointMultiply(FixedPointType _a, FixedPointType _b) pure returns (
 
 function fixedPointDivide(FixedPointType _a, FixedPointType _b) pure returns (FixedPointType) {
     return FixedPointType.wrap((FixedPointType.unwrap(_a) * MULTIPLIER) / FixedPointType.unwrap(_b));
+}
+
+function fixedPointSqrt(FixedPointType _a) pure returns (FixedPointType) {
+    return FixedPointType.wrap(_a.toUint256().sqrt() * MULTIPLIER_SQRT);
 }
 
 function fixedPointEquality(FixedPointType _a, FixedPointType _b) pure returns (bool) {

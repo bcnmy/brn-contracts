@@ -11,6 +11,7 @@ import "./TARelayerManagementStorage.sol";
 import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
 import "../../common/TAConstants.sol";
+import "src/library/FixedPointArithmetic.sol";
 
 import "forge-std/console2.sol";
 
@@ -22,10 +23,10 @@ contract TARelayerManagement is
 {
     using SafeCast for uint256;
     using SafeERC20 for IERC20;
+    using Uint256WrapperHelper for uint256;
+    using FixedPointTypeHelper for FixedPointType;
 
-    function _scaleStake(uint256 _stake) internal pure returns (uint32) {
-        return (_stake / STAKE_SCALING_FACTOR).toUint32();
-    }
+    ////////////////////////// Relayer Registration //////////////////////////
 
     function _addNewRelayerToDelegationArray(uint32[] calldata _delegationArray)
         internal
@@ -33,7 +34,9 @@ contract TARelayerManagement is
         returns (uint32[] memory)
     {
         uint256 delegationArrayLength = _delegationArray.length;
-        uint32[] memory newDelegationArrayLength = new uint32[](delegationArrayLength + 1);
+        uint32[] memory newDelegationArrayLength = new uint32[](
+            delegationArrayLength + 1
+        );
 
         for (uint256 i = 0; i < delegationArrayLength;) {
             newDelegationArrayLength[i] = _delegationArray[i];
@@ -94,7 +97,9 @@ contract TARelayerManagement is
         returns (uint32[] memory)
     {
         uint256 newDelegationArrayLength = _delegationArray.length - 1;
-        uint32[] memory newDelegationArray = new uint32[](newDelegationArrayLength);
+        uint32[] memory newDelegationArray = new uint32[](
+            newDelegationArrayLength
+        );
 
         for (uint256 i = 0; i < newDelegationArrayLength;) {
             if (i == _index) {
@@ -177,8 +182,10 @@ contract TARelayerManagement is
         node.endpoint = _endpoint;
         node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
         node.index = ds.relayerCount;
+        node.rewardShares = _mintProtocolRewardShares(_stake);
         _setRelayerAccountAddresses(relayerAddress, _accounts);
         _updateRelayerIndexToRelayer(node.index, relayerAddress);
+        ds.totalStake += _stake;
         ++ds.relayerCount;
 
         // Update stake array and hash
@@ -201,8 +208,11 @@ contract TARelayerManagement is
     {
         RMStorage storage ds = getRMStorage();
 
+        claimProtocolReward();
+
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
+        ds.totalShares = ds.totalShares - node.rewardShares;
         uint256 n = ds.relayerCount - 1;
         uint256 nodeIndex = node.index;
         uint256 stake = node.stake;
@@ -219,6 +229,7 @@ contract TARelayerManagement is
         }
 
         --ds.relayerCount;
+        ds.totalStake -= stake;
 
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _removeRelayerFromStakeArray(_previousStakeArray, nodeIndex);
@@ -393,6 +404,41 @@ contract TARelayerManagement is
 
     ////////////////////////// Relayer Configuration //////////////////////////
     // TODO: Jailed relayers should not be able to update their configuration
+
+    ////////////////////////// Constant Rate Rewards //////////////////////////
+    function claimProtocolReward() public override onlyStakedRelayer(RelayerAddress.wrap(msg.sender)) {
+        _updateProtocolRewards();
+
+        // Calculate Rewards
+        (uint256 relayerReward, uint256 delegatorRewards) =
+            _burnRewardSharesForRelayerAndGetRewards(RelayerAddress.wrap(msg.sender));
+
+        // Process Delegator Rewards
+        RMStorage storage rs = getRMStorage();
+        _addDelegatorRewards(
+            RelayerAddress.wrap(msg.sender), TokenAddress.wrap(address(rs.bondToken)), delegatorRewards
+        );
+
+        // Process Relayer Rewards
+        relayerReward += rs.relayerInfo[RelayerAddress.wrap(msg.sender)].unpaidProtocolRewards;
+        rs.relayerInfo[RelayerAddress.wrap(msg.sender)].unpaidProtocolRewards = 0;
+        _transfer(TokenAddress.wrap(address(rs.bondToken)), msg.sender, relayerReward);
+
+        emit RelayerProtocolRewardsClaimed(RelayerAddress.wrap(msg.sender), relayerReward);
+    }
+
+    function _mintProtocolRewardShares(uint256 _amount) internal returns (FixedPointType) {
+        _updateProtocolRewards();
+
+        RMStorage storage rs = getRMStorage();
+
+        FixedPointType rewardShares = _amount.toFixedPointType() / _protocolRewardRelayerSharePrice();
+        rs.totalShares = rs.totalShares + rewardShares;
+
+        emit RelayerProtocolRewardMinted(rewardShares);
+
+        return rewardShares;
+    }
 
     ////////////////////////// Getters //////////////////////////
     function relayerCount() external view override returns (uint256) {

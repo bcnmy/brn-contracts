@@ -19,12 +19,12 @@ interface ITADelegation is ITADelegationEventsErrors {
         RelayerAddress _relayerAddress
     ) external;
 
-    function sharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+    function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
         view
         returns (FixedPointType);
 
-    function rewardsEarned(
+    function delegationRewardsEarned(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddres,
         DelegatorAddress _delegatorAddress
