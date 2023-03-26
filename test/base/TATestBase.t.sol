@@ -3,24 +3,42 @@
 pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
-import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
+import "../modules/ITransactionAllocatorDebug.sol";
+import "src/library/FixedPointArithmetic.sol";
 import "script/TA.Deployment.s.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
+import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 
 abstract contract TATestBase is Test {
+    using FixedPointTypeHelper for FixedPointType;
+
     string constant mnemonic = "test test test test test test test test test test test junk";
     uint256 constant relayerCount = 10;
     uint256 constant relayerAccountsPerRelayer = 10;
-    uint256 constant initialMainAccountFunds = 10 ether;
+    uint256 constant delegatorCount = 10;
+    uint256 constant initialMainAccountFunds = MINIMUM_STAKE_AMOUNT + 10 ether;
     uint256 constant initialRelayerAccountFunds = 1 ether;
-    InitalizerParams deployParams =
-        InitalizerParams({blocksPerWindow: 10, withdrawDelay: 10, relayersPerWindow: 10, penaltyDelayBlocks: 10});
+    uint256 constant initialDelegatorFunds = 1 ether;
 
-    ITransactionAllocator internal ta;
+    TokenAddress[] internal supportedTokens;
+    InitalizerParams deployParams = InitalizerParams({
+        blocksPerWindow: 10,
+        relayersPerWindow: 10,
+        penaltyDelayBlocks: 10,
+        bondTokenAddress: TokenAddress.wrap(address(0)),
+        supportedTokens: supportedTokens
+    });
+
+    ITransactionAllocatorDebug internal ta;
+
     uint256[] internal relayerMainKey;
     RelayerAddress[] internal relayerMainAddress;
     mapping(RelayerAddress => RelayerAccountAddress[]) internal relayerAccountAddresses;
     mapping(RelayerAddress => uint256[]) internal relayerAccountKeys;
+    uint256[] internal delegatorKeys;
+    DelegatorAddress[] internal delegatorAddresses;
+
+    ERC20 bico;
 
     uint256 private _postDeploymentSnapshotId = type(uint256).max;
 
@@ -29,19 +47,28 @@ abstract contract TATestBase is Test {
             return;
         }
 
+        // Deploy the bico token
+        bico = new ERC20("BICO", "BICO");
+        vm.label(address(bico), "ERC20(BICO)");
+        supportedTokens.push(TokenAddress.wrap(address(bico)));
+        supportedTokens.push(NATIVE_TOKEN);
+        deployParams.bondTokenAddress = TokenAddress.wrap(address(bico));
+        deployParams.supportedTokens = supportedTokens;
+
         uint32 keyIndex = 0;
 
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
         uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
-        ta = script.deploy(deployerPrivateKey, deployParams, false);
+        ta = script.deployWithDebugModule(deployerPrivateKey, deployParams, false);
 
         // Generate Relayer Addresses
         for (uint256 i = 0; i < relayerCount; i++) {
             // Generate Main Relayer Addresses
             relayerMainKey.push(vm.deriveKey(mnemonic, ++keyIndex));
             relayerMainAddress.push(RelayerAddress.wrap(vm.addr(relayerMainKey[i])));
-            vm.deal(RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
+            deal(RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
+            deal(address(bico), RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
             vm.label(RelayerAddress.unwrap(relayerMainAddress[i]), _stringConcat2("relayer", vm.toString(i)));
 
             // Generate Relayer Account Addresses
@@ -50,7 +77,12 @@ abstract contract TATestBase is Test {
                 relayerAccountAddresses[relayerMainAddress[i]].push(
                     RelayerAccountAddress.wrap(vm.addr(relayerAccountKeys[relayerMainAddress[i]][j]))
                 );
-                vm.deal(
+                deal(
+                    RelayerAccountAddress.unwrap(relayerAccountAddresses[relayerMainAddress[i]][j]),
+                    initialRelayerAccountFunds
+                );
+                deal(
+                    address(bico),
                     RelayerAccountAddress.unwrap(relayerAccountAddresses[relayerMainAddress[i]][j]),
                     initialRelayerAccountFunds
                 );
@@ -59,6 +91,15 @@ abstract contract TATestBase is Test {
                     _stringConcat4("relayer", vm.toString(i), "account", vm.toString(j))
                 );
             }
+        }
+
+        // Generate Delegator Addresses
+        for (uint256 i = 0; i < delegatorCount; i++) {
+            delegatorKeys.push(vm.deriveKey(mnemonic, ++keyIndex));
+            delegatorAddresses.push(DelegatorAddress.wrap(vm.addr(delegatorKeys[i])));
+            deal(DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
+            deal(address(bico), DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
+            vm.label(DelegatorAddress.unwrap(delegatorAddresses[i]), _stringConcat2("delegator", vm.toString(i)));
         }
 
         _postDeploymentSnapshotId = vm.snapshot();
@@ -98,6 +139,18 @@ abstract contract TATestBase is Test {
 
     function _startPrankRAA(RelayerAccountAddress _account) internal {
         vm.startPrank(RelayerAccountAddress.unwrap(_account));
+    }
+
+    function _prankDa(DelegatorAddress _da) internal {
+        vm.prank(DelegatorAddress.unwrap(_da));
+    }
+
+    function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
+        assertEq(_a.toUint256(), _b.toUint256());
+    }
+
+    function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
+        assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
     }
 
     // add this to be excluded from coverage report

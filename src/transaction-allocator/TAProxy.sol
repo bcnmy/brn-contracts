@@ -2,12 +2,15 @@
 
 pragma solidity 0.8.19;
 
+import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
 import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
+import "src/transaction-allocator/common/TATypes.sol";
 
 contract TAProxy is
     ITAProxy,
@@ -53,13 +56,30 @@ contract TAProxy is
 
     function _initialize(InitalizerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
+        TADStorage storage tds = getTADStorage();
 
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
-        rms.withdrawDelay = _params.withdrawDelay;
         rms.relayersPerWindow = _params.relayersPerWindow;
-        rms.stakeArrayHash = keccak256(abi.encodePacked(new uint256[](0)));
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
+        rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
+        tds.supportedPools = _params.supportedTokens;
+
+        uint256 length = _params.supportedTokens.length;
+        for (uint256 i = 0; i < length;) {
+            rms.isGasTokenSupported[_params.supportedTokens[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+
+        // Initial State
+        rms.stakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
+        tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
+        rms.cdfHashUpdateLog.push(
+            CdfHashUpdateInfo({cdfHash: keccak256(abi.encodePacked(new uint32[](0))), windowIndex: 0})
+        );
+        rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
 
     /// @notice Adds a new module

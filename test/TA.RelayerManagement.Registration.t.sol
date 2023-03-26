@@ -7,23 +7,34 @@ import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
 
-contract TARelayerManagementRegistrationTest is
-    TATestBase,
-    TAConstants,
-    ITARelayerManagementEventsErrors,
-    ITAHelpers
-{
+// TODO: check delayed update for relayer index
+contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
+    string endpoint = "test";
+    uint256 delegatorPoolPremiumShare = 1000;
+
     function testRelayerRegistration() external atSnapshot {
+        uint16[] memory cdf = ta.getCdfArray();
+        assertEq(cdf.length, 0);
+
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
+            bico.approve(address(ta), stake);
             vm.expectEmit(true, true, true, true);
-            emit RelayerRegistered(relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake);
-            // TODO: Pass tokens while registering
-            ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
+            emit RelayerRegistered(
+                relayerAddress, endpoint, relayerAccountAddresses[relayerAddress], stake, delegatorPoolPremiumShare
+            );
+            ta.register(
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
+            );
             vm.stopPrank();
 
             assertEq(ta.relayerCount(), i + 1);
@@ -35,37 +46,53 @@ contract TARelayerManagementRegistrationTest is
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), true);
             }
         }
+
+        uint16[] memory newCdf = ta.getCdfArray();
+        assertEq(newCdf.length, relayerCount);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 0), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 0), false);
+
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), true);
     }
 
     function testRelayerUnRegistration() external atSnapshot {
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
-            ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
+            bico.approve(address(ta), stake);
+            ta.register(
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
+            );
             vm.stopPrank();
         }
+
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+        uint16[] memory cdf = ta.getCdfArray();
 
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
-
             _startPrankRA(relayerAddress);
-
-            // De Register Accounts
-            bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
-            vm.expectEmit(true, true, true, true);
-            emit RelayerAccountsUpdated(relayerAddress, accounts, accountUpdatedStatus);
-            ta.setRelayerAccountsStatus(accounts, accountUpdatedStatus);
 
             // De Register Relayer
             vm.expectEmit(true, true, true, true);
             emit RelayerUnRegistered(relayerAddress);
-            ta.unRegister(ta.getStakeArray());
+            ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
 
             vm.stopPrank();
 
@@ -78,41 +105,69 @@ contract TARelayerManagementRegistrationTest is
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), false);
             }
         }
+
+        uint16[] memory newCdf = ta.getCdfArray();
+        assertEq(newCdf.length, 0);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
+
+        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * ta.blocksPerWindow());
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 2), true);
     }
 
     function testWithdrawal() external atSnapshot {
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = MINIMUM_STAKE_AMOUNT;
-            string memory endpoint = "test";
+
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
-            ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerAddress], endpoint);
+            bico.approve(address(ta), stake);
+            ta.register(
+                ta.getStakeArray(),
+                ta.getDelegationArray(),
+                stake,
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
+            );
             vm.stopPrank();
         }
 
         // De-register all Relayers
+        uint256 maxWithdrawalBlock;
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            RelayerAccountAddress[] storage accounts = relayerAccountAddresses[relayerAddress];
 
             _startPrankRA(relayerAddress);
-            bool[] memory accountUpdatedStatus = new bool[](relayerAccountAddresses[relayerAddress].length);
-            ta.setRelayerAccountsStatus(accounts, accountUpdatedStatus);
-            ta.unRegister(ta.getStakeArray());
+            ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
             vm.stopPrank();
 
+            uint256 expectedWithdrawBlock = (
+                (block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
+                    / deployParams.blocksPerWindow
+            ) * deployParams.blocksPerWindow;
+
             assertEq(ta.withdrawalInfo(relayerAddress).amount, MINIMUM_STAKE_AMOUNT);
-            assertEq(ta.withdrawalInfo(relayerAddress).time, block.timestamp + ta.withdrawDelay());
+            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, expectedWithdrawBlock);
+
+            maxWithdrawalBlock = expectedWithdrawBlock > maxWithdrawalBlock ? expectedWithdrawBlock : maxWithdrawalBlock;
         }
 
         // Withdraw
-        skip(ta.withdrawDelay() + 1);
+        vm.roll(maxWithdrawalBlock);
 
         for (uint256 i = 0; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
+
             uint256 stake = MINIMUM_STAKE_AMOUNT;
+            uint256 balanceBefore = bico.balanceOf(RelayerAddress.unwrap(relayerAddress));
 
             _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
@@ -120,89 +175,167 @@ contract TARelayerManagementRegistrationTest is
             ta.withdraw();
             vm.stopPrank();
 
-            // TODO: Check if the stake is transferred to the relayer address
             assertEq(ta.withdrawalInfo(relayerAddress).amount, 0);
-            assertEq(ta.withdrawalInfo(relayerAddress).time, 0);
+            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, 0);
+            assertEq(bico.balanceOf(RelayerAddress.unwrap(relayerAddress)), balanceBefore + stake);
         }
     }
 
     function testCannotRegisterWithNoRelayAccounts() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
+
         RelayerAccountAddress[] memory accounts;
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
+        uint32[] memory delegationArray = ta.getDelegationArray();
+        bico.approve(address(ta), stake);
         vm.expectRevert(NoAccountsProvided.selector);
-        ta.register(stakeArray, stake, accounts, endpoint);
+        ta.register(stakeArray, delegationArray, stake, accounts, endpoint, delegatorPoolPremiumShare);
         vm.stopPrank();
     }
 
     function testCannotRegisterWithInsufficientStake() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT - 1;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = ta.getStakeArray();
+        uint32[] memory delegationArray = ta.getDelegationArray();
+        bico.approve(address(ta), stake);
         vm.expectRevert(abi.encodeWithSelector(InsufficientStake.selector, stake, MINIMUM_STAKE_AMOUNT));
-        ta.register(stakeArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         vm.stopPrank();
     }
 
     function testCannotRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
         uint32[] memory stakeArray = new uint32[](1);
+        uint32[] memory delegationArray = ta.getDelegationArray();
         stakeArray[0] = 0xb1c0;
+        bico.approve(address(ta), stake);
         vm.expectRevert(InvalidStakeArrayHash.selector);
-        ta.register(stakeArray, stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
+        vm.stopPrank();
+    }
+
+    function testCannotRegisterWithInvalidDelegationArray() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+
+        _startPrankRA(relayerMainAddress[0]);
+        uint32[] memory stakeArray = ta.getStakeArray();
+        uint32[] memory delegationArray = new uint32[](1);
+        delegationArray[0] = 0xb1c0;
+        bico.approve(address(ta), stake);
+        vm.expectRevert(InvalidDelegationArrayHash.selector);
+        ta.register(
+            stakeArray,
+            delegationArray,
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         vm.stopPrank();
     }
 
     function testCannotUnRegisterWithInvalidStakeArray() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
-        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
+        bico.approve(address(ta), stake);
+        ta.register(
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
         uint32[] memory stakeArray = new uint32[](1);
         stakeArray[0] = 0xb1c0;
+        uint32[] memory delegationArray = ta.getDelegationArray();
         vm.expectRevert(InvalidStakeArrayHash.selector);
-        ta.unRegister(stakeArray);
+        ta.unRegister(stakeArray, delegationArray);
+        vm.stopPrank();
+    }
+
+    function testCannotUnRegisterWithInvalidDelegationArray() external atSnapshot {
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+
+        _startPrankRA(relayerMainAddress[0]);
+        bico.approve(address(ta), stake);
+        ta.register(
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
+            relayerAccountAddresses[relayerMainAddress[0]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
+        uint32[] memory stakeArray = ta.getStakeArray();
+        uint32[] memory delegationArray = new uint32[](1);
+        delegationArray[0] = 0xb1c0;
+        vm.expectRevert(InvalidDelegationArrayHash.selector);
+        ta.unRegister(stakeArray, delegationArray);
         vm.stopPrank();
     }
 
     function testCannotSetAccountsStateAfterUnRegistering() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
-        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
-        ta.unRegister(ta.getStakeArray());
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
-        ta.setRelayerAccountsStatus(
+        bico.approve(address(ta), stake);
+        ta.register(
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
             relayerAccountAddresses[relayerMainAddress[0]],
-            new bool[](relayerAccountAddresses[relayerMainAddress[0]].length)
+            endpoint,
+            delegatorPoolPremiumShare
         );
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
+        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[0]));
+        ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
         vm.stopPrank();
     }
 
     function testCannotWithdrawBeforeWithdrawTime() external atSnapshot {
         uint256 stake = MINIMUM_STAKE_AMOUNT;
-        string memory endpoint = "test";
 
         _startPrankRA(relayerMainAddress[0]);
-        ta.register(ta.getStakeArray(), stake, relayerAccountAddresses[relayerMainAddress[0]], endpoint);
-        ta.setRelayerAccountsStatus(
+        bico.approve(address(ta), stake);
+        ta.register(
+            ta.getStakeArray(),
+            ta.getDelegationArray(),
+            stake,
             relayerAccountAddresses[relayerMainAddress[0]],
-            new bool[](relayerAccountAddresses[relayerMainAddress[0]].length)
+            endpoint,
+            delegatorPoolPremiumShare
         );
-        ta.unRegister(ta.getStakeArray());
-        uint256 withdrawTime = block.timestamp + ta.withdrawDelay();
-        skip(1);
-        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.timestamp, withdrawTime));
+        ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0));
+        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
+
+        uint256 expectedWithdrawBlock = (
+            (block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow)
+                / deployParams.blocksPerWindow
+        ) * deployParams.blocksPerWindow;
+        vm.expectRevert(abi.encodeWithSelector(InvalidWithdrawal.selector, stake, block.number, expectedWithdrawBlock));
         ta.withdraw();
         vm.stopPrank();
     }

@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.19;
 
+import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
+import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 
 abstract contract TADelegationStorage {
@@ -9,8 +11,13 @@ abstract contract TADelegationStorage {
 
     struct TADStorage {
         mapping(RelayerAddress => uint256) totalDelegation;
-        mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegations;
-        mapping(RelayerAddress => mapping(address => uint256)) unclaimedRewards;
+        mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegation;
+        mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => FixedPointType))) shares;
+        mapping(RelayerAddress => mapping(TokenAddress => FixedPointType)) totalShares;
+        // TODO: Add C*Time
+        mapping(RelayerAddress => mapping(TokenAddress => uint256)) unclaimedRewards;
+        TokenAddress[] supportedPools;
+        bytes32 delegationArrayHash;
     }
 
     /* solhint-disable no-inline-assembly */

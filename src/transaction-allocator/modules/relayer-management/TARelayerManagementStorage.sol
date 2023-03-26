@@ -3,36 +3,38 @@
 pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+
+import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
 
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
+    // TODO: Check packing
     struct RMStorage {
-        // Token in which registration are done. BICO
+        // Config
         IERC20 bondToken;
+        uint256 penaltyDelayBlocks;
         // No of registered relayers
         uint256 relayerCount;
-        /// Maps relayer main address to info
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        // Relayer Index to Relayer
-        mapping(uint256 => RelayerAddress) relayerIndexToRelayer;
-        // random number of realyers selected per window
+        uint256 totalStake;
+        // Update log of a relayer's index in the CDF -> Relayer Address over time
+        mapping(uint256 => RelayerIndexToRelayerUpdateInfo[]) relayerIndexToRelayerUpdationLog;
         // TODO: Dynamic?
         uint256 relayersPerWindow;
-        /// blocks per node
         uint256 blocksPerWindow;
         // cdf array hash
         CdfHashUpdateInfo[] cdfHashUpdateLog;
-        // stake array hash
         bytes32 stakeArrayHash;
-        // -------Transaction Allocator State-------
-        uint256 penaltyDelayBlocks;
         /// Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
-        // unbounding period
-        uint256 withdrawDelay;
+        mapping(TokenAddress => bool) isGasTokenSupported;
+        // Constant Rate Rewards
+        uint256 unpaidProtocolRewards;
+        uint256 lastUnpaidRewardUpdatedTimestamp;
+        FixedPointType totalShares;
     }
 
     /* solhint-disable no-inline-assembly */
