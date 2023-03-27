@@ -2,23 +2,31 @@
 
 pragma solidity 0.8.19;
 
-import "forge-std/Test.sol";
-import "../modules/ITransactionAllocatorDebug.sol";
-import "src/library/FixedPointArithmetic.sol";
-import "script/TA.Deployment.s.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
+import "forge-std/Test.sol";
+
+import "src/library/FixedPointArithmetic.sol";
+import "src/transaction-allocator/common/TAStructs.sol";
+import "src/paymaster/Paymaster.sol";
+import "../modules/ITransactionAllocatorDebug.sol";
+import "script/TA.Deployment.s.sol";
+import "src/library/Transaction.sol";
 
 abstract contract TATestBase is Test {
     using FixedPointTypeHelper for FixedPointType;
+    using TransactionLib for Transaction;
+    using ECDSA for bytes32;
 
     string constant mnemonic = "test test test test test test test test test test test junk";
     uint256 constant relayerCount = 10;
     uint256 constant relayerAccountsPerRelayer = 10;
     uint256 constant delegatorCount = 10;
+    uint256 constant userCount = 10;
     uint256 constant initialMainAccountFunds = MINIMUM_STAKE_AMOUNT + 10 ether;
     uint256 constant initialRelayerAccountFunds = 1 ether;
     uint256 constant initialDelegatorFunds = 1 ether;
+    uint256 constant initialUserAccountFunds = 1 ether;
 
     TokenAddress[] internal supportedTokens;
     InitalizerParams deployParams = InitalizerParams({
@@ -30,6 +38,7 @@ abstract contract TATestBase is Test {
     });
 
     ITransactionAllocatorDebug internal ta;
+    Paymaster internal paymaster;
 
     uint256[] internal relayerMainKey;
     RelayerAddress[] internal relayerMainAddress;
@@ -37,6 +46,8 @@ abstract contract TATestBase is Test {
     mapping(RelayerAddress => uint256[]) internal relayerAccountKeys;
     uint256[] internal delegatorKeys;
     DelegatorAddress[] internal delegatorAddresses;
+    address[] userAddresses;
+    mapping(address => uint256) internal userKeys;
 
     ERC20 bico;
 
@@ -61,6 +72,9 @@ abstract contract TATestBase is Test {
         TADeploymentScript script = new TADeploymentScript();
         uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
         ta = script.deployWithDebugModule(deployerPrivateKey, deployParams, false);
+
+        // Deploy Paymaster
+        paymaster = new Paymaster(address(ta));
 
         // Generate Relayer Addresses
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -100,6 +114,15 @@ abstract contract TATestBase is Test {
             deal(DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
             deal(address(bico), DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
             vm.label(DelegatorAddress.unwrap(delegatorAddresses[i]), _stringConcat2("delegator", vm.toString(i)));
+        }
+
+        // Generate User Addresses
+        for (uint256 i = 0; i < userCount; i++) {
+            uint256 key = vm.deriveKey(mnemonic, ++keyIndex);
+            userAddresses.push(vm.addr(key));
+            userKeys[userAddresses[i]] = key;
+            deal(userAddresses[i], initialUserAccountFunds);
+            vm.label(userAddresses[i], _stringConcat2("user", vm.toString(i)));
         }
 
         _postDeploymentSnapshotId = vm.snapshot();
@@ -151,6 +174,16 @@ abstract contract TATestBase is Test {
 
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
+    }
+
+    function _signTransaction(uint256 _key, Transaction memory _tx)
+        internal
+        pure
+        returns (Transaction memory _txSigned)
+    {
+        _txSigned = _tx;
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_key, _tx.hashMemory().toEthSignedMessageHash());
+        _txSigned.signature = abi.encodePacked(r, s, v);
     }
 
     // add this to be excluded from coverage report

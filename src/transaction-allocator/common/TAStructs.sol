@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "src/interfaces/IApplication.sol";
 import "src/library/FixedPointArithmetic.sol";
 import "./TATypes.sol";
 
@@ -66,10 +65,13 @@ struct AllocateTransactionParams {
 }
 
 struct Transaction {
-    IApplication to;
-    uint256 fixedGas; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily large value to drain funds
-    uint256 prePaymentGasLimit;
-    uint256 gasLimit; // TODO: Relayer can manipulate this value, for ex set it to 0
-    uint256 refundGasLimit; // Application has to somehow agree to this, otherwise relayer can specify arbitrarily small value to prevent refund
-    bytes data;
+    address to;
+    uint256 nonce;
+    bytes callData;
+    uint256 callGasLimit;
+    uint256 baseGas;
+    uint256 maxFeePerGas;
+    uint256 maxPriorityFeePerGas;
+    bytes paymaster;
+    bytes signature;
 }

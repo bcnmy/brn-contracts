@@ -5,6 +5,8 @@ pragma solidity 0.8.19;
 import "src/transaction-allocator/common/TAStructs.sol";
 import "src/transaction-allocator/common/TAHelpers.sol";
 import "src/transaction-allocator/common/TATypes.sol";
+import "src/library/Transaction.sol";
+import "src/paymaster/interfaces/IPaymaster.sol";
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
@@ -12,9 +14,11 @@ import "../relayer-management/TARelayerManagementStorage.sol";
 import "forge-std/console.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
-    function _getHashedModIndex(bytes calldata _calldata) internal view returns (uint256 relayerIndex) {
+    using TransactionLib for Transaction;
+
+    function _getHashedModIndex(bytes memory _data) internal view returns (uint256 relayerIndex) {
         RMStorage storage ds = getRMStorage();
-        relayerIndex = uint256(keccak256(abi.encodePacked(_calldata))) % ds.relayersPerWindow;
+        relayerIndex = uint256(keccak256(_data)) % ds.relayersPerWindow;
     }
 
     /// @notice returns true if the current sender is allowed to relay transaction in this block
@@ -55,7 +59,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Verify if the transaction was alloted to the relayer
         length = _txs.length;
         for (uint256 i = 0; i < length;) {
-            uint256 relayerGenerationIteration = _getHashedModIndex(_txs[i].data);
+            // Assign transactions to relayers based on the to address
+            uint256 relayerGenerationIteration = _getHashedModIndex(abi.encodePacked(_txs[i].to));
             if ((bitmap & (1 << relayerGenerationIteration)) == 0) {
                 return false;
             }
@@ -86,74 +91,102 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // TODO: Non native token support
         // TODO: Study ERC4337 EP implementation to get any insights on this process
 
-        uint256 expectedGasConsumed = _req.gasLimit + _req.prePaymentGasLimit + _req.fixedGas + _req.refundGasLimit;
-        uint256 gasPremium = expectedGasConsumed * RELAYER_PREMIUM_PERCENTAGE / (100 * PERCENTAGE_MULTIPLIER);
-        TokenAddress paymentTokenAddress;
+        // TODO: Test gas limit thoroughly
 
-        // Ask the application to prepay gas
-        uint256 prePayment = address(this).balance;
-        uint256 relayerRefund = 0;
-        try _req.to.prepayGas{gas: _req.prePaymentGasLimit}(_req, expectedGasConsumed + gasPremium) returns (
-            address _paymentTokenAddress
-        ) {
-            uint256 expectedPrepayment = (expectedGasConsumed + gasPremium) * tx.gasprice;
-            paymentTokenAddress = TokenAddress.wrap(_paymentTokenAddress);
+        uint256 expectedGasConsumed = _req.callGasLimit + _req.baseGas;
+        uint256 gasPrice = _req.effectiveGasPrice();
 
-            if (!getRMStorage().isGasTokenSupported[paymentTokenAddress]) {
-                return (
-                    false,
-                    false,
-                    abi.encodeWithSelector(GasTokenNotSuported.selector, paymentTokenAddress),
-                    gas - gasleft(),
-                    0,
-                    0,
-                    paymentTokenAddress
-                );
-            }
-
-            // TODO: Non native token support
-            prePayment = address(this).balance - prePayment;
-            if (prePayment != expectedPrepayment) {
-                return (
-                    false,
-                    false,
-                    abi.encodeWithSelector(InsufficientPrepayment.selector, expectedPrepayment, prePayment),
-                    gas - gasleft(),
-                    prePayment,
-                    0,
-                    paymentTokenAddress
-                );
-            }
-            relayerRefund = prePayment - gasPremium * tx.gasprice;
-            emit PrepaymentReceived(_index, prePayment, paymentTokenAddress);
-        } catch (bytes memory reason) {
+        // Check Nonce
+        TAStorage storage ds = getTAStorage();
+        address sender = _req.getSender();
+        if (_req.nonce != ds.nonce[sender]) {
             return (
                 false,
                 false,
-                abi.encodeWithSelector(PrepaymentFailed.selector, reason),
+                abi.encodeWithSelector(InvalidNonce.selector, sender, _req.nonce, getTAStorage().nonce[sender]),
                 gas - gasleft(),
                 0,
                 0,
                 TokenAddress.wrap(address(0))
             );
         }
+        ++ds.nonce[sender];
+
+        uint256 gasPremium = expectedGasConsumed * RELAYER_PREMIUM_PERCENTAGE / (100 * PERCENTAGE_MULTIPLIER);
+        TokenAddress paymentTokenAddress;
+
+        // Ask the application to prepay gas
+        uint256 relayerRefund = 0;
+        IPaymaster paymaster;
+        {
+            uint256 prePayment = address(this).balance;
+            bytes memory paymasterData;
+            (paymaster, paymasterData) = _req.getPaymasterAndData();
+            try paymaster.prepayGas{gas: expectedGasConsumed - (preExecutionGas - gasleft())}(
+                _req, expectedGasConsumed + gasPremium, paymasterData
+            ) returns (TokenAddress _paymentTokenAddress) {
+                uint256 expectedPrepayment = (expectedGasConsumed + gasPremium) * gasPrice;
+                paymentTokenAddress = _paymentTokenAddress;
+
+                if (!getRMStorage().isGasTokenSupported[paymentTokenAddress]) {
+                    return (
+                        false,
+                        false,
+                        abi.encodeWithSelector(GasTokenNotSuported.selector, paymentTokenAddress),
+                        gas - gasleft(),
+                        0,
+                        0,
+                        paymentTokenAddress
+                    );
+                }
+
+                // TODO: Non native token support
+                prePayment = address(this).balance - prePayment;
+                if (prePayment != expectedPrepayment) {
+                    return (
+                        false,
+                        false,
+                        abi.encodeWithSelector(InsufficientPrepayment.selector, expectedPrepayment, prePayment),
+                        gas - gasleft(),
+                        prePayment,
+                        0,
+                        paymentTokenAddress
+                    );
+                }
+                relayerRefund = prePayment - gasPremium * gasPrice;
+                emit PrepaymentReceived(_index, prePayment, paymentTokenAddress);
+            } catch (bytes memory reason) {
+                return (
+                    false,
+                    false,
+                    abi.encodeWithSelector(PrepaymentFailed.selector, reason),
+                    gas - gasleft(),
+                    0,
+                    0,
+                    TokenAddress.wrap(address(0))
+                );
+            }
+        }
 
         emit GenericGasConsumed("PrepaymentGas", gas - gasleft());
         gas = gasleft();
 
         // Execute the transaction
-        (bool success, bytes memory returndata) = address(_req.to).call{gas: _req.gasLimit}(_req.data);
+        (bool success, bytes memory returndata) =
+            address(_req.to).call{gas: expectedGasConsumed - (preExecutionGas - gasleft())}(_req.callData);
 
         emit GenericGasConsumed("ExecutionGas", gas - gasleft());
         gas = gasleft();
 
         // Refund the excess gas if needed
-        uint256 actualGasConsumed = preExecutionGas - gasleft() + _req.fixedGas + gasPremium + _req.refundGasLimit;
+        uint256 actualGasConsumed = preExecutionGas - gasleft() + _req.baseGas + gasPremium;
         bool refundSuccess;
         if (expectedGasConsumed > actualGasConsumed) {
-            uint256 refundAmount = (expectedGasConsumed - actualGasConsumed) * tx.gasprice;
+            uint256 refundAmount = (expectedGasConsumed - actualGasConsumed) * gasPrice;
 
-            try _req.to.refundGas{value: refundAmount, gas: _req.refundGasLimit}() {
+            try paymaster.addFunds{value: refundAmount, gas: expectedGasConsumed - (preExecutionGas - gasleft())}(
+                sender
+            ) {
                 refundSuccess = true;
                 relayerRefund -= refundAmount;
                 emit GasFeeRefunded(_index, expectedGasConsumed, actualGasConsumed, paymentTokenAddress);
@@ -165,7 +198,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                     returndata,
                     gas - gasleft(),
                     relayerRefund,
-                    gasPremium * tx.gasprice,
+                    gasPremium * gasPrice,
                     paymentTokenAddress
                 );
             }
@@ -179,7 +212,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             returndata,
             gas - gasleft(),
             relayerRefund,
-            gasPremium * tx.gasprice,
+            gasPremium * gasPrice,
             paymentTokenAddress
         );
     }
@@ -229,7 +262,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         for (uint256 i = 0; i < length;) {
             Transaction calldata _req = _reqs[i];
 
-            // TODO: Relayer Premiums and relayer refund
             (
                 bool success,
                 bool refundSuccess,
@@ -393,7 +425,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 j;
         for (uint256 i = 0; i < _data.requests.length;) {
             // If the transaction can be processed by this relayer, store it's info
-            uint256 relayerIndex = _getHashedModIndex(_data.requests[i].data);
+            uint256 relayerIndex = _getHashedModIndex(abi.encodePacked(_data.requests[i].to));
             if (relayersAllocated[relayerIndex] == _data.relayerAddress) {
                 relayerGenerationIteration[j] = relayerIndex;
                 txnAllocated[j] = _data.requests[i];

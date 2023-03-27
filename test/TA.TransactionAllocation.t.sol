@@ -57,16 +57,22 @@ contract TATransactionAllocationTest is
         vm.deal(address(tm), initialApplicationFunds);
         vm.label(address(tm), "ApplicationMock");
 
-        for (uint256 i = 0; i < 10; i++) {
+        for (uint256 i = 0; i < userCount; i++) {
             txns.push(
-                Transaction({
-                    to: tm,
-                    data: abi.encodeWithSelector(tm.incrementA.selector, i + 1),
-                    fixedGas: 21000,
-                    prePaymentGasLimit: 10000,
-                    gasLimit: 10 ** 6,
-                    refundGasLimit: 10 ** 5
-                })
+                _signTransaction(
+                    userKeys[userAddresses[i]],
+                    Transaction({
+                        to: address(tm),
+                        nonce: 0,
+                        callData: abi.encodeWithSelector(tm.incrementA.selector, i + 1),
+                        baseGas: 21000,
+                        callGasLimit: 1000000,
+                        maxFeePerGas: 5 gwei,
+                        maxPriorityFeePerGas: 1 gwei,
+                        paymaster: abi.encode(address(paymaster), abi.encode(0)),
+                        signature: bytes("")
+                    })
+                )
             );
         }
 
@@ -133,6 +139,12 @@ contract TATransactionAllocationTest is
     function testTransactionExecution() external atSnapshot {
         vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
         console2.log("gasprice", tx.gasprice);
+
+        // Add funds to the paymaster
+        for (uint256 i = 0; i < userCount; i++) {
+            vm.prank(userAddresses[i]);
+            paymaster.addFunds{value: 1 ether}(userAddresses[i]);
+        }
 
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray();

@@ -8,6 +8,7 @@ abstract contract TATransactionAllocationStorage {
     bytes32 internal constant TRANSACTION_ALLOCATION_STORAGE_SLOT = keccak256("TransactionAllocation.storage");
 
     struct TAStorage {
+        mapping(address => uint256) nonce;
         // attendance: windowIndex -> relayer -> wasPresent?
         mapping(uint256 => mapping(RelayerAddress => bool)) attendance;
     }
