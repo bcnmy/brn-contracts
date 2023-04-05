@@ -1,6 +1,15 @@
 name: test
 
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - dev*
+  pull_request:
+    branches:
+      - master
+      - dev*
 
 env:
   FOUNDRY_PROFILE: ci
@@ -22,6 +31,10 @@ jobs:
         with:
           version: nightly
 
+      - name: Install node modules
+        run: |
+          yarn
+
       - name: Run Forge build
         run: |
           forge --version
@@ -30,6 +43,5 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          forge test -vvv
+          FOUNDRY_PROFILE=test forge test -vvv --ffi
         id: test
-
