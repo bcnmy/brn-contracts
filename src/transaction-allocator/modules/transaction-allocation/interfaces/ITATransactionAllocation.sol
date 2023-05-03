@@ -8,24 +8,15 @@ import "./ITATransactionAllocationEventsErrors.sol";
 
 interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
     function execute(
-        Transaction[] calldata _reqs,
+        bytes[] calldata _reqs,
         uint16[] calldata _cdf,
-        uint256[] calldata _relayerGenerationIterations,
-        uint256 _cdfIndex,
-        uint256 _currentCdfLogIndex,
-        uint256 _relayerIndexUpdationLogIndex
+        uint256 _relayerGenerationIterationBitmap,
+        uint256 _relayerIndex,
+        uint256 _currentCdfLogIndex
     ) external returns (bool[] memory, bytes[] memory);
 
     function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
         external
         view
         returns (RelayerAddress[] memory, uint256[] memory);
-
-    function allocateTransaction(AllocateTransactionParams calldata _data)
-        external
-        view
-        returns (Transaction[] memory, uint256[] memory, uint256);
-
-    ////////////////////////// Getters //////////////////////////
-    function attendance(uint256, RelayerAddress) external view returns (bool);
 }

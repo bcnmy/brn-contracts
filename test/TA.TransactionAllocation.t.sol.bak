@@ -20,7 +20,7 @@ contract TATransactionAllocationTest is
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
     ApplicationMock private tm;
-    Transaction[] private txns;
+    bytes[] private txns;
 
     function setUp() public override {
         if (_postRegistrationSnapshotId != 0) {
@@ -58,22 +58,8 @@ contract TATransactionAllocationTest is
         vm.label(address(tm), "ApplicationMock");
 
         for (uint256 i = 0; i < userCount; i++) {
-            txns.push(
-                _signTransaction(
-                    userKeys[userAddresses[i]],
-                    Transaction({
-                        to: address(tm),
-                        nonce: 0,
-                        callData: abi.encodeWithSelector(tm.incrementA.selector, i + 1),
-                        baseGas: 21000,
-                        callGasLimit: 1000000,
-                        maxFeePerGas: 5 gwei,
-                        maxPriorityFeePerGas: 1 gwei,
-                        paymaster: abi.encode(address(paymaster), abi.encode(0)),
-                        signature: bytes("")
-                    })
-                )
-            );
+            // TODO
+            txns.push();
         }
 
         _postRegistrationSnapshotId = vm.snapshot();
@@ -105,17 +91,17 @@ contract TATransactionAllocationTest is
         return _result;
     }
 
-    function _getRelayerAssignedToTx(Transaction memory _tx, uint16[] memory _cdf, uint256 _currentCdfLogIndex)
+    function _getRelayerAssignedToTx(bytes memory _tx, uint16[] memory _cdf, uint256 _currentCdfLogIndex)
         internal
         returns (RelayerAddress, uint256[] memory, uint256)
     {
-        Transaction[] memory txns_ = new Transaction[](1);
+        bytes[] memory txns_ = new bytes[](1);
         txns_[0] = _tx;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                Transaction[] memory allotedTransactions,
+                bytes[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(
@@ -140,18 +126,12 @@ contract TATransactionAllocationTest is
         vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
         console2.log("gasprice", tx.gasprice);
 
-        // Add funds to the paymaster
-        for (uint256 i = 0; i < userCount; i++) {
-            vm.prank(userAddresses[i]);
-            paymaster.addFunds{value: 1 ether}(userAddresses[i]);
-        }
-
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray();
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                Transaction[] memory allotedTransactions,
+                bytes[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(
@@ -200,7 +180,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (
-                Transaction[] memory allotedTransactions,
+                bytes[] memory allotedTransactions,
                 uint256[] memory relayerGenerationIteration,
                 uint256 selectedRelayerCdfIndex
             ) = ta.allocateTransaction(

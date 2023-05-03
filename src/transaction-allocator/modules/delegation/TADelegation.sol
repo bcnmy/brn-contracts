@@ -263,8 +263,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         uint32[] memory delegationArray = new uint32[](length);
 
         for (uint256 i = 0; i < length;) {
-            RelayerAddress relayerAddress = rms.relayerIndexToRelayerUpdationLog[i][rms.relayerIndexToRelayerUpdationLog[i]
-                .length - 1].relayerAddress;
+            RelayerAddress relayerAddress = rms.relayerIndexToRelayerAddress[i];
             delegationArray[i] = _scaleDelegation(ds.totalDelegation[relayerAddress]);
             unchecked {
                 ++i;

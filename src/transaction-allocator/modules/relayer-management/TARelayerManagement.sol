@@ -126,25 +126,6 @@ contract TARelayerManagement is
         return newStakeArray;
     }
 
-    function _updateRelayerIndexToRelayer(uint256 _index, RelayerAddress _relayerAddress) internal {
-        RelayerIndexToRelayerUpdateInfo[] storage updationLog = getRMStorage().relayerIndexToRelayerUpdationLog[_index];
-        uint256 updateEffectiveAtWindowIndex =
-            _windowIndex(block.number) + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS;
-
-        if (updationLog.length > 0 && updationLog[updationLog.length - 1].windowIndex == updateEffectiveAtWindowIndex) {
-            updationLog[updationLog.length - 1].relayerAddress = _relayerAddress;
-        } else {
-            updationLog.push(
-                RelayerIndexToRelayerUpdateInfo({
-                    windowIndex: updateEffectiveAtWindowIndex,
-                    relayerAddress: _relayerAddress
-                })
-            );
-        }
-
-        emit RelayerIndexToRelayerInfoUpdateQueued(updationLog[updationLog.length - 1]);
-    }
-
     // TODO: Implement a way to increase the relayer's stake
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
@@ -184,7 +165,7 @@ contract TARelayerManagement is
         node.index = ds.relayerCount;
         node.rewardShares = _mintProtocolRewardShares(_stake);
         _setRelayerAccountAddresses(relayerAddress, _accounts);
-        _updateRelayerIndexToRelayer(node.index, relayerAddress);
+        ds.relayerIndexToRelayerAddress[node.index] = relayerAddress;
         ds.totalStake += _stake;
         ++ds.relayerCount;
 
@@ -221,11 +202,10 @@ contract TARelayerManagement is
         delete ds.relayerInfo[relayerAddress];
 
         if (nodeIndex != n) {
-            RelayerAddress lastRelayer =
-                ds.relayerIndexToRelayerUpdationLog[n][ds.relayerIndexToRelayerUpdationLog[n].length - 1].relayerAddress;
-            _updateRelayerIndexToRelayer(nodeIndex, lastRelayer);
+            RelayerAddress lastRelayer = ds.relayerIndexToRelayerAddress[n];
+            ds.relayerIndexToRelayerAddress[nodeIndex] = lastRelayer;
             ds.relayerInfo[lastRelayer].index = nodeIndex;
-            _updateRelayerIndexToRelayer(n, RelayerAddress.wrap(address(0)));
+            ds.relayerIndexToRelayerAddress[n] = RelayerAddress.wrap(address(0));
         }
 
         --ds.relayerCount;
@@ -288,118 +268,6 @@ contract TARelayerManagement is
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         _setRelayerAccountAddresses(relayerAddress, _accounts);
         emit RelayerAccountsUpdated(relayerAddress, _accounts);
-    }
-
-    function processAbsenceProof(
-        AbsenceProofReporterData calldata _reporterData,
-        AbsenceProofAbsenteeData calldata _absenteeData,
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray
-    ) public override verifyStakeArrayHash(_currentStakeArray) verifyDelegationArrayHash(_currentDelegationArray) {
-        uint256 gas = gasleft();
-
-        RelayerAccountAddress reporter_relayerAddress = RelayerAccountAddress.wrap(msg.sender);
-        RMStorage storage ds = getRMStorage();
-
-        if (
-            !(_reporterData.relayerGenerationIterations.length == 1)
-                || !(_reporterData.relayerGenerationIterations[0] == ABSENTEE_PROOF_REPORTER_GENERATION_ITERATION)
-        ) {
-            revert InvalidRelayerWindowForReporter();
-        }
-
-        // Verify Reporter Selection in Current Window
-        if (
-            !_verifyRelayerSelection(
-                RelayerAccountAddress.unwrap(reporter_relayerAddress),
-                _reporterData.cdf,
-                _reporterData.currentCdfLogIndex,
-                _reporterData.cdfIndex,
-                _reporterData.relayerIndexToRelayerLogIndex,
-                _reporterData.relayerGenerationIterations,
-                block.number
-            )
-        ) {
-            revert InvalidRelayerWindowForReporter();
-        }
-
-        {
-            // Absentee block must not be in a point before the contract was deployed
-            if (_absenteeData.blockNumber < ds.penaltyDelayBlocks) {
-                revert InvalidAbsenteeBlockNumber();
-            }
-
-            {
-                // The Absentee block must not be in the current window
-                uint256 currentWindowStartBlock = block.number - (block.number % ds.blocksPerWindow);
-                if (_absenteeData.blockNumber >= currentWindowStartBlock) {
-                    revert InvalidAbsenteeBlockNumber();
-                }
-            }
-        }
-
-        {
-            uint256 absentee_windowIndex = _windowIndex(_absenteeData.blockNumber);
-
-            // Verify Absence of the relayer
-            TAStorage storage ts = getTAStorage();
-            if (ts.attendance[absentee_windowIndex][_absenteeData.relayerAddress]) {
-                revert AbsenteeWasPresent(absentee_windowIndex);
-            }
-        }
-
-        // Verify Relayer Selection in Absentee Window
-        if (
-            !_verifyRelayerSelection(
-                RelayerAddress.unwrap(_absenteeData.relayerAddress),
-                _absenteeData.cdf,
-                _absenteeData.latestStakeUpdationCdfLogIndex,
-                _absenteeData.cdfIndex,
-                _absenteeData.relayerIndexToRelayerLogIndex,
-                _absenteeData.relayerGenerationIterations,
-                _absenteeData.blockNumber
-            )
-        ) {
-            revert InvalidRelayerWindowForAbsentee();
-        }
-
-        emit GenericGasConsumed("Verification", gas - gasleft());
-        gas = gasleft();
-
-        // Process penalty
-        uint256 penalty;
-
-        if (_isStakedRelayer(_absenteeData.relayerAddress)) {
-            // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
-            RelayerInfo storage absence_relayerInfo = getRMStorage().relayerInfo[_absenteeData.relayerAddress];
-            penalty = (absence_relayerInfo.stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
-            absence_relayerInfo.stake -= penalty;
-
-            uint32[] memory newStakeArray = _updateRelayerStakeInStakeArray(
-                _currentStakeArray, _absenteeData.cdfIndex, _scaleStake(absence_relayerInfo.stake)
-            );
-            _updateAccountingState(newStakeArray, true, _currentDelegationArray, false);
-        } else {
-            // If the relayer un-registered itself, then we just subtract from their withdrawl info
-            WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[_absenteeData.relayerAddress];
-            penalty = (withdrawalInfo_.amount * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
-            withdrawalInfo_.amount -= penalty;
-        }
-        _transfer(
-            TokenAddress.wrap(address(getRMStorage().bondToken)),
-            RelayerAccountAddress.unwrap(reporter_relayerAddress),
-            penalty
-        );
-
-        emit AbsenceProofProcessed(
-            _windowIndex(block.number),
-            RelayerAccountAddress.unwrap(reporter_relayerAddress),
-            _absenteeData.relayerAddress,
-            _windowIndex(_absenteeData.blockNumber),
-            penalty
-        );
-
-        emit GenericGasConsumed("Process Penalty", gas - gasleft());
     }
 
     ////////////////////////// Relayer Configuration //////////////////////////
@@ -470,15 +338,6 @@ contract TARelayerManagement is
         return getRMStorage().relayerInfo[_relayerAddress].delegatorPoolPremiumShare;
     }
 
-    function getRelayerIndexUpdationLog(uint256 _index)
-        external
-        view
-        override
-        returns (RelayerIndexToRelayerUpdateInfo[] memory)
-    {
-        return getRMStorage().relayerIndexToRelayerUpdationLog[_index];
-    }
-
     function isGasTokenSupported(TokenAddress _token) external view override returns (bool) {
         return getRMStorage().isGasTokenSupported[_token];
     }
@@ -518,8 +377,7 @@ contract TARelayerManagement is
         uint256 length = ds.relayerCount;
         uint32[] memory stakeArray = new uint32[](length);
         for (uint256 i = 0; i < length;) {
-            RelayerAddress relayerAddress =
-                ds.relayerIndexToRelayerUpdationLog[i][ds.relayerIndexToRelayerUpdationLog[i].length - 1].relayerAddress;
+            RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[i];
             stakeArray[i] = _scaleStake(ds.relayerInfo[relayerAddress].stake);
             unchecked {
                 ++i;

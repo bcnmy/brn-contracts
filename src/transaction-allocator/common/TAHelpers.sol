@@ -95,30 +95,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }
 
-    function _verifyRelayerUpdationLogIndexAtBlock(
-        uint256 _relayerIndex,
-        uint256 _blockNumber,
-        uint256 _relayerIndexUpdationLogIndex
-    ) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-
-        uint256 windowIndexAtBlock = _windowIndex(_blockNumber);
-        RelayerIndexToRelayerUpdateInfo[] storage relayerIndexUpdateLog =
-            ds.relayerIndexToRelayerUpdationLog[_relayerIndex];
-
-        if (_relayerIndexUpdationLogIndex >= relayerIndexUpdateLog.length) {
-            return false;
-        }
-
-        return (
-            relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
-                && (
-                    _relayerIndexUpdationLogIndex == relayerIndexUpdateLog.length - 1
-                        || relayerIndexUpdateLog[_relayerIndexUpdationLogIndex + 1].windowIndex > windowIndexAtBlock
-                )
-        );
-    }
-
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
         return getRMStorage().relayerInfo[_relayer].stake > 0;
     }
@@ -144,13 +120,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint16[] calldata _cdf,
         uint256 _cdfUpdationLogIndex,
         uint256 _relayerIndex,
-        uint256 _relayerIndexUpdationLogIndex,
-        uint256[] calldata _relayerGenerationIterations,
+        uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
     ) internal view returns (bool) {
         RMStorage storage ds = getRMStorage();
 
-        uint256 iterationCount = _relayerGenerationIterations.length;
+        // uint256 iterationCount = _relayerGenerationIterations.length;
         uint256 stakeSum = _cdf[_cdf.length - 1];
 
         // Verify CDF
@@ -158,40 +133,38 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             revert InvalidCdfArrayHash();
         }
 
-        // Verify Relayer Index Updation Log Index
-        if (!_verifyRelayerUpdationLogIndexAtBlock(_relayerIndex, _blockNumber, _relayerIndexUpdationLogIndex)) {
-            revert InvalidRelayerUpdationLogIndex();
-        }
-
         // Verify Each Iteration against _cdfIndex in _cdf
-        for (uint256 i = 0; i < iterationCount;) {
-            uint256 relayerGenerationIteration = _relayerGenerationIterations[i];
+        uint256 relayerGenerationIteration = 0;
 
-            if (relayerGenerationIteration >= ds.relayersPerWindow) {
-                revert InvalidRelayerGenerationIteration();
-            }
+        while (_relayerGenerationIterationBitmap != 0) {
+            if (_relayerGenerationIterationBitmap % 2 == 1) {
+                if (relayerGenerationIteration >= ds.relayersPerWindow) {
+                    revert InvalidRelayerGenerationIteration();
+                }
 
-            // Verify if correct stake prefix sum index has been provided
-            uint256 randomRelayerStake = _randomCdfNumber(_blockNumber, relayerGenerationIteration, stakeSum);
+                // Verify if correct stake prefix sum index has been provided
+                uint256 randomRelayerStake = _randomCdfNumber(_blockNumber, relayerGenerationIteration, stakeSum);
 
-            if (
-                !(
-                    (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
-                        && randomRelayerStake <= _cdf[_relayerIndex]
-                )
-            ) {
-                // The supplied index does not point to the correct interval
-                revert RelayerIndexDoesNotPointToSelectedCdfInterval();
+                if (
+                    !(
+                        (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
+                            && randomRelayerStake <= _cdf[_relayerIndex]
+                    )
+                ) {
+                    // The supplied index does not point to the correct interval
+                    revert RelayerIndexDoesNotPointToSelectedCdfInterval();
+                }
             }
 
             unchecked {
-                ++i;
+                ++relayerGenerationIteration;
+                _relayerGenerationIterationBitmap /= 2;
             }
         }
 
-        RelayerAddress relayerAddress =
-            ds.relayerIndexToRelayerUpdationLog[_relayerIndex][_relayerIndexUpdationLogIndex].relayerAddress;
+        RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
+
         if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
             revert RelayerAddressDoesNotMatchSelectedRelayer();
         }
