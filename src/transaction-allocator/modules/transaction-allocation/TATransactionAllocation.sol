@@ -217,6 +217,16 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         );
     }
 
+    /*
+    TODO:
+    1. Remove tx allocation to selected relayer verification from this contract.
+    2. Move tx allocation verification to the application module contract
+        2.0 main contract will append hte list of generation iterations, and the number of relayers at the end of the calldata.
+        2.1 Application will have it's own hashing logic
+        2.2 Remove eveyrthing realted to payment in the main contract, this will be handled by the application contract in later versions.
+    3. Implement the refund flow on the source chain. Check for errors
+    */
+
     /// @notice allows relayer to execute a tx on behalf of a client
     /// @param _reqs requested txs to be forwarded
     /// @param _relayerGenerationIterations index at which relayer was selected
