@@ -14,16 +14,12 @@ import "forge-std/console.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     ///////////////////////////////// Transaction Execution ///////////////////////////////
-
-    /*
-    TODO:
-    1. Remove tx allocation to selected relayer verification from this contract.
-    2. Move tx allocation verification to the application module contract
-        2.0 main contract will append hte list of generation iterations, and the number of relayers at the end of the calldata.
-        2.1 Application will have it's own hashing logic
-        2.2 Remove eveyrthing realted to payment in the main contract, this will be handled by the application contract in later versions.
-    3. Implement the refund flow on the source chain. Check for errors
-    */
+    function _execute(bytes calldata _req, uint256 _relayerGenerationIterationBitmap, uint256 _relayerCount)
+        internal
+        returns (bool status)
+    {
+        (status,) = address(this).call(abi.encodePacked(_req, _relayerGenerationIterationBitmap, _relayerCount));
+    }
 
     /// @notice allows relayer to execute a tx on behalf of a client
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
@@ -35,7 +31,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayerIndex,
         uint256 _currentCdfLogIndex
-    ) public override returns (bool[] memory successes, bytes[] memory returndatas) {
+    ) public override returns (bool[] memory successes) {
         uint256 gasLeft = gasleft();
         if (
             !_verifyRelayerSelection(
@@ -48,16 +44,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         gasLeft = gasleft();
 
         uint256 length = _reqs.length;
-        // TODO: Non native token support
-        uint256 totalRefund = 0;
-        uint256 totalPremiums = 0;
-
         successes = new bool[](length);
-        returndatas = new bytes[](length);
+        uint256 relayerCount = getRMStorage().relayersPerWindow;
 
         // Execute all transactions
         for (uint256 i = 0; i < length;) {
-            (bool success,) = address(this).call(_reqs[i]);
+            bool success = _execute(_reqs[i], _relayerGenerationIterationBitmap, relayerCount);
 
             emit TransactionStatus(i, success);
 
@@ -73,21 +65,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         gasLeft = gasleft();
-        RMStorage storage ds = getRMStorage();
-
-        // Mark Attendance
-        RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
-
-        // Split the premiums b/w the relayer and the delegator
-        uint256 delegatorPremiums =
-            totalPremiums * ds.relayerInfo[relayerAddress].delegatorPoolPremiumShare / (100 * PERCENTAGE_MULTIPLIER);
-
-        // Refund the relayer. TODO: Non native token support
-        _transfer(NATIVE_TOKEN, msg.sender, totalRefund + (totalPremiums - delegatorPremiums));
-
-        // Add the premiums to the delegator pool
-        _addDelegatorRewards(relayerAddress, NATIVE_TOKEN, delegatorPremiums);
-
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         // TODO: Check how to update this logic
@@ -98,7 +75,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         //     }
         // }
 
-        return (successes, returndatas);
+        return successes;
     }
 
     /////////////////////////////// Allocation Helpers ///////////////////////////////

@@ -11,6 +11,7 @@ import "src/transaction-allocator/modules/transaction-allocation/TATransactionAl
 import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
 
 import "test/modules/debug/TADebug.sol";
+import "test/modules/minimal-application/MinimalApplication.sol";
 import "test/modules/ITransactionAllocatorDebug.sol";
 
 import "src/transaction-allocator/common/TAStructs.sol";
@@ -115,7 +116,7 @@ contract TADeploymentScript is Script {
         returns (ITransactionAllocatorDebug)
     {
         // Deploy Modules
-        uint256 moduleCount = 4;
+        uint256 moduleCount = 5;
         address[] memory modules = new address[](moduleCount);
         bytes4[][] memory selectors = new bytes4[][](moduleCount);
 
@@ -130,6 +131,9 @@ contract TADeploymentScript is Script {
 
         modules[3] = address(new TADebug());
         selectors[3] = _generateSelectors("TADebug");
+
+        modules[4] = address(new MinimalApplication());
+        selectors[4] = _generateSelectors("MinimalApplication");
 
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors, _debug);
 

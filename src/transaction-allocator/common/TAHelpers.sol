@@ -136,6 +136,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         // Verify Each Iteration against _cdfIndex in _cdf
         uint256 relayerGenerationIteration = 0;
 
+        // TODO: Optimize iteration over set bits (potentially using x & -x flow)
         while (_relayerGenerationIterationBitmap != 0) {
             if (_relayerGenerationIterationBitmap % 2 == 1) {
                 if (relayerGenerationIteration >= ds.relayersPerWindow) {

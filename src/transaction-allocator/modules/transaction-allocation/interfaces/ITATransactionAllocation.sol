@@ -13,7 +13,7 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayerIndex,
         uint256 _currentCdfLogIndex
-    ) external returns (bool[] memory, bytes[] memory);
+    ) external returns (bool[] memory);
 
     function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
         external
