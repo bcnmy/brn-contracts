@@ -12,7 +12,7 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
         return keccak256(_tx[:20]);
     }
 
-    function executeMinimalApplication(bytes32 _data) external override applicationHandler {
+    function executeMinimalApplication(bytes32 _data) external payable override applicationHandler(msg.data) {
         count++;
         emit MessageEmitted(_data);
     }

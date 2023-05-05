@@ -17,6 +17,7 @@ interface ITATransactionAllocationEventsErrors {
     error GasTokenNotSuported(TokenAddress tokenAddress);
     error InvalidNonce(address sender, uint256 nonce, uint256 expectedNonce);
     error TransactionExecutionFailed(uint256 index);
+    error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
 
     event PrepaymentReceived(uint256 indexed index, uint256 indexed amount, TokenAddress indexed tokenAddress);
     event GasFeeRefunded(

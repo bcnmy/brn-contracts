@@ -14,11 +14,14 @@ import "forge-std/console.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     ///////////////////////////////// Transaction Execution ///////////////////////////////
-    function _execute(bytes calldata _req, uint256 _relayerGenerationIterationBitmap, uint256 _relayerCount)
-        internal
-        returns (bool status)
-    {
-        (status,) = address(this).call(abi.encodePacked(_req, _relayerGenerationIterationBitmap, _relayerCount));
+    function _execute(
+        bytes calldata _req,
+        uint256 _value,
+        uint256 _relayerGenerationIterationBitmap,
+        uint256 _relayerCount
+    ) internal returns (bool status) {
+        (status,) =
+            address(this).call{value: _value}(abi.encodePacked(_req, _relayerGenerationIterationBitmap, _relayerCount));
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
@@ -27,12 +30,31 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     // TODO: check if _cdfIndex is needed, since it's always going to be relayer.index
     function execute(
         bytes[] calldata _reqs,
+        uint256[] calldata _forwardedNativeAmounts,
         uint16[] calldata _cdf,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayerIndex,
         uint256 _currentCdfLogIndex
-    ) public override returns (bool[] memory successes) {
+    ) public payable override returns (bool[] memory successes) {
         uint256 gasLeft = gasleft();
+
+        // Verify whether sufficient fee has been attached or not
+        uint256 length = _reqs.length;
+        if (length != _forwardedNativeAmounts.length) {
+            revert ParameterLengthMismatch();
+        }
+        uint256 totalExpectedValue;
+        for (uint256 i; i < length;) {
+            totalExpectedValue += _forwardedNativeAmounts[i];
+            unchecked {
+                ++i;
+            }
+        }
+        if (msg.value != totalExpectedValue) {
+            revert InvalidFeeAttached(totalExpectedValue, msg.value);
+        }
+
+        // Verify Relayer Selection
         if (
             !_verifyRelayerSelection(
                 msg.sender, _cdf, _currentCdfLogIndex, _relayerIndex, _relayerGenerationIterationBitmap, block.number
@@ -43,13 +65,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
         gasLeft = gasleft();
 
-        uint256 length = _reqs.length;
         successes = new bool[](length);
         uint256 relayerCount = getRMStorage().relayersPerWindow;
 
         // Execute all transactions
-        for (uint256 i = 0; i < length;) {
-            bool success = _execute(_reqs[i], _relayerGenerationIterationBitmap, relayerCount);
+        for (uint256 i; i < length;) {
+            bool success =
+                _execute(_reqs[i], _forwardedNativeAmounts[i], _relayerGenerationIterationBitmap, relayerCount);
 
             emit TransactionStatus(i, success);
 

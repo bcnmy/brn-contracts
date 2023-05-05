@@ -117,8 +117,14 @@ contract TATransactionAllocationTest is
             }
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
-            bool[] memory successes =
-                ta.execute(allotedTransactions, cdf, relayerGenerationIterations, selectedRelayerCdfIndex, 1);
+            bool[] memory successes = ta.execute(
+                allotedTransactions,
+                new uint256[](allotedTransactions.length),
+                cdf,
+                relayerGenerationIterations,
+                selectedRelayerCdfIndex,
+                1
+            );
             vm.stopPrank();
 
             executionCount += allotedTransactions.length;
@@ -160,7 +166,14 @@ contract TATransactionAllocationTest is
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidCdfArrayHash.selector);
-            ta.execute(allotedTransactions, cdf2, relayerGenerationIterations, selectedRelayerCdfIndex + 1, 1);
+            ta.execute(
+                allotedTransactions,
+                new uint256[](allotedTransactions.length),
+                cdf2,
+                relayerGenerationIterations,
+                selectedRelayerCdfIndex + 1,
+                1
+            );
             vm.stopPrank();
         }
     }
@@ -187,7 +200,14 @@ contract TATransactionAllocationTest is
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
             vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
-            ta.execute(allotedTransactions, cdf, relayerGenerationIterations, selectedRelayerCdfIndex + 1, 1);
+            ta.execute(
+                allotedTransactions,
+                new uint256[](allotedTransactions.length),
+                cdf,
+                relayerGenerationIterations,
+                selectedRelayerCdfIndex + 1,
+                1
+            );
             vm.stopPrank();
         }
     }
@@ -224,7 +244,14 @@ contract TATransactionAllocationTest is
 
             _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
             vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
-            ta.execute(allotedTransactions, cdf, relayerGenerationIteration, selectedRelayerCdfIndex + 1, 1);
+            ta.execute(
+                allotedTransactions,
+                new uint256[](allotedTransactions.length),
+                cdf,
+                relayerGenerationIteration,
+                selectedRelayerCdfIndex + 1,
+                1
+            );
             vm.stopPrank();
         }
 

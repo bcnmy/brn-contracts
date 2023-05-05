@@ -7,12 +7,12 @@ import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITAT
 import "src/transaction-allocator/modules/relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
-    modifier applicationHandler() {
+    modifier applicationHandler(bytes calldata _dataToHash) {
         if (msg.sender != address(this)) revert ExternalCallsNotAllowed();
 
         (uint256 _relayerGenerationIterationBitmap, uint256 _relayerCount) = _getCalldataParams();
 
-        if (!_verifyTransactionAllocation(msg.data, _relayerGenerationIterationBitmap, _relayerCount)) {
+        if (!_verifyTransactionAllocation(_dataToHash, _relayerGenerationIterationBitmap, _relayerCount)) {
             revert RelayerNotAssignedToTransaction();
         }
 
