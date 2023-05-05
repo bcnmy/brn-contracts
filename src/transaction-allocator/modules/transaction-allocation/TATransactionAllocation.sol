@@ -18,10 +18,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         bytes calldata _req,
         uint256 _value,
         uint256 _relayerGenerationIterationBitmap,
-        uint256 _relayerCount
+        uint256 _relayerCount,
+        RelayerAddress _relayerAddress
     ) internal returns (bool status) {
-        (status,) =
-            address(this).call{value: _value}(abi.encodePacked(_req, _relayerGenerationIterationBitmap, _relayerCount));
+        (status,) = address(this).call{value: _value}(
+            abi.encodePacked(
+                _req, _relayerGenerationIterationBitmap, _relayerCount, RelayerAddress.unwrap(_relayerAddress)
+            )
+        );
     }
 
     /// @notice allows relayer to execute a tx on behalf of a client
@@ -66,12 +70,15 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         gasLeft = gasleft();
 
         successes = new bool[](length);
-        uint256 relayerCount = getRMStorage().relayersPerWindow;
+        RMStorage storage ds = getRMStorage();
+        uint256 relayerCount = ds.relayersPerWindow;
+        RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
 
         // Execute all transactions
         for (uint256 i; i < length;) {
-            bool success =
-                _execute(_reqs[i], _forwardedNativeAmounts[i], _relayerGenerationIterationBitmap, relayerCount);
+            bool success = _execute(
+                _reqs[i], _forwardedNativeAmounts[i], _relayerGenerationIterationBitmap, relayerCount, relayerAddress
+            );
 
             emit TransactionStatus(i, success);
 

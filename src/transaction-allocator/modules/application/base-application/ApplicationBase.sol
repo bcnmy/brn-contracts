@@ -10,9 +10,9 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
     modifier applicationHandler(bytes calldata _dataToHash) {
         if (msg.sender != address(this)) revert ExternalCallsNotAllowed();
 
-        (uint256 _relayerGenerationIterationBitmap, uint256 _relayerCount) = _getCalldataParams();
+        (, uint256 relayerGenerationIterationBitmap, uint256 relayerCount) = _getCalldataParams();
 
-        if (!_verifyTransactionAllocation(_dataToHash, _relayerGenerationIterationBitmap, _relayerCount)) {
+        if (!_verifyTransactionAllocation(_dataToHash, relayerGenerationIterationBitmap, relayerCount)) {
             revert RelayerNotAssignedToTransaction();
         }
 
@@ -23,16 +23,17 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         internal
         pure
         virtual
-        returns (uint256 relayerGenerationIterationBitmap, uint256 relayerCount)
+        returns (RelayerAddress relayerAddress, uint256 relayerGenerationIterationBitmap, uint256 relayerCount)
     {
         /*
          * Calldata Map
-         * |-------?? bytes--------|------32 bytes-------|---------32 bytes -------|
-         * |---Original Calldata---|------RGI Bitmap-----|------Relayer Count------|
+         * |-------?? bytes--------|------32 bytes-------|---------32 bytes -------|---------20 bytes -------|
+         * |---Original Calldata---|------RGI Bitmap-----|------Relayer Count------|-----Relayer Address-----|
          */
         assembly {
-            relayerGenerationIterationBitmap := calldataload(sub(calldatasize(), 64))
-            relayerCount := calldataload(sub(calldatasize(), 32))
+            relayerAddress := shr(96, calldataload(sub(calldatasize(), 20)))
+            relayerCount := calldataload(sub(calldatasize(), 52))
+            relayerGenerationIterationBitmap := calldataload(sub(calldatasize(), 84))
         }
     }
 
