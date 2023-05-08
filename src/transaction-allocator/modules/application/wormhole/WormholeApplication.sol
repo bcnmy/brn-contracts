@@ -32,7 +32,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     }
 
     /// Execution Logic
-    function executeWormhole(IWormholeDelivery.TargetDeliveryParameters calldata _targetParams)
+    function executeWormhole(IDelivery.TargetDeliveryParameters calldata _targetParams)
         external
         payable
         override

@@ -2,15 +2,15 @@
 
 pragma solidity 0.8.19;
 
-import "./interfaces/IWormhole.sol";
-import "./interfaces/IWormholeDelivery.sol";
+import "lib/wormhole/ethereum/contracts/interfaces/relayer/IDelivery.sol";
+import "lib/wormhole/ethereum/contracts/interfaces/IWormhole.sol";
 
 abstract contract WormholeApplicationStorage {
     bytes32 internal constant WORMHOLE_APPLICATION_STORAGE_SLOT = keccak256("WormholeApplication.storage");
 
     struct WHStorage {
         IWormhole wormhole;
-        IWormholeDelivery delivery;
+        IDelivery delivery;
         uint8 receiptVAAConsistencyLevel;
     }
 
