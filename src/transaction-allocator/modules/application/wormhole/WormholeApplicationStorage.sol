@@ -12,6 +12,7 @@ abstract contract WormholeApplicationStorage {
         IWormhole wormhole;
         IDelivery delivery;
         uint8 receiptVAAConsistencyLevel;
+        bool initialized;
     }
 
     /* solhint-disable no-inline-assembly */

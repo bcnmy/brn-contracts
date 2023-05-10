@@ -9,6 +9,7 @@ import "src/transaction-allocator/modules/delegation/TADelegation.sol";
 import "src/transaction-allocator/modules/relayer-management/TARelayerManagement.sol";
 import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocation.sol";
 import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
+import "src/transaction-allocator/modules/application/wormhole/WormholeApplication.sol";
 
 import "test/modules/debug/TADebug.sol";
 import "test/modules/minimal-application/MinimalApplication.sol";
@@ -111,12 +112,12 @@ contract TADeploymentScript is Script {
         return ITransactionAllocator(address(proxy));
     }
 
-    function deployWithDebugModule(uint256 _deployerPrivateKey, InitalizerParams memory _params, bool _debug)
+    function deployTest(uint256 _deployerPrivateKey, InitalizerParams memory _params, bool _debug)
         public
         returns (ITransactionAllocatorDebug)
     {
         // Deploy Modules
-        uint256 moduleCount = 5;
+        uint256 moduleCount = 6;
         address[] memory modules = new address[](moduleCount);
         bytes4[][] memory selectors = new bytes4[][](moduleCount);
 
@@ -134,6 +135,9 @@ contract TADeploymentScript is Script {
 
         modules[4] = address(new MinimalApplication());
         selectors[4] = _generateSelectors("MinimalApplication");
+
+        modules[5] = address(new WormholeApplication());
+        selectors[5] = _generateSelectors("WormholeApplication");
 
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors, _debug);
 

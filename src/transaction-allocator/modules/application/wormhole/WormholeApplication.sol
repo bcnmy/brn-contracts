@@ -12,12 +12,30 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
     using BytesLib for bytes;
 
-    ////// Alloction Logic //////
-    function _getTransactionHash(bytes calldata _encodedDeliveryVAA) internal pure virtual override returns (bytes32) {
-        return keccak256(abi.encode(_getVAASequenceNumber(_encodedDeliveryVAA)));
+    // TODO: Only Governance
+    function initialize(IWormhole _wormhole, IDelivery _delivery) external {
+        WHStorage storage ws = getWHStorage();
+        if (ws.initialized) {
+            revert AlreadyInitialized();
+        }
+
+        ws.initialized = true;
+        ws.wormhole = _wormhole;
+        ws.delivery = _delivery;
+
+        emit Initialized(address(_wormhole), address(_delivery));
     }
 
-    function _getVAASequenceNumber(bytes calldata _encodedVAA) internal pure returns (uint256 sequenceNumber) {
+    ////// Alloction Logic //////
+    function _getTransactionHash(bytes calldata _calldata) internal pure virtual override returns (bytes32) {
+        (IDelivery.TargetDeliveryParameters memory params) =
+            abi.decode(_calldata[4:], (IDelivery.TargetDeliveryParameters));
+
+        return keccak256(abi.encode(_getVAASequenceNumber(params.encodedDeliveryVAA)));
+    }
+
+    // TODO: Optimize
+    function _getVAASequenceNumber(bytes memory _encodedVAA) internal pure returns (uint256 sequenceNumber) {
         uint256 index = 0;
 
         uint256 version = _encodedVAA.toUint8(index);
@@ -31,12 +49,21 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         sequenceNumber = _encodedVAA.toUint64(index);
     }
 
+    function allocateWormholeDeliveryVAA(AllocateTransactionParams calldata _params)
+        external
+        view
+        override
+        returns (bytes[] memory, uint256, uint256)
+    {
+        return _allocateTransaction(_params);
+    }
+
     /// Execution Logic
     function executeWormhole(IDelivery.TargetDeliveryParameters calldata _targetParams)
         external
         payable
         override
-        applicationHandler(_targetParams.encodedDeliveryVAA)
+        applicationHandler(msg.data)
     {
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();
@@ -47,5 +74,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         bytes memory receiptVAAPayload =
             abi.encode(_getVAASequenceNumber(_targetParams.encodedDeliveryVAA), relayerAddress);
         whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);
+
+        emit WormholeDeliveryExecuted(_targetParams.encodedDeliveryVAA);
     }
 }

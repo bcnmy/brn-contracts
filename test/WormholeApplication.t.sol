@@ -6,13 +6,13 @@ import "./base/TATestBase.t.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
-import "./modules/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
+import "src/transaction-allocator/modules/application/wormhole/interfaces/IWormholeApplicationEventsErrors.sol";
 
-contract TATransactionAllocationTest is
+contract WormholeApplicationTest is
     TATestBase,
     ITATransactionAllocationEventsErrors,
     ITAHelpers,
-    IMinimalApplicationEventsErrors
+    IWormholeApplicationEventsErrors
 {
     uint256 constant initialApplicationFunds = 10 ether;
 
@@ -20,7 +20,12 @@ contract TATransactionAllocationTest is
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
     bytes[] private txns;
 
-    IMinimalApplication tam;
+    bytes constant defaultVAA =
+        hex"01000000000100dd9410ea42cce096a51f9c02a91ed565d71e5cfdd09966e5246c1d3cd4064ad97fb8bce9993227fbaf4d366fc8b3e73029bc7565f6ad4473f29a3532e8b1f9060163bff8f400000041000500000000000000000000000084fee39095b18962b875588df7f9ad1be87e86530000000000000041c875e5f7065b71d698d6ab1bf73f7b0604a5c9f3015ab01248fbc127af5a8e3c2a";
+
+    IDelivery deliveryMock = IDelivery(address(0xFFF01));
+    IWormhole wormholeMock = IWormhole(address(0xFFF02));
+    IWormholeApplication taw;
 
     function setUp() public override {
         if (_postRegistrationSnapshotId != 0) {
@@ -33,7 +38,8 @@ contract TATransactionAllocationTest is
 
         super.setUp();
 
-        tam = IMinimalApplication(address(ta));
+        taw = IWormholeApplication(address(ta));
+        taw.initialize(wormholeMock, deliveryMock);
 
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -56,7 +62,19 @@ contract TATransactionAllocationTest is
         }
 
         for (uint256 i = 0; i < userCount; i++) {
-            txns.push(abi.encodeCall(IMinimalApplication.executeMinimalApplication, (keccak256(abi.encodePacked(i)))));
+            txns.push(
+                abi.encodeCall(
+                    taw.executeWormhole,
+                    (
+                        IDelivery.TargetDeliveryParameters({
+                            encodedVMs: new bytes[](0),
+                            encodedDeliveryVAA: defaultVAA,
+                            relayerRefundAddress: payable(address(taw)),
+                            overrides: bytes("")
+                        })
+                    )
+                )
+            );
         }
 
         _postRegistrationSnapshotId = vm.snapshot();
@@ -76,7 +94,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            taw.allocateWormholeDeliveryVAA(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns_,
@@ -94,15 +112,23 @@ contract TATransactionAllocationTest is
         return (RelayerAddress.wrap(address(0)), 0, 0);
     }
 
-    function testTransactionExecution() external atSnapshot {
+    function testWHTransactionExecution() external atSnapshot {
         vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+
+        // Setup Mocks
+        vm.mockCall(
+            address(wormholeMock), abi.encodePacked(wormholeMock.publishMessage.selector), abi.encode(uint64(1))
+        );
+        vm.etch(address(wormholeMock), address(ta).code);
+        vm.mockCall(address(deliveryMock), abi.encodePacked(deliveryMock.deliver.selector), bytes(""));
+        vm.etch(address(deliveryMock), address(ta).code);
 
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray();
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            taw.allocateWormholeDeliveryVAA(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -116,13 +142,21 @@ contract TATransactionAllocationTest is
             }
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
-            bool[] memory successes = ta.execute(
-                allotedTransactions,
-                new uint256[](allotedTransactions.length),
-                cdf,
-                relayerGenerationIterations,
-                selectedRelayerCdfIndex,
-                1
+
+            // Create native value array
+            uint256[] memory values = new uint256[](allotedTransactions.length);
+            for (uint256 j = 0; j < allotedTransactions.length; j++) {
+                values[j] = 0.001 ether;
+            }
+
+            // Check Events
+            for (uint256 j = 0; j < allotedTransactions.length; ++j) {
+                emit WormholeDeliveryExecuted(defaultVAA);
+                vm.expectEmit(true, true, false, false);
+            }
+
+            bool[] memory successes = ta.execute{value: 0.001 ether * allotedTransactions.length}(
+                allotedTransactions, values, cdf, relayerGenerationIterations, selectedRelayerCdfIndex, 1
             );
             vm.stopPrank();
 
@@ -136,7 +170,7 @@ contract TATransactionAllocationTest is
         }
 
         assertEq(executionCount, txns.length);
-        assertEq(tam.count(), executionCount);
+        vm.clearMockedCalls();
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
@@ -150,7 +184,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            taw.allocateWormholeDeliveryVAA(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -184,7 +218,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            taw.allocateWormholeDeliveryVAA(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -222,7 +256,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIteration, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            taw.allocateWormholeDeliveryVAA(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
