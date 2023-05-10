@@ -67,7 +67,7 @@ abstract contract TATestBase is Test {
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
         uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
-        ta = script.deployWithDebugModule(deployerPrivateKey, deployParams, false);
+        ta = script.deployTest(deployerPrivateKey, deployParams, false);
 
         // Generate Relayer Addresses
         for (uint256 i = 0; i < relayerCount; i++) {
