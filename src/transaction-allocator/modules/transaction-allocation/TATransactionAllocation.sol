@@ -105,6 +105,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         gasLeft = gasleft();
+        // TODO: Account for caes where the relayer list changes between epochs or if a relayer is exiting in the current epoch
         getTAStorage().transactionsSubmitted[_epochIndexFromBlock(block.number)][relayerAddress] +=
             transactionsAllotedAndSubmittedByRelayer;
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
