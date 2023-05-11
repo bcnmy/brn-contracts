@@ -8,20 +8,27 @@ import "src/transaction-allocator/common/TATypes.sol";
 import "src/paymaster/interfaces/IPaymaster.sol";
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
+import "../application/base-application/interfaces/IApplicationBase.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
-
-import "forge-std/console.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     ///////////////////////////////// Transaction Execution ///////////////////////////////
+    function _verifyRelayerWasSelectedForTransaction(bool _success, bytes memory _returndata)
+        internal
+        pure
+        returns (bool result)
+    {
+        result = _success || (bytes4(_returndata) == IApplicationBase.RelayerNotAssignedToTransaction.selector);
+    }
+
     function _execute(
         bytes calldata _req,
         uint256 _value,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayerCount,
         RelayerAddress _relayerAddress
-    ) internal returns (bool status) {
-        (status,) = address(this).call{value: _value}(
+    ) internal returns (bool status, bytes memory returndata) {
+        (status, returndata) = address(this).call{value: _value}(
             abi.encodePacked(
                 _req, _relayerGenerationIterationBitmap, _relayerCount, RelayerAddress.unwrap(_relayerAddress)
             )
@@ -31,7 +38,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @notice allows relayer to execute a tx on behalf of a client
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
-    // TODO: check if _cdfIndex is needed, since it's always going to be relayer.index
     function execute(
         bytes[] calldata _reqs,
         uint256[] calldata _forwardedNativeAmounts,
@@ -75,10 +81,15 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
 
         // Execute all transactions
+        uint256 transactionsAllotedAndSubmittedByRelayer;
         for (uint256 i; i < length;) {
-            bool success = _execute(
+            (bool success, bytes memory returndata) = _execute(
                 _reqs[i], _forwardedNativeAmounts[i], _relayerGenerationIterationBitmap, relayerCount, relayerAddress
             );
+
+            if (_verifyRelayerWasSelectedForTransaction(success, returndata)) {
+                ++transactionsAllotedAndSubmittedByRelayer;
+            }
 
             emit TransactionStatus(i, success);
 
@@ -94,6 +105,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         gasLeft = gasleft();
+        getTAStorage().transactionsSubmitted[_epochIndexFromBlock(block.number)][relayerAddress] +=
+            transactionsAllotedAndSubmittedByRelayer;
         emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         // TODO: Check how to update this logic

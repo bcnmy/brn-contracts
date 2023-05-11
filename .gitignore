@@ -28,3 +28,4 @@ cache_hardhat
 artifacts
 
 .DS_Store
+ScratchPad.t.sol

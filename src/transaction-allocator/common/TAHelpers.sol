@@ -108,6 +108,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return __windowIndex * getRMStorage().blocksPerWindow;
     }
 
+    // TODO: windows per epoch should be read from storage
+    function _epochIndexFromBlock(uint256 _blockNumber) internal view returns (uint256) {
+        return _epochIndexFromWindowIndex(_windowIndex(_blockNumber));
+    }
+
+    function _epochIndexFromWindowIndex(uint256 __windowIndex) internal pure returns (uint256) {
+        return __windowIndex / WINDOWS_PER_EPOCH;
+    }
+
     function _randomCdfNumber(uint256 _blockNumber, uint256 _iter, uint256 _max) internal view returns (uint256) {
         // The seed for jth iteration is a function of the base seed and j
         uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
