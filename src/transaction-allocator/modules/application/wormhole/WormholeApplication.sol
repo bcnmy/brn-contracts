@@ -65,6 +65,8 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         override
         applicationHandler(msg.data)
     {
+        // TODO: Handle refunds
+
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();
         whs.delivery.deliver{value: msg.value}(_targetParams);
