@@ -5,12 +5,9 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 import "./interfaces/IPaymaster.sol";
-import "src/library/Transaction.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 
 contract Paymaster is IPaymaster, Ownable {
-    using TransactionLib for Transaction;
-
     address public transactionAllocator;
     mapping(address => uint256) balances;
 
@@ -25,7 +22,7 @@ contract Paymaster is IPaymaster, Ownable {
         transactionAllocator = _transactionAllocator;
     }
 
-    function prepayGas(Transaction calldata _tx, uint256 _expectedGas, bytes calldata)
+    function prepayGas(bytes calldata _tx, uint256 _expectedGas, bytes calldata)
         external
         override
         onlyTransactionAllocator

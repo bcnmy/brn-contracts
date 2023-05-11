@@ -8,14 +8,11 @@ import "forge-std/Test.sol";
 
 import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
-import "src/paymaster/Paymaster.sol";
 import "../modules/ITransactionAllocatorDebug.sol";
 import "script/TA.Deployment.s.sol";
-import "src/library/Transaction.sol";
 
 abstract contract TATestBase is Test {
     using FixedPointTypeHelper for FixedPointType;
-    using TransactionLib for Transaction;
     using ECDSA for bytes32;
 
     string constant mnemonic = "test test test test test test test test test test test junk";
@@ -38,7 +35,6 @@ abstract contract TATestBase is Test {
     });
 
     ITransactionAllocatorDebug internal ta;
-    Paymaster internal paymaster;
 
     uint256[] internal relayerMainKey;
     RelayerAddress[] internal relayerMainAddress;
@@ -71,10 +67,7 @@ abstract contract TATestBase is Test {
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
         uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
-        ta = script.deployWithDebugModule(deployerPrivateKey, deployParams, false);
-
-        // Deploy Paymaster
-        paymaster = new Paymaster(address(ta));
+        ta = script.deployTest(deployerPrivateKey, deployParams, false);
 
         // Generate Relayer Addresses
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -174,16 +167,6 @@ abstract contract TATestBase is Test {
 
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
-    }
-
-    function _signTransaction(uint256 _key, Transaction memory _tx)
-        internal
-        pure
-        returns (Transaction memory _txSigned)
-    {
-        _txSigned = _tx;
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_key, _tx.hashMemory().toEthSignedMessageHash());
-        _txSigned.signature = abi.encodePacked(r, s, v);
     }
 
     // add this to be excluded from coverage report
