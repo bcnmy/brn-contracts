@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 import "src/library/FixedPointArithmetic.sol";
+import "src/library/VersionHistoryManager.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
 
@@ -16,24 +17,24 @@ abstract contract TARelayerManagementStorage {
         // Config
         IERC20 bondToken;
         uint256 penaltyDelayBlocks;
-        // No of registered relayers
-        uint256 relayerCount;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        mapping(uint256 => RelayerAddress) relayerIndexToRelayerAddress;
-        uint256 totalStake;
         // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
         // cdf array hash
-        CdfHashUpdateInfo[] cdfHashUpdateLog;
-        bytes32 stakeArrayHash;
-        /// Maps relayer address to pending withdrawals
+        VersionHistoryManager.Version[] cdfVersionHistoryManager;
+        VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;
+        bytes32 latestActiveRelayerStakeArrayHash;
+        // Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
         mapping(TokenAddress => bool) isGasTokenSupported;
         // Constant Rate Rewards
         uint256 unpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;
         FixedPointType totalShares;
+        // Latest State. TODO: Verify if using these are safe or not.
+        uint256 relayerCount;
+        uint256 totalStake;
     }
 
     /* solhint-disable no-inline-assembly */

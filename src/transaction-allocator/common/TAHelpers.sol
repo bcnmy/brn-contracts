@@ -19,6 +19,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using SafeCast for uint256;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
+    using VersionHistoryManager for VersionHistoryManager.Version[];
 
     ////////////////////////////// Hash Functions //////////////////////////////
     function _hashUint32ArrayCalldata(uint32[] calldata _array) internal pure returns (bytes32) {
@@ -37,6 +38,14 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return keccak256(abi.encodePacked((_array)));
     }
 
+    function _hashRelayerAddressArrayCalldata(RelayerAddress[] calldata _array) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked((_array)));
+    }
+
+    function _hashRelayerAddressArrayMemory(RelayerAddress[] memory _array) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked((_array)));
+    }
+
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier verifyDelegationArrayHash(uint32[] calldata _array) {
         if (!_verifyDelegationArrayHash(_array)) {
@@ -48,6 +57,39 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     modifier verifyStakeArrayHash(uint32[] calldata _array) {
         if (!_verifyStakeArrayHash(_array)) {
             revert InvalidStakeArrayHash();
+        }
+        _;
+    }
+
+    modifier verifyLatestActiveRelayerList(RelayerAddress[] calldata _array) {
+        if (
+            !getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(
+                _hashRelayerAddressArrayCalldata(_array)
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
+        _;
+    }
+
+    modifier verifyActiveRelayerList(RelayerAddress[] calldata _array, uint256 _logIndex, uint256 _blockNumber) {
+        if (
+            !getRMStorage().activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
+                _hashRelayerAddressArrayCalldata(_array), _logIndex, _windowIndex(_blockNumber)
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
+        _;
+    }
+
+    modifier verifyCDF(uint16[] calldata _array, uint256 _logIndex, uint256 _blockNumber) {
+        if (
+            !getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
+                _hashUint16ArrayCalldata(_array), _logIndex, _windowIndex(_blockNumber)
+            )
+        ) {
+            revert InvalidCdfArrayHash();
         }
         _;
     }
@@ -66,33 +108,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     function _verifyStakeArrayHash(uint32[] calldata _array) internal view returns (bool) {
         RMStorage storage ds = getRMStorage();
-        return ds.stakeArrayHash == _hashUint32ArrayCalldata(_array);
-    }
-
-    function _verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex)
-        internal
-        view
-        returns (bool)
-    {
-        RMStorage storage ds = getRMStorage();
-
-        if (_cdfLogIndex >= ds.cdfHashUpdateLog.length) {
-            return false;
-        }
-
-        if (
-            !(
-                ds.cdfHashUpdateLog[_cdfLogIndex].windowIndex <= __windowIndex
-                    && (
-                        _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
-                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowIndex > __windowIndex
-                    )
-            )
-        ) {
-            return false;
-        }
-
-        return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
+        return ds.latestActiveRelayerStakeArrayHash == _hashUint32ArrayCalldata(_array);
     }
 
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
@@ -117,7 +133,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return __windowIndex / WINDOWS_PER_EPOCH;
     }
 
-    function _randomCdfNumber(uint256 _blockNumber, uint256 _iter, uint256 _max) internal view returns (uint256) {
+    function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
+        internal
+        view
+        returns (uint256)
+    {
         // The seed for jth iteration is a function of the base seed and j
         uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
@@ -127,20 +147,22 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _verifyRelayerSelection(
         address _relayer,
         uint16[] calldata _cdf,
-        uint256 _cdfUpdationLogIndex,
+        uint256 _cdfLogIndex,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex,
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    ) internal view returns (bool) {
+    )
+        internal
+        view
+        verifyCDF(_cdf, _cdfLogIndex, _blockNumber)
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, _blockNumber)
+        returns (bool)
+    {
         RMStorage storage ds = getRMStorage();
 
-        // uint256 iterationCount = _relayerGenerationIterations.length;
         uint256 stakeSum = _cdf[_cdf.length - 1];
-
-        // Verify CDF
-        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(_blockNumber), _cdfUpdationLogIndex)) {
-            revert InvalidCdfArrayHash();
-        }
 
         // Verify Each Iteration against _cdfIndex in _cdf
         uint256 relayerGenerationIteration = 0;
@@ -153,7 +175,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
                 }
 
                 // Verify if correct stake prefix sum index has been provided
-                uint256 randomRelayerStake = _randomCdfNumber(_blockNumber, relayerGenerationIteration, stakeSum);
+                uint256 randomRelayerStake =
+                    _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, stakeSum);
 
                 if (
                     !(
@@ -172,7 +195,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
+        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
 
         if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
@@ -211,18 +234,27 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (cdf, _hashUint16ArrayMemory(cdf));
     }
 
-    function _updateAccountingState(
+    function _nextUpdateEffectiveAtWindowIndex() internal view returns (uint256) {
+        uint256 windowIndex = _windowIndex(block.number);
+        return windowIndex * 2 - (windowIndex % WINDOWS_PER_EPOCH);
+    }
+
+    function _updateCdf(
         uint32[] memory _stakeArray,
         bool _shouldUpdateStakeAccounting,
         uint32[] memory _delegationArray,
         bool _shouldUpdateDelegationAccounting
-    ) internal returns (uint256) {
+    ) internal {
+        if (_stakeArray.length != _delegationArray.length) {
+            revert ParameterLengthMismatch();
+        }
+
         RMStorage storage ds = getRMStorage();
 
         // Update Stake Array Hash
         if (_shouldUpdateStakeAccounting) {
-            ds.stakeArrayHash = _hashUint32ArrayMemory(_stakeArray);
-            emit StakeArrayUpdated(ds.stakeArrayHash);
+            ds.latestActiveRelayerStakeArrayHash = _hashUint32ArrayMemory(_stakeArray);
+            emit StakeArrayUpdated(ds.latestActiveRelayerStakeArrayHash);
         }
 
         // Update Delegation Array Hash
@@ -232,26 +264,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             emit DelegationArrayUpdated(tds.delegationArrayHash);
         }
 
-        if (_stakeArray.length != _delegationArray.length) {
-            revert ParameterLengthMismatch();
-        }
-
         // Update cdf hash
         (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
-        uint256 updateEffectiveAtwindowIndex =
-            _windowIndex(block.number) + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS;
-        if (
-            ds.cdfHashUpdateLog.length > 0
-                && ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowIndex == updateEffectiveAtwindowIndex
-        ) {
-            ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length - 1);
-        } else {
-            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowIndex: updateEffectiveAtwindowIndex, cdfHash: cdfHash}));
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length);
-        }
-
-        return updateEffectiveAtwindowIndex;
+        ds.cdfVersionHistoryManager.addNewVersion(cdfHash, _nextUpdateEffectiveAtWindowIndex());
     }
 
     ////////////////////////////// Delegation ////////////////////////
@@ -283,8 +298,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             return;
         }
 
-        // console2.log("Updating Protocol Rewards", block.timestamp, rs.lastUnpaidRewardUpdatedTimestamp);
-
         rs.unpaidProtocolRewards = _getUpdatedUnpaidProtocolRewards();
         rs.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
@@ -296,10 +309,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             return uint256(1).toFixedPointType();
         }
 
-        // console2.log("Total Stake", FixedPointType.unwrap(rs.totalStake.toFixedPointType()));
-        // console2.log("Unpaid Rewards", FixedPointType.unwrap(rs.unpaidProtocolRewards.toFixedPointType()));
-        // console2.log("Total Shares", FixedPointType.unwrap(rs.totalShares));
-
         return (rs.totalStake.toFixedPointType() + rs.unpaidProtocolRewards.toFixedPointType()) / rs.totalShares;
     }
 
@@ -307,11 +316,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         RMStorage storage rs = getRMStorage();
 
         FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
-        // console2.log("Reward Shares", FixedPointType.unwrap(rs.relayerInfo[_relayer].rewardShares));
-        // console2.log("Share Price", FixedPointType.unwrap(_protocolRewardRelayerSharePrice()));
-        // console2.log("Total value", FixedPointType.unwrap(totalValue));
-        // console2.log("Stake", FixedPointType.unwrap(rs.relayerInfo[_relayer].stake.toFixedPointType()));
-
         FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.toFixedPointType();
         return rewards.toUint256();
     }
@@ -328,14 +332,10 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _burnRewardSharesForRelayerAndGetRewards(RelayerAddress _relayer) internal returns (uint256, uint256) {
         RMStorage storage rs = getRMStorage();
 
-        // console2.log("Pre rewards check", block.timestamp);
-
         uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer);
         if (rewards == 0) {
             return (0, 0);
         }
-
-        // console2.log("Post rewards check", block.timestamp, rewards);
 
         FixedPointType rewardShares = rewards.toFixedPointType() / _protocolRewardRelayerSharePrice();
         rs.relayerInfo[_relayer].rewardShares = rs.relayerInfo[_relayer].rewardShares - rewardShares;
@@ -372,6 +372,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
     }
 
+    // TODO: Measure gas and check if these are needed
     function _scaleStake(uint256 _stake) internal pure returns (uint32) {
         return (_stake / STAKE_SCALING_FACTOR).toUint32();
     }

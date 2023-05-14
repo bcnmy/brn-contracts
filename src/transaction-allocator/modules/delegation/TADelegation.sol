@@ -7,6 +7,7 @@ import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 import "src/library/FixedPointArithmetic.sol";
+import "src/library/ArrayHelpers.sol";
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
 import "../../common/TAConstants.sol";
@@ -15,31 +16,12 @@ import "../../common/TAHelpers.sol";
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
+    using U32CalldataArrayHelpers for uint32[];
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
     function _scaleDelegation(uint256 _delegatedAmount) internal pure returns (uint32) {
         return (_delegatedAmount / DELGATION_SCALING_FACTOR).toUint32();
-    }
-
-    function _addDelegationInDelegationArray(uint32[] calldata _delegationArray, uint256 _index, uint32 _scaledAmount)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint32[] memory _newDelegationArray = _delegationArray;
-        _newDelegationArray[_index] = _newDelegationArray[_index] + _scaledAmount;
-        return _newDelegationArray;
-    }
-
-    function _decreaseDelegationInDelegationArray(
-        uint32[] calldata _delegationArray,
-        uint256 _index,
-        uint32 _scaledAmount
-    ) internal pure returns (uint32[] memory) {
-        uint32[] memory _newDelegationArray = _delegationArray;
-        _newDelegationArray[_index] = _newDelegationArray[_index] - _scaledAmount;
-        return _newDelegationArray;
     }
 
     function _mintPoolShares(
@@ -82,45 +64,48 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     function delegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerAddress _relayerAddress,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex,
+        uint256 _relayerIndex,
         uint256 _amount
     )
         external
         override
         verifyStakeArrayHash(_currentStakeArray)
         verifyDelegationArrayHash(_prevDelegationArray)
-        onlyStakedRelayer(_relayerAddress)
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        onlyStakedRelayer(_activeRelayers[_relayerIndex])
     {
         RMStorage storage rms = getRMStorage();
         TADStorage storage ds = getTADStorage();
+        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
 
-        _updateRelayerProtocolRewards(_relayerAddress);
+        _updateRelayerProtocolRewards(relayerAddress);
 
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
         uint256 length = ds.supportedPools.length;
         if (length == 0) {
-            revert NoSupportedGasTokens(_relayerAddress);
+            revert NoSupportedGasTokens(relayerAddress);
         }
 
         for (uint256 i = 0; i < length;) {
-            _mintPoolShares(_relayerAddress, delegatorAddress, _amount, ds.supportedPools[i]);
+            _mintPoolShares(relayerAddress, delegatorAddress, _amount, ds.supportedPools[i]);
             unchecked {
                 ++i;
             }
         }
 
-        ds.delegation[_relayerAddress][delegatorAddress] += _amount;
-        ds.totalDelegation[_relayerAddress] += _amount;
+        ds.delegation[relayerAddress][delegatorAddress] += _amount;
+        ds.totalDelegation[relayerAddress] += _amount;
 
-        uint32[] memory _newDelegationArray = _addDelegationInDelegationArray(
-            _prevDelegationArray, rms.relayerInfo[_relayerAddress].index, _scaleDelegation(_amount)
-        );
+        uint32[] memory _newDelegationArray =
+            _prevDelegationArray.update(_relayerIndex, _scaleDelegation(ds.totalDelegation[relayerAddress]));
 
-        _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
+        _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
 
-        emit DelegationAdded(_relayerAddress, delegatorAddress, _amount);
+        emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
     }
 
     function _processRewards(RelayerAddress _relayerAddress, TokenAddress _pool, DelegatorAddress _delegatorAddress)
@@ -145,38 +130,45 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     function unDelegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerAddress _relayerAddress
-    ) external override verifyStakeArrayHash(_currentStakeArray) verifyDelegationArrayHash(_prevDelegationArray) {
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex,
+        uint256 _relayerIndex
+    )
+        external
+        override
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        verifyStakeArrayHash(_currentStakeArray)
+        verifyDelegationArrayHash(_prevDelegationArray)
+    {
         TADStorage storage ds = getTADStorage();
-        RMStorage storage rms = getRMStorage();
+        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
 
-        _updateRelayerProtocolRewards(_relayerAddress);
+        _updateRelayerProtocolRewards(relayerAddress);
 
         DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
 
         uint256 length = ds.supportedPools.length;
 
         for (uint256 i = 0; i < length;) {
-            _processRewards(_relayerAddress, ds.supportedPools[i], delegatorAddress);
+            _processRewards(relayerAddress, ds.supportedPools[i], delegatorAddress);
             unchecked {
                 ++i;
             }
         }
 
-        uint256 delegation_ = ds.delegation[_relayerAddress][delegatorAddress];
-        ds.totalDelegation[_relayerAddress] -= delegation_;
-        ds.delegation[_relayerAddress][delegatorAddress] = 0;
+        uint256 delegation_ = ds.delegation[relayerAddress][delegatorAddress];
+        ds.totalDelegation[relayerAddress] -= delegation_;
+        ds.delegation[relayerAddress][delegatorAddress] = 0;
 
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
-        if (_isStakedRelayer(_relayerAddress)) {
-            uint32[] memory _newDelegationArray = _decreaseDelegationInDelegationArray(
-                _prevDelegationArray, rms.relayerInfo[_relayerAddress].index, _scaleDelegation(delegation_)
-            );
-            _updateAccountingState(_currentStakeArray, false, _newDelegationArray, true);
+        if (_isStakedRelayer(relayerAddress)) {
+            uint32[] memory _newDelegationArray =
+                _prevDelegationArray.update(_relayerIndex, _scaleDelegation(ds.totalDelegation[relayerAddress]));
+            _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
         }
 
-        emit DelegationRemoved(_relayerAddress, delegatorAddress, delegation_);
+        emit DelegationRemoved(relayerAddress, delegatorAddress, delegation_);
     }
 
     function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
@@ -256,14 +248,19 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return ds.unclaimedRewards[_relayerAddress][_tokenAddress];
     }
 
-    function getDelegationArray() external view override returns (uint32[] memory) {
+    function getDelegationArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+        external
+        view
+        override
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        returns (uint32[] memory)
+    {
         TADStorage storage ds = getTADStorage();
-        RMStorage storage rms = getRMStorage();
-        uint256 length = rms.relayerCount;
+        uint256 length = _activeRelayers.length;
         uint32[] memory delegationArray = new uint32[](length);
 
         for (uint256 i = 0; i < length;) {
-            RelayerAddress relayerAddress = rms.relayerIndexToRelayerAddress[i];
+            RelayerAddress relayerAddress = _activeRelayers[i];
             delegationArray[i] = _scaleDelegation(ds.totalDelegation[relayerAddress]);
             unchecked {
                 ++i;

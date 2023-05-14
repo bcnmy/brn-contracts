@@ -8,6 +8,7 @@ import "src/library/FixedPointArithmetic.sol";
 interface ITAHelpers {
     error InvalidStakeArrayHash();
     error InvalidCdfArrayHash();
+    error InvalidRelayersArrayHash();
     error InvalidDelegationArrayHash();
     error NativeTransferFailed(address to, uint256 amount);
     error InsufficientBalance(TokenAddress token, uint256 balance, uint256 amount);

@@ -12,6 +12,8 @@ import "../application/base-application/interfaces/IApplicationBase.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
+    using VersionHistoryManager for VersionHistoryManager.Version[];
+
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     function _verifyRelayerWasSelectedForTransaction(bool _success, bytes memory _returndata)
         internal
@@ -42,12 +44,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         bytes[] calldata _reqs,
         uint256[] calldata _forwardedNativeAmounts,
         uint16[] calldata _cdf,
-        uint256 _relayerGenerationIterationBitmap,
+        uint256 _currentCdfLogIndex,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _currentRelayerListLogIndex,
         uint256 _relayerIndex,
-        uint256 _currentCdfLogIndex
+        uint256 _relayerGenerationIterationBitmap
     ) public payable override returns (bool[] memory successes) {
-        uint256 gasLeft = gasleft();
-
         // Verify whether sufficient fee has been attached or not
         uint256 length = _reqs.length;
         if (length != _forwardedNativeAmounts.length) {
@@ -67,18 +69,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Verify Relayer Selection
         if (
             !_verifyRelayerSelection(
-                msg.sender, _cdf, _currentCdfLogIndex, _relayerIndex, _relayerGenerationIterationBitmap, block.number
+                msg.sender,
+                _cdf,
+                _currentCdfLogIndex,
+                _activeRelayers,
+                _currentRelayerListLogIndex,
+                _relayerIndex,
+                _relayerGenerationIterationBitmap,
+                block.number
             )
         ) {
             revert InvalidRelayerWindow();
         }
-        emit GenericGasConsumed("VerificationGas", gasLeft - gasleft());
-        gasLeft = gasleft();
 
         successes = new bool[](length);
-        RMStorage storage ds = getRMStorage();
-        uint256 relayerCount = ds.relayersPerWindow;
-        RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[_relayerIndex];
+        uint256 relayerCount = _activeRelayers.length;
+        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
 
         // Execute all transactions
         uint256 transactionsAllotedAndSubmittedByRelayer;
@@ -104,11 +110,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
         }
 
-        gasLeft = gasleft();
-        // TODO: Account for caes where the relayer list changes between epochs or if a relayer is exiting in the current epoch
+        // Record the number of transactions submitted by the relayer
         getTAStorage().transactionsSubmitted[_epochIndexFromBlock(block.number)][relayerAddress] +=
             transactionsAllotedAndSubmittedByRelayer;
-        emit GenericGasConsumed("OtherOverhead", gasLeft - gasleft());
 
         // TODO: Check how to update this logic
         // Validate that the relayer has sent enough gas for the call.
@@ -144,15 +148,29 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
     /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
-    function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
+    function allocateRelayers(
+        uint16[] calldata _cdf,
+        uint256 _currentCdfLogIndex,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex
+    )
         public
         view
         override
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
         returns (RelayerAddress[] memory, uint256[] memory)
     {
         RMStorage storage ds = getRMStorage();
 
-        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(block.number), _currentCdfLogIndex)) {
+        uint256 windowIndex = _windowIndex(block.number);
+
+        // TODO: Modifier
+        // Verify CDF
+        if (
+            !ds.cdfVersionHistoryManager.verifyContentHashAtTimestamp(
+                _hashUint16ArrayCalldata(_cdf), _currentCdfLogIndex, windowIndex
+            )
+        ) {
             revert InvalidCdfArrayHash();
         }
 
@@ -170,9 +188,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         for (uint256 i = 0; i < ds.relayersPerWindow;) {
-            uint256 randomCdfNumber = _randomCdfNumber(block.number, i, _cdf[cdfLength - 1]);
+            uint256 randomCdfNumber = _randomNumberForCdfSelection(block.number, i, _cdf[cdfLength - 1]);
             cdfIndex[i] = _lowerBound(_cdf, randomCdfNumber);
-            selectedRelayers[i] = ds.relayerIndexToRelayerAddress[cdfIndex[i]];
+            selectedRelayers[i] = _activeRelayers[cdfIndex[i]];
             unchecked {
                 ++i;
             }

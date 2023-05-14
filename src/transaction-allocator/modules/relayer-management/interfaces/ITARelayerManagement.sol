@@ -9,21 +9,33 @@ import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITARelayerManagementEventsErrors.sol";
 
 interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
-    function getStakeArray() external view returns (uint32[] memory);
+    function getStakeArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+        external
+        view
+        returns (uint32[] memory);
 
-    function getCdfArray() external view returns (uint16[] memory);
+    function getCdfArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+        external
+        view
+        returns (uint16[] memory);
 
     ////////////////////////// Relayer Registration //////////////////////////
     function register(
         uint32[] calldata _previousStakeArray,
         uint32[] calldata _currentDelegationArray,
+        RelayerAddress[] calldata _activeRelayers,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint,
         uint256 _delegatorPoolPremiumShare
-    ) external returns (RelayerAddress);
+    ) external;
 
-    function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _currentDelegationArray) external;
+    function unRegister(
+        uint32[] calldata _previousStakeArray,
+        uint32[] calldata _currentDelegationArray,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerIndex
+    ) external;
 
     function withdraw() external;
 
@@ -40,8 +52,6 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function relayerInfo_Endpoint(RelayerAddress) external view returns (string memory);
 
-    function relayerInfo_Index(RelayerAddress) external view returns (uint256);
-
     function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
 
     function relayerInfo_delegatorPoolPremiumShare(RelayerAddress) external view returns (uint256);
@@ -52,9 +62,7 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function blocksPerWindow() external view returns (uint256);
 
-    function cdfHashUpdateLog(uint256) external view returns (CdfHashUpdateInfo memory);
-
-    function stakeArrayHash() external view returns (bytes32);
+    function latestActiveRelayerStakeArrayHash() external view returns (bytes32);
 
     function penaltyDelayBlocks() external view returns (uint256);
 

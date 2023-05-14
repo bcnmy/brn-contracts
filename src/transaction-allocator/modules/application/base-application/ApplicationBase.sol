@@ -62,7 +62,9 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         returns (bytes[] memory, uint256, uint256)
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
-            ITATransactionAllocation(address(this)).allocateRelayers(_data.cdf, _data.currentCdfLogIndex);
+        ITATransactionAllocation(address(this)).allocateRelayers(
+            _data.cdf, _data.currentCdfLogIndex, _data.activeRelayers, _data.relayerLogIndex
+        );
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
             revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
         }

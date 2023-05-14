@@ -25,10 +25,9 @@ contract TADebug is ITADebug, TAHelpers {
         external
         view
         override
+        verifyCDF(_array, __windowIndex, _cdfLogIndex)
         returns (bool)
-    {
-        return _verifyCdfHashAtWindow(_array, __windowIndex, _cdfLogIndex);
-    }
+    {}
 
     function debug_currentWindowIndex() external view override returns (uint256) {
         return _windowIndex(block.number);
