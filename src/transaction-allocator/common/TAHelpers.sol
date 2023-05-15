@@ -133,6 +133,14 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return __windowIndex / WINDOWS_PER_EPOCH;
     }
 
+    function _epochIndexToStartingWindowIndex(uint256 __epochIndex) internal pure returns (uint256) {
+        return __epochIndex * WINDOWS_PER_EPOCH;
+    }
+
+    function _epochIndexToStartingBlock(uint256 __epochIndex) internal view returns (uint256) {
+        return _windowIndexToStartingBlock(_epochIndexToStartingWindowIndex(__epochIndex));
+    }
+
     function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
         internal
         view
@@ -279,9 +287,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function _protocolRewardRate() internal view returns (uint256) {
         return (
-            BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.toFixedPointType() * MINIMUM_STAKE_AMOUNT.toFixedPointType()
-                * fixedPointSqrt(getRMStorage().relayerCount.toFixedPointType())
-        ).toUint256();
+            BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.fp() * MINIMUM_STAKE_AMOUNT.fp()
+                * (getRMStorage().relayerCount.fp().sqrt())
+        ).u256();
     }
 
     function _getUpdatedUnpaidProtocolRewards() internal view returns (uint256) {
@@ -305,19 +313,19 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _protocolRewardRelayerSharePrice() internal view returns (FixedPointType) {
         RMStorage storage rs = getRMStorage();
 
-        if (rs.totalShares == uint256(0).toFixedPointType()) {
-            return uint256(1).toFixedPointType();
+        if (rs.totalShares == FP_ZERO) {
+            return FP_ONE;
         }
 
-        return (rs.totalStake.toFixedPointType() + rs.unpaidProtocolRewards.toFixedPointType()) / rs.totalShares;
+        return (rs.totalStake.fp() + rs.unpaidProtocolRewards.fp()) / rs.totalShares;
     }
 
     function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
 
         FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
-        FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.toFixedPointType();
-        return rewards.toUint256();
+        FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.fp();
+        return rewards.u256();
     }
 
     function _splitRewards(uint256 _totalRewards, uint256 _delegatorRewardSharePercentage)
@@ -337,7 +345,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             return (0, 0);
         }
 
-        FixedPointType rewardShares = rewards.toFixedPointType() / _protocolRewardRelayerSharePrice();
+        FixedPointType rewardShares = rewards.fp() / _protocolRewardRelayerSharePrice();
         rs.relayerInfo[_relayer].rewardShares = rs.relayerInfo[_relayer].rewardShares - rewardShares;
         rs.totalShares = rs.totalShares - rewardShares;
 

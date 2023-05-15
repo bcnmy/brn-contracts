@@ -221,7 +221,7 @@ contract TARelayerManagement is
 
         RMStorage storage rs = getRMStorage();
 
-        FixedPointType rewardShares = _amount.toFixedPointType() / _protocolRewardRelayerSharePrice();
+        FixedPointType rewardShares = _amount.fp() / _protocolRewardRelayerSharePrice();
         rs.totalShares = rs.totalShares + rewardShares;
 
         emit RelayerProtocolRewardMinted(rewardShares);

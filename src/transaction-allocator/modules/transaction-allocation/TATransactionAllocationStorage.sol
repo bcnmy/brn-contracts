@@ -9,6 +9,7 @@ abstract contract TATransactionAllocationStorage {
 
     struct TAStorage {
         mapping(uint256 epoch => mapping(RelayerAddress => uint256 transactionsSubmitted)) transactionsSubmitted;
+        mapping(uint256 epoch => uint256 totalTransactionsSubmitted) totalTransactionsSubmitted;
     }
 
     /* solhint-disable no-inline-assembly */

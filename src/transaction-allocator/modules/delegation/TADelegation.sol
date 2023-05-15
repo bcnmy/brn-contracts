@@ -33,7 +33,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         TADStorage storage ds = getTADStorage();
 
         FixedPointType sharePrice_ = delegationSharePrice(_relayerAddress, _pool);
-        FixedPointType sharesMinted = (_delegatedAmount.toFixedPointType() / sharePrice_);
+        FixedPointType sharesMinted = (_delegatedAmount.fp() / sharePrice_);
 
         ds.shares[_relayerAddress][_delegatorAddress][_pool] =
             ds.shares[_relayerAddress][_delegatorAddress][_pool] + sharesMinted;
@@ -119,7 +119,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             ds.unclaimedRewards[_relayerAddress][_pool] -= rewardsEarned_;
             ds.totalShares[_relayerAddress][_pool] =
                 ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
-            ds.shares[_relayerAddress][_delegatorAddress][_pool] = uint256(0).toFixedPointType();
+            ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
 
             _transfer(_pool, DelegatorAddress.unwrap(_delegatorAddress), rewardsEarned_);
             emit RewardSent(_relayerAddress, _delegatorAddress, _pool, rewardsEarned_);
@@ -178,11 +178,11 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         returns (FixedPointType)
     {
         TADStorage storage ds = getTADStorage();
-        if (ds.totalShares[_relayerAddress][_tokenAddress] == uint256(0).toFixedPointType()) {
-            return uint256(1).toFixedPointType();
+        if (ds.totalShares[_relayerAddress][_tokenAddress] == FP_ZERO) {
+            return FP_ONE;
         }
-        FixedPointType totalDelegation_ = ds.totalDelegation[_relayerAddress].toFixedPointType();
-        FixedPointType unclaimedRewards_ = ds.unclaimedRewards[_relayerAddress][_tokenAddress].toFixedPointType();
+        FixedPointType totalDelegation_ = ds.totalDelegation[_relayerAddress].fp();
+        FixedPointType unclaimedRewards_ = ds.unclaimedRewards[_relayerAddress][_tokenAddress].fp();
         FixedPointType totalShares_ = ds.totalShares[_relayerAddress][_tokenAddress];
 
         return (totalDelegation_ + unclaimedRewards_) / totalShares_;
@@ -196,10 +196,10 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         TADStorage storage ds = getTADStorage();
 
         FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
-        FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].toFixedPointType();
+        FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].fp();
         FixedPointType rewards = shares_ * delegationSharePrice(_relayerAddress, _tokenAddres) - delegation_;
 
-        return rewards.toUint256();
+        return rewards.u256();
     }
 
     ////////////////////////// Getters //////////////////////////

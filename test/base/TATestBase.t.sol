@@ -215,7 +215,7 @@ abstract contract TATestBase is Test {
     }
 
     function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
-        assertEq(_a.toUint256(), _b.toUint256());
+        assertEq(_a.u256(), _b.u256());
     }
 
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {

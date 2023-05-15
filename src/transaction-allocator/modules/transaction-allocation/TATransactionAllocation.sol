@@ -13,6 +13,8 @@ import "../relayer-management/TARelayerManagementStorage.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     using VersionHistoryManager for VersionHistoryManager.Version[];
+    using FixedPointTypeHelper for FixedPointType;
+    using Uint256WrapperHelper for uint256;
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     function _verifyRelayerWasSelectedForTransaction(bool _success, bytes memory _returndata)
@@ -111,8 +113,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Record the number of transactions submitted by the relayer
-        getTAStorage().transactionsSubmitted[_epochIndexFromBlock(block.number)][relayerAddress] +=
-            transactionsAllotedAndSubmittedByRelayer;
+        TAStorage storage ts = getTAStorage();
+        uint256 epochIndex = _epochIndexFromBlock(block.number);
+        // TODO: Is extra update for total transactions TRULY required?
+        ts.transactionsSubmitted[epochIndex][relayerAddress] += transactionsAllotedAndSubmittedByRelayer;
+        ts.totalTransactionsSubmitted[epochIndex] += transactionsAllotedAndSubmittedByRelayer;
 
         // TODO: Check how to update this logic
         // Validate that the relayer has sent enough gas for the call.
@@ -196,5 +201,69 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
         }
         return (selectedRelayers, cdfIndex);
+    }
+
+    ///////////////////////////////// Liveness ///////////////////////////////
+    function _calculateConfidenceInterval(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        FixedPointType _totalTransactions,
+        FixedPointType _zScore
+    ) internal pure returns (FixedPointType, FixedPointType) {
+        FixedPointType p = _relayerStake.fp() / _totalStake.fp();
+        FixedPointType s = (p * (FP_ONE - p) / _totalTransactions).sqrt();
+        FixedPointType d = _zScore * s;
+        if (p > d) {
+            return (p - d, p + d);
+        }
+
+        return (FP_ZERO, p + d);
+    }
+
+    function _verifyRelayerLiveness(
+        uint16[] calldata _cdf,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerIndex,
+        FixedPointType _totalTransactionsInEpoch
+    ) internal view returns (bool) {
+        uint256 relayerStakeNormalized = _cdf[_relayerIndex];
+        uint256 transactionsProcessedByRelayer =
+            getTAStorage().transactionsSubmitted[_epochIndexFromBlock(block.number)][_activeRelayers[_relayerIndex]];
+
+        if (_relayerIndex != 0) {
+            relayerStakeNormalized -= _cdf[_relayerIndex - 1];
+        }
+
+        (FixedPointType expectedLow, FixedPointType expectedHigh) = _calculateConfidenceInterval(
+            relayerStakeNormalized, _cdf[_cdf.length - 1], _totalTransactionsInEpoch, LIVENESS_Z_PARAMETER
+        );
+
+        FixedPointType actualProportion = transactionsProcessedByRelayer.fp() / _totalTransactionsInEpoch;
+
+        return actualProportion >= expectedLow && actualProportion <= expectedHigh;
+    }
+
+    function _processLivenessCheck(
+        uint16[] calldata _cdf,
+        uint256 _cdfLogIndex,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex,
+        uint256 _epochIndex
+    )
+        internal
+        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, _epochIndexToStartingBlock(_epochIndex))
+        verifyCDF(_cdf, _cdfLogIndex, _epochIndexToStartingBlock(_epochIndex))
+    {
+        FixedPointType totalTransactionsInEpoch = getTAStorage().totalTransactionsSubmitted[_epochIndex].fp();
+
+        for (uint256 i; i < _activeRelayers.length;) {
+            if (!_verifyRelayerLiveness(_cdf, _activeRelayers, i, totalTransactionsInEpoch)) {
+                // TODO
+                revert("TODO");
+            }
+            unchecked {
+                ++i;
+            }
+        }
     }
 }
