@@ -44,15 +44,17 @@ contract TATransactionAllocationTest is
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            ta.register(
-                ta.getStakeArray(),
-                ta.getDelegationArray(),
+            vm.stopPrank();
+
+            _register(
+                relayerAddress,
+                ta.getStakeArray(activeRelayers),
+                ta.getDelegationArray(activeRelayers),
                 stake,
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
                 delegatorPoolPremiumShare
             );
-            vm.stopPrank();
         }
 
         for (uint256 i = 0; i < userCount; i++) {
@@ -81,7 +83,9 @@ contract TATransactionAllocationTest is
                     relayerAddress: relayerAddress,
                     requests: txns_,
                     cdf: _cdf,
-                    currentCdfLogIndex: _currentCdfLogIndex
+                    currentCdfLogIndex: _currentCdfLogIndex,
+                    activeRelayers: activeRelayers,
+                    relayerLogIndex: 1
                 })
             );
 
@@ -95,10 +99,10 @@ contract TATransactionAllocationTest is
     }
 
     function testTransactionExecution() external atSnapshot {
-        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
 
         uint256 executionCount = 0;
-        uint16[] memory cdf = ta.getCdfArray();
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
@@ -107,7 +111,9 @@ contract TATransactionAllocationTest is
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1
+                    currentCdfLogIndex: 1,
+                    activeRelayers: activeRelayers,
+                    relayerLogIndex: 1
                 })
             );
 
@@ -120,9 +126,11 @@ contract TATransactionAllocationTest is
                 allotedTransactions,
                 new uint256[](allotedTransactions.length),
                 cdf,
-                relayerGenerationIterations,
+                1,
+                activeRelayers,
+                1,
                 selectedRelayerCdfIndex,
-                1
+                relayerGenerationIterations
             );
             vm.stopPrank();
 
@@ -140,10 +148,10 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
-        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
 
-        uint16[] memory cdf = ta.getCdfArray();
-        uint16[] memory cdf2 = ta.getCdfArray();
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
         // Corrupt the CDF
         cdf2[0] += 1;
 
@@ -155,7 +163,9 @@ contract TATransactionAllocationTest is
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1
+                    currentCdfLogIndex: 1,
+                    activeRelayers: activeRelayers,
+                    relayerLogIndex: 1
                 })
             );
 
@@ -169,17 +179,19 @@ contract TATransactionAllocationTest is
                 allotedTransactions,
                 new uint256[](allotedTransactions.length),
                 cdf2,
-                relayerGenerationIterations,
-                selectedRelayerCdfIndex + 1,
-                1
+                1,
+                activeRelayers,
+                1,
+                selectedRelayerCdfIndex,
+                relayerGenerationIterations
             );
             vm.stopPrank();
         }
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
-        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
-        uint16[] memory cdf = ta.getCdfArray();
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
@@ -189,7 +201,9 @@ contract TATransactionAllocationTest is
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1
+                    currentCdfLogIndex: 1,
+                    activeRelayers: activeRelayers,
+                    relayerLogIndex: 1
                 })
             );
 
@@ -197,15 +211,19 @@ contract TATransactionAllocationTest is
                 continue;
             }
 
-            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
+            uint256 testRelayerIndex = (i + 1) % relayerMainAddress.length;
+
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[testRelayerIndex]][0]);
             vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
             ta.execute(
                 allotedTransactions,
                 new uint256[](allotedTransactions.length),
                 cdf,
-                relayerGenerationIterations,
+                1,
+                activeRelayers,
+                1,
                 selectedRelayerCdfIndex + 1,
-                1
+                relayerGenerationIterations
             );
             vm.stopPrank();
         }
@@ -213,21 +231,23 @@ contract TATransactionAllocationTest is
 
     // TODO: This test is suspicious
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
-        vm.roll(block.number + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS * deployParams.blocksPerWindow);
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
 
-        uint16[] memory cdf = ta.getCdfArray();
-        (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1);
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1, activeRelayers, 1);
         bool testRun = false;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            (bytes[] memory allotedTransactions, uint256 relayerGenerationIteration, uint256 selectedRelayerCdfIndex) =
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
             tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1
+                    currentCdfLogIndex: 1,
+                    activeRelayers: activeRelayers,
+                    relayerLogIndex: 1
                 })
             );
 
@@ -247,9 +267,11 @@ contract TATransactionAllocationTest is
                 allotedTransactions,
                 new uint256[](allotedTransactions.length),
                 cdf,
-                relayerGenerationIteration,
+                1,
+                activeRelayers,
+                1,
                 selectedRelayerCdfIndex + 1,
-                1
+                relayerGenerationIterations
             );
             vm.stopPrank();
         }
