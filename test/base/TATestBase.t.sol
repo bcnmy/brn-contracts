@@ -45,6 +45,8 @@ abstract contract TATestBase is Test {
     address[] userAddresses;
     mapping(address => uint256) internal userKeys;
 
+    RelayerAddress[] internal activeRelayers;
+
     ERC20 bico;
 
     uint256 private _postDeploymentSnapshotId = type(uint256).max;
@@ -128,6 +130,57 @@ abstract contract TATestBase is Test {
         }
         _;
     }
+
+    // Relayer Registration Helpers
+    function _register(
+        RelayerAddress _relayerAddress,
+        uint32[] memory _stakeArray,
+        uint32[] memory _delegationArray,
+        uint256 _stake,
+        RelayerAccountAddress[] memory _accountAddresses,
+        string memory endpoint,
+        uint256 delegatorPoolPremiumShare
+    ) internal {
+        _startPrankRA(_relayerAddress);
+        ta.register(
+            _stakeArray,
+            _delegationArray,
+            activeRelayers,
+            _stake,
+            _accountAddresses,
+            endpoint,
+            delegatorPoolPremiumShare
+        );
+        vm.stopPrank();
+        activeRelayers.push(_relayerAddress);
+    }
+
+    function _unregister(RelayerAddress _relayerAddress, uint32[] memory _stakeArray, uint32[] memory _delegationArray)
+        internal
+    {
+        _startPrankRA(_relayerAddress);
+
+        uint256 relayerIndex = _findRelayerIndex(_relayerAddress);
+
+        ta.unRegister(_stakeArray, _delegationArray, activeRelayers, relayerIndex);
+        vm.stopPrank();
+
+        // Update Active Relayers
+        activeRelayers[relayerIndex] = activeRelayers[activeRelayers.length - 1];
+        activeRelayers.pop();
+    }
+
+    function _findRelayerIndex(RelayerAddress _relayer) internal returns (uint256) {
+        for (uint256 i = 0; i < activeRelayers.length; i++) {
+            if (activeRelayers[i] == _relayer) {
+                return i;
+            }
+        }
+        fail("Relayer not found");
+        return 0;
+    }
+
+    // Utils
 
     function _stringConcat2(string memory a, string memory b) internal pure returns (string memory) {
         return string(abi.encodePacked(a, b));

@@ -3,10 +3,12 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/ITADebug.sol";
-
 import "src/transaction-allocator/common/TAHelpers.sol";
+import "forge-std/console2.sol";
 
 contract TADebug is ITADebug, TAHelpers {
+    using VersionHistoryManager for VersionHistoryManager.Version[];
+
     constructor() {
         if (block.chainid != 31337) {
             revert("TADebug: only for testing");
@@ -25,9 +27,12 @@ contract TADebug is ITADebug, TAHelpers {
         external
         view
         override
-        verifyCDF(_array, __windowIndex, _cdfLogIndex)
         returns (bool)
-    {}
+    {
+        return getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
+            _hashUint16ArrayCalldata(_array), _cdfLogIndex, __windowIndex
+        );
+    }
 
     function debug_currentWindowIndex() external view override returns (uint256) {
         return _windowIndex(block.number);
@@ -35,5 +40,14 @@ contract TADebug is ITADebug, TAHelpers {
 
     function debug_cdfHash(uint16[] calldata _cdf) external pure override returns (bytes32) {
         return _hashUint16ArrayCalldata(_cdf);
+    }
+
+    function debug_printCdfLog() external view override {
+        RMStorage storage rms = getRMStorage();
+        VersionHistoryManager.Version[] storage cdfVersionHistory = rms.cdfVersionHistoryManager;
+        console2.log("CDF Log:");
+        for (uint256 i = 0; i < cdfVersionHistory.length; i++) {
+            console2.log(i, uint256(cdfVersionHistory[i].contentHash), cdfVersionHistory[i].timestamp);
+        }
     }
 }

@@ -59,8 +59,5 @@ interface ITADelegation is ITADelegationEventsErrors {
 
     function supportedPools() external view returns (TokenAddress[] memory);
 
-    function getDelegationArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
-        external
-        view
-        returns (uint32[] memory);
+    function getDelegationArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint32[] memory);
 }

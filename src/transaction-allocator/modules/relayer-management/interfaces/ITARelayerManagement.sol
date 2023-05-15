@@ -9,15 +9,9 @@ import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITARelayerManagementEventsErrors.sol";
 
 interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
-    function getStakeArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
-        external
-        view
-        returns (uint32[] memory);
+    function getStakeArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint32[] memory);
 
-    function getCdfArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
-        external
-        view
-        returns (uint16[] memory);
+    function getCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
 
     ////////////////////////// Relayer Registration //////////////////////////
     function register(
@@ -39,7 +33,7 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function withdraw() external;
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts) external;
+    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts) external;
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function claimProtocolReward() external;

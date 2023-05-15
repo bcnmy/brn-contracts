@@ -236,7 +236,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     function _nextUpdateEffectiveAtWindowIndex() internal view returns (uint256) {
         uint256 windowIndex = _windowIndex(block.number);
-        return windowIndex * 2 - (windowIndex % WINDOWS_PER_EPOCH);
+        return windowIndex + WINDOWS_PER_EPOCH - (windowIndex % WINDOWS_PER_EPOCH);
     }
 
     function _updateCdf(

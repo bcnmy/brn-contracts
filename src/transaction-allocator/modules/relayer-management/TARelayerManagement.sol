@@ -116,11 +116,12 @@ contract TARelayerManagement is
         rms.totalShares = rms.totalShares - node.rewardShares;
         uint256 stake = node.stake;
         _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
-
         delete rms.relayerInfo[relayerAddress];
 
         --rms.relayerCount;
         rms.totalStake -= stake;
+
+        // TODO: Ensure that whenever active relayer are updated, stake array and delegation array is also updated
 
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _previousStakeArray.remove(_relayerIndex);
@@ -135,8 +136,7 @@ contract TARelayerManagement is
         );
 
         // Create withdrawal Info
-        rms.withdrawalInfo[relayerAddress] =
-            WithdrawalInfo(stake, _windowIndexToStartingBlock(updateEffectiveAtWindowIndex));
+        rms.withdrawalInfo[relayerAddress] = WithdrawalInfo(stake, block.number + RELAYER_WITHDRAW_DELAY_IN_BLOCKS);
 
         emit RelayerUnRegistered(relayerAddress);
     }
@@ -181,7 +181,7 @@ contract TARelayerManagement is
         node.relayerAccountAddresses = _accounts;
     }
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts)
+    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
         external
         override
         onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
@@ -289,11 +289,11 @@ contract TARelayerManagement is
     }
 
     ////////////////////////// Getters For Derived State //////////////////////////
-    function getStakeArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+    function getStakeArray(RelayerAddress[] calldata _activeRelayers)
         public
         view
         override
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        verifyLatestActiveRelayerList(_activeRelayers)
         returns (uint32[] memory)
     {
         RMStorage storage ds = getRMStorage();
@@ -310,16 +310,15 @@ contract TARelayerManagement is
         return stakeArray;
     }
 
-    function getCdfArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+    function getCdfArray(RelayerAddress[] calldata _activeRelayers)
         public
         view
         override
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        verifyLatestActiveRelayerList(_activeRelayers)
         returns (uint16[] memory)
     {
-        uint32[] memory stakeArray = getStakeArray(_activeRelayers, _relayerLogIndex);
-        uint32[] memory delegationArray =
-            ITADelegation(address(this)).getDelegationArray(_activeRelayers, _relayerLogIndex);
+        uint32[] memory stakeArray = getStakeArray(_activeRelayers);
+        uint32[] memory delegationArray = ITADelegation(address(this)).getDelegationArray(_activeRelayers);
         (uint16[] memory cdfArray,) = _generateCdfArray(stakeArray, delegationArray);
         return cdfArray;
     }

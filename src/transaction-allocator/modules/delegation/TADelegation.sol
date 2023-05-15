@@ -248,11 +248,11 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return ds.unclaimedRewards[_relayerAddress][_tokenAddress];
     }
 
-    function getDelegationArray(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+    function getDelegationArray(RelayerAddress[] calldata _activeRelayers)
         external
         view
         override
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
+        verifyLatestActiveRelayerList(_activeRelayers)
         returns (uint32[] memory)
     {
         TADStorage storage ds = getTADStorage();

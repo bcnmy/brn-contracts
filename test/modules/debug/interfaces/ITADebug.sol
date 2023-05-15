@@ -15,4 +15,6 @@ interface ITADebug {
     function debug_currentWindowIndex() external view returns (uint256);
 
     function debug_cdfHash(uint16[] calldata _cdf) external view returns (bytes32);
+
+    function debug_printCdfLog() external view;
 }
