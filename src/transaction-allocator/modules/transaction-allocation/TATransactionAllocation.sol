@@ -5,7 +5,7 @@ pragma solidity 0.8.19;
 import "src/transaction-allocator/common/TAStructs.sol";
 import "src/transaction-allocator/common/TAHelpers.sol";
 import "src/transaction-allocator/common/TATypes.sol";
-import "src/library/ArrayHelpers.sol";
+
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../application/base-application/interfaces/IApplicationBase.sol";
@@ -15,7 +15,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     using VersionHistoryManager for VersionHistoryManager.Version[];
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
-    using U32CalldataArrayHelpers for uint32[];
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     function _executeTransaction(
@@ -136,6 +135,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /////////////////////////////// Allocation Helpers ///////////////////////////////
+    // TODO: Use oz
     function _lowerBound(uint16[] calldata arr, uint256 target) internal pure returns (uint256) {
         uint256 low = 0;
         uint256 high = arr.length;

@@ -9,6 +9,7 @@ import "forge-std/console2.sol";
 
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using VersionHistoryManager for VersionHistoryManager.Version[];
+    using U16ArrayHelper for uint16[];
 
     constructor() {
         if (block.chainid != 31337) {
@@ -31,7 +32,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         returns (bool)
     {
         return getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
-            _hashUint16ArrayCalldata(_array), _cdfLogIndex, __windowIndex
+            _array.cd_hash(), _cdfLogIndex, __windowIndex
         );
     }
 
@@ -40,7 +41,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     }
 
     function debug_cdfHash(uint16[] calldata _cdf) external pure override returns (bytes32) {
-        return _hashUint16ArrayCalldata(_cdf);
+        return _cdf.cd_hash();
     }
 
     function debug_printCdfLog() external view override {

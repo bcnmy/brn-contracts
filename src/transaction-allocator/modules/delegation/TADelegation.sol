@@ -7,7 +7,7 @@ import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 
 import "src/library/FixedPointArithmetic.sol";
-import "src/library/ArrayHelpers.sol";
+
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
 import "../../common/TAConstants.sol";
@@ -16,7 +16,7 @@ import "../../common/TAHelpers.sol";
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
-    using U32CalldataArrayHelpers for uint32[];
+    using U32ArrayHelper for uint32[];
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -85,7 +85,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         uint256 _updatedDelegationValue
     ) internal {
         uint32[] memory _newDelegationArray =
-            _currentDelegationArray.update(_relayerIndex, _scaleDelegation(_updatedDelegationValue));
+            _currentDelegationArray.cd_update(_relayerIndex, _scaleDelegation(_updatedDelegationValue));
         _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
     }
 

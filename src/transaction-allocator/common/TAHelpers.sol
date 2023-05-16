@@ -11,6 +11,9 @@ import "./TAConstants.sol";
 import "./TATypes.sol";
 import "../modules/relayer-management/TARelayerManagementStorage.sol";
 import "../modules/delegation/TADelegationStorage.sol";
+import "src/library/arrays/U32ArrayHelper.sol";
+import "src/library/arrays/RAArrayHelper.sol";
+import "src/library/arrays/U16ArrayHelper.sol";
 
 import "forge-std/console2.sol";
 
@@ -20,31 +23,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionHistoryManager for VersionHistoryManager.Version[];
-
-    ////////////////////////////// Hash Functions //////////////////////////////
-    function _hashUint32ArrayCalldata(uint32[] calldata _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint32ArrayMemory(uint32[] memory _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint16ArrayCalldata(uint16[] calldata _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint16ArrayMemory(uint16[] memory _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashRelayerAddressArrayCalldata(RelayerAddress[] calldata _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashRelayerAddressArrayMemory(RelayerAddress[] memory _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
+    using U32ArrayHelper for uint32[];
+    using U16ArrayHelper for uint16[];
+    using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlyStakedRelayer(RelayerAddress _relayer) {
@@ -71,19 +52,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
-        if (rs.latestActiveRelayerStakeArrayHash != _hashUint32ArrayCalldata(_currentStakeArray)) {
+        if (rs.latestActiveRelayerStakeArrayHash != _currentStakeArray.cd_hash()) {
             revert InvalidStakeArrayHash();
         }
 
-        if (ds.delegationArrayHash != _hashUint32ArrayCalldata(_currentDelegationArray)) {
+        if (ds.delegationArrayHash != _currentDelegationArray.cd_hash()) {
             revert InvalidDelegationArrayHash();
         }
 
-        if (
-            !rs.activeRelayerListVersionHistoryManager.verifyLatestContentHash(
-                _hashRelayerAddressArrayCalldata(_latestActiveRelayerArray)
-            )
-        ) {
+        if (!rs.activeRelayerListVersionHistoryManager.verifyLatestContentHash(_latestActiveRelayerArray.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
@@ -98,17 +75,13 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         RMStorage storage rs = getRMStorage();
         uint256 windowIndex = _windowIndex(_blockNumber);
 
-        if (
-            !rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(
-                _hashUint16ArrayCalldata(_cdf), _cdfLogIndex, windowIndex
-            )
-        ) {
+        if (!rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(_cdf.cd_hash(), _cdfLogIndex, windowIndex)) {
             revert InvalidCdfArrayHash();
         }
 
         if (
             !rs.activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _hashRelayerAddressArrayCalldata(_activeRelayers), _relayerLogIndex, windowIndex
+                _activeRelayers.cd_hash(), _relayerLogIndex, windowIndex
             )
         ) {
             revert InvalidRelayersArrayHash();
@@ -116,11 +89,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     function _verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
-        if (
-            !getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(
-                _hashRelayerAddressArrayCalldata(_activeRelayers)
-            )
-        ) {
+        if (!getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(_activeRelayers.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
@@ -226,7 +195,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _generateCdfArray(uint32[] memory _stakeArray, uint32[] memory _delegationArray)
         internal
         pure
-        returns (uint16[] memory, bytes32)
+        returns (uint16[] memory)
     {
         uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 totalStakeSum = 0;
@@ -248,7 +217,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        return (cdf, _hashUint16ArrayMemory(cdf));
+        return cdf;
     }
 
     function _nextUpdateEffectiveAtWindowIndex() internal view returns (uint256) {
@@ -270,19 +239,19 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update Stake Array Hash
         if (_shouldUpdateStakeAccounting) {
-            ds.latestActiveRelayerStakeArrayHash = _hashUint32ArrayMemory(_stakeArray);
+            ds.latestActiveRelayerStakeArrayHash = _stakeArray.m_hash();
             emit StakeArrayUpdated(ds.latestActiveRelayerStakeArrayHash);
         }
 
         // Update Delegation Array Hash
         if (_shouldUpdateDelegationAccounting) {
             TADStorage storage tds = getTADStorage();
-            tds.delegationArrayHash = _hashUint32ArrayMemory(_delegationArray);
+            tds.delegationArrayHash = _delegationArray.m_hash();
             emit DelegationArrayUpdated(tds.delegationArrayHash);
         }
 
         // Update cdf hash
-        (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
+        bytes32 cdfHash = _generateCdfArray(_stakeArray, _delegationArray).m_hash();
         ds.cdfVersionHistoryManager.addNewVersion(cdfHash, _nextUpdateEffectiveAtWindowIndex());
     }
 

@@ -13,7 +13,6 @@ import "../../common/TAHelpers.sol";
 import "../../common/TAConstants.sol";
 import "src/library/FixedPointArithmetic.sol";
 import "src/library/VersionHistoryManager.sol";
-import "src/library/ArrayHelpers.sol";
 
 contract TARelayerManagement is
     ITARelayerManagement,
@@ -26,8 +25,8 @@ contract TARelayerManagement is
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionHistoryManager for VersionHistoryManager.Version[];
-    using U32CalldataArrayHelpers for uint32[];
-    using RelayerAddressCalldataArrayHelpers for RelayerAddress[];
+    using U32ArrayHelper for uint32[];
+    using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////// Relayer Registration //////////////////////////
 
@@ -71,16 +70,16 @@ contract TARelayerManagement is
             ++rms.relayerCount;
 
             // Update Active Relayer List
-            RelayerAddress[] memory newActiveRelayers = _activeRelayers.append(relayerAddress);
+            RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_append(relayerAddress);
             rms.activeRelayerListVersionHistoryManager.addNewVersion(
-                _hashRelayerAddressArrayMemory(newActiveRelayers), _nextUpdateEffectiveAtWindowIndex()
+                newActiveRelayers.m_hash(), _nextUpdateEffectiveAtWindowIndex()
             );
             emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
         }
 
         // Update stake array and hash
-        uint32[] memory newStakeArray = _previousStakeArray.append(_scaleStake(_stake));
-        uint32[] memory newDelegationArray = _currentDelegationArray.append(0);
+        uint32[] memory newStakeArray = _previousStakeArray.cd_append(_scaleStake(_stake));
+        uint32[] memory newDelegationArray = _currentDelegationArray.cd_append(0);
         _updateCdf(newStakeArray, true, newDelegationArray, true);
     }
 
@@ -115,15 +114,15 @@ contract TARelayerManagement is
         // TODO: Ensure that whenever active relayer are updated, stake array and delegation array is also updated
 
         // Update stake percentages array and hash
-        uint32[] memory newStakeArray = _previousStakeArray.remove(_relayerIndex);
-        uint32[] memory newDelegationArray = _previousDelegationArray.remove(_relayerIndex);
+        uint32[] memory newStakeArray = _previousStakeArray.cd_remove(_relayerIndex);
+        uint32[] memory newDelegationArray = _previousDelegationArray.cd_remove(_relayerIndex);
         _updateCdf(newStakeArray, true, newDelegationArray, true);
 
         // Update Active Relayers
         uint256 updateEffectiveAtWindowIndex = _nextUpdateEffectiveAtWindowIndex();
-        RelayerAddress[] memory newActiveRelayers = _activeRelayers.remove(_relayerIndex);
+        RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_remove(_relayerIndex);
         rms.activeRelayerListVersionHistoryManager.addNewVersion(
-            _hashRelayerAddressArrayMemory(newActiveRelayers), updateEffectiveAtWindowIndex
+            newActiveRelayers.m_hash(), updateEffectiveAtWindowIndex
         );
 
         // Create withdrawal Info
@@ -310,7 +309,7 @@ contract TARelayerManagement is
     {
         uint32[] memory stakeArray = getStakeArray(_activeRelayers);
         uint32[] memory delegationArray = ITADelegation(address(this)).getDelegationArray(_activeRelayers);
-        (uint16[] memory cdfArray,) = _generateCdfArray(stakeArray, delegationArray);
+        uint16[] memory cdfArray = _generateCdfArray(stakeArray, delegationArray);
         return cdfArray;
     }
 }
