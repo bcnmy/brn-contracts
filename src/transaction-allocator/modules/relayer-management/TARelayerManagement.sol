@@ -45,13 +45,9 @@ contract TARelayerManagement is
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint,
         uint256 _delegatorPoolPremiumShare
-    )
-        external
-        override
-        verifyLatestActiveRelayerList(_activeRelayers)
-        verifyStakeArrayHash(_previousStakeArray)
-        verifyDelegationArrayHash(_currentDelegationArray)
-    {
+    ) external override {
+        _verifyExternalStateForCdfUpdation(_previousStakeArray, _currentDelegationArray, _activeRelayers);
+
         RMStorage storage rms = getRMStorage();
 
         if (_accounts.length == 0) {
@@ -62,30 +58,30 @@ contract TARelayerManagement is
         }
 
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+        {
+            // Store relayer info
+            RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+            RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+            node.stake += _stake;
+            node.endpoint = _endpoint;
+            node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
+            node.rewardShares = _mintProtocolRewardShares(_stake);
+            _setRelayerAccountAddresses(relayerAddress, _accounts);
+            rms.totalStake += _stake;
+            ++rms.relayerCount;
 
-        // Store relayer info
-        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
-        node.stake += _stake;
-        node.endpoint = _endpoint;
-        node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-        node.rewardShares = _mintProtocolRewardShares(_stake);
-        _setRelayerAccountAddresses(relayerAddress, _accounts);
-        rms.totalStake += _stake;
-        ++rms.relayerCount;
+            // Update Active Relayer List
+            RelayerAddress[] memory newActiveRelayers = _activeRelayers.append(relayerAddress);
+            rms.activeRelayerListVersionHistoryManager.addNewVersion(
+                _hashRelayerAddressArrayMemory(newActiveRelayers), _nextUpdateEffectiveAtWindowIndex()
+            );
+            emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
+        }
 
         // Update stake array and hash
         uint32[] memory newStakeArray = _previousStakeArray.append(_scaleStake(_stake));
         uint32[] memory newDelegationArray = _currentDelegationArray.append(0);
         _updateCdf(newStakeArray, true, newDelegationArray, true);
-
-        // Update Active Relayer List
-        RelayerAddress[] memory newActiveRelayers = _activeRelayers.append(relayerAddress);
-        rms.activeRelayerListVersionHistoryManager.addNewVersion(
-            _hashRelayerAddressArrayMemory(newActiveRelayers), _nextUpdateEffectiveAtWindowIndex()
-        );
-
-        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
@@ -94,14 +90,9 @@ contract TARelayerManagement is
         uint32[] calldata _previousDelegationArray,
         RelayerAddress[] calldata _activeRelayers,
         uint256 _relayerIndex
-    )
-        external
-        override
-        verifyLatestActiveRelayerList(_activeRelayers)
-        verifyStakeArrayHash(_previousStakeArray)
-        verifyDelegationArrayHash(_previousDelegationArray)
-        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
-    {
+    ) external override onlyStakedRelayer(RelayerAddress.wrap(msg.sender)) {
+        _verifyExternalStateForCdfUpdation(_previousStakeArray, _previousDelegationArray, _activeRelayers);
+
         // Verify relayer index
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         if (_activeRelayers[_relayerIndex] != relayerAddress) {

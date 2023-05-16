@@ -4,9 +4,10 @@ pragma solidity 0.8.19;
 
 import "./interfaces/ITADebug.sol";
 import "src/transaction-allocator/common/TAHelpers.sol";
+import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocationStorage.sol";
 import "forge-std/console2.sol";
 
-contract TADebug is ITADebug, TAHelpers {
+contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using VersionHistoryManager for VersionHistoryManager.Version[];
 
     constructor() {
@@ -49,5 +50,20 @@ contract TADebug is ITADebug, TAHelpers {
         for (uint256 i = 0; i < cdfVersionHistory.length; i++) {
             console2.log(i, uint256(cdfVersionHistory[i].contentHash), cdfVersionHistory[i].timestamp);
         }
+    }
+
+    function debug_setTransactionsProcessedInEpochByRelayer(
+        uint256 _epoch,
+        RelayerAddress _relayerAddress,
+        uint256 _transactionsProcessed
+    ) external override {
+        getTAStorage().transactionsSubmitted[_epoch][_relayerAddress] = _transactionsProcessed;
+    }
+
+    function debug_setTotalTransactionsProcessedInEpoch(uint256 _epoch, uint256 _transactionsProcessed)
+        external
+        override
+    {
+        getTAStorage().totalTransactionsSubmitted[_epoch] = _transactionsProcessed;
     }
 }

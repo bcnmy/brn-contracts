@@ -10,7 +10,6 @@ interface ITADelegation is ITADelegationEventsErrors {
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
         RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
         uint256 _relayerIndex,
         uint256 _amount
     ) external;
@@ -19,7 +18,6 @@ interface ITADelegation is ITADelegationEventsErrors {
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
         RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
         uint256 _relayerIndex
     ) external;
 

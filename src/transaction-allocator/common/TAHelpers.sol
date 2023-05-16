@@ -47,53 +47,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
-    modifier verifyDelegationArrayHash(uint32[] calldata _array) {
-        if (!_verifyDelegationArrayHash(_array)) {
-            revert InvalidDelegationArrayHash();
-        }
-        _;
-    }
-
-    modifier verifyStakeArrayHash(uint32[] calldata _array) {
-        if (!_verifyStakeArrayHash(_array)) {
-            revert InvalidStakeArrayHash();
-        }
-        _;
-    }
-
-    modifier verifyLatestActiveRelayerList(RelayerAddress[] calldata _array) {
-        if (
-            !getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(
-                _hashRelayerAddressArrayCalldata(_array)
-            )
-        ) {
-            revert InvalidRelayersArrayHash();
-        }
-        _;
-    }
-
-    modifier verifyActiveRelayerList(RelayerAddress[] calldata _array, uint256 _logIndex, uint256 _blockNumber) {
-        if (
-            !getRMStorage().activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _hashRelayerAddressArrayCalldata(_array), _logIndex, _windowIndex(_blockNumber)
-            )
-        ) {
-            revert InvalidRelayersArrayHash();
-        }
-        _;
-    }
-
-    modifier verifyCDF(uint16[] calldata _array, uint256 _logIndex, uint256 _blockNumber) {
-        if (
-            !getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
-                _hashUint16ArrayCalldata(_array), _logIndex, _windowIndex(_blockNumber)
-            )
-        ) {
-            revert InvalidCdfArrayHash();
-        }
-        _;
-    }
-
     modifier onlyStakedRelayer(RelayerAddress _relayer) {
         if (!_isStakedRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
@@ -101,18 +54,75 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    function _verifyDelegationArrayHash(uint32[] calldata _array) internal view returns (bool) {
-        TADStorage storage ds = getTADStorage();
-        return ds.delegationArrayHash == _hashUint32ArrayCalldata(_array);
-    }
-
-    function _verifyStakeArrayHash(uint32[] calldata _array) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-        return ds.latestActiveRelayerStakeArrayHash == _hashUint32ArrayCalldata(_array);
+    modifier verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) {
+        _verifyLatestActiveRelayerList(_activeRelayers);
+        _;
     }
 
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
         return getRMStorage().relayerInfo[_relayer].stake > 0;
+    }
+
+    function _verifyExternalStateForCdfUpdation(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray,
+        RelayerAddress[] calldata _latestActiveRelayerArray
+    ) internal view {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
+
+        if (rs.latestActiveRelayerStakeArrayHash != _hashUint32ArrayCalldata(_currentStakeArray)) {
+            revert InvalidStakeArrayHash();
+        }
+
+        if (ds.delegationArrayHash != _hashUint32ArrayCalldata(_currentDelegationArray)) {
+            revert InvalidDelegationArrayHash();
+        }
+
+        if (
+            !rs.activeRelayerListVersionHistoryManager.verifyLatestContentHash(
+                _hashRelayerAddressArrayCalldata(_latestActiveRelayerArray)
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
+    }
+
+    function _verifyExternalStateForTransactionAllocation(
+        uint16[] calldata _cdf,
+        uint256 _cdfLogIndex,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerLogIndex,
+        uint256 _blockNumber
+    ) internal view {
+        RMStorage storage rs = getRMStorage();
+        uint256 windowIndex = _windowIndex(_blockNumber);
+
+        if (
+            !rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(
+                _hashUint16ArrayCalldata(_cdf), _cdfLogIndex, windowIndex
+            )
+        ) {
+            revert InvalidCdfArrayHash();
+        }
+
+        if (
+            !rs.activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
+                _hashRelayerAddressArrayCalldata(_activeRelayers), _relayerLogIndex, windowIndex
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
+    }
+
+    function _verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
+        if (
+            !getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(
+                _hashRelayerAddressArrayCalldata(_activeRelayers)
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
@@ -161,45 +171,44 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    )
-        internal
-        view
-        verifyCDF(_cdf, _cdfLogIndex, _blockNumber)
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, _blockNumber)
-        returns (bool)
-    {
+    ) internal view returns (bool) {
+        _verifyExternalStateForTransactionAllocation(
+            _cdf, _cdfLogIndex, _activeRelayers, _relayerLogIndex, _blockNumber
+        );
+
         RMStorage storage ds = getRMStorage();
 
-        uint256 stakeSum = _cdf[_cdf.length - 1];
+        {
+            // Verify Each Iteration against _cdfIndex in _cdf
+            uint256 stakeSum = _cdf[_cdf.length - 1];
+            uint256 relayerGenerationIteration;
 
-        // Verify Each Iteration against _cdfIndex in _cdf
-        uint256 relayerGenerationIteration = 0;
+            // TODO: Optimize iteration over set bits (potentially using x & -x flow)
+            while (_relayerGenerationIterationBitmap != 0) {
+                if (_relayerGenerationIterationBitmap % 2 == 1) {
+                    if (relayerGenerationIteration >= ds.relayersPerWindow) {
+                        revert InvalidRelayerGenerationIteration();
+                    }
 
-        // TODO: Optimize iteration over set bits (potentially using x & -x flow)
-        while (_relayerGenerationIterationBitmap != 0) {
-            if (_relayerGenerationIterationBitmap % 2 == 1) {
-                if (relayerGenerationIteration >= ds.relayersPerWindow) {
-                    revert InvalidRelayerGenerationIteration();
+                    // Verify if correct stake prefix sum index has been provided
+                    uint256 randomRelayerStake =
+                        _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, stakeSum);
+
+                    if (
+                        !(
+                            (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
+                                && randomRelayerStake <= _cdf[_relayerIndex]
+                        )
+                    ) {
+                        // The supplied index does not point to the correct interval
+                        revert RelayerIndexDoesNotPointToSelectedCdfInterval();
+                    }
                 }
 
-                // Verify if correct stake prefix sum index has been provided
-                uint256 randomRelayerStake =
-                    _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, stakeSum);
-
-                if (
-                    !(
-                        (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
-                            && randomRelayerStake <= _cdf[_relayerIndex]
-                    )
-                ) {
-                    // The supplied index does not point to the correct interval
-                    revert RelayerIndexDoesNotPointToSelectedCdfInterval();
+                unchecked {
+                    ++relayerGenerationIteration;
+                    _relayerGenerationIterationBitmap /= 2;
                 }
-            }
-
-            unchecked {
-                ++relayerGenerationIteration;
-                _relayerGenerationIterationBitmap /= 2;
             }
         }
 

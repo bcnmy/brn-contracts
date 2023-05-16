@@ -14,6 +14,9 @@ contract TATransactionAllocationTest is
     ITAHelpers,
     IMinimalApplicationEventsErrors
 {
+    using FixedPointTypeHelper for FixedPointType;
+    using Uint256WrapperHelper for uint256;
+
     uint256 constant initialApplicationFunds = 10 ether;
 
     uint256 private _postRegistrationSnapshotId;
@@ -122,7 +125,7 @@ contract TATransactionAllocationTest is
             }
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
-            bool[] memory successes = ta.execute(
+            ta.execute(
                 allotedTransactions,
                 new uint256[](allotedTransactions.length),
                 cdf,
@@ -135,12 +138,6 @@ contract TATransactionAllocationTest is
             vm.stopPrank();
 
             executionCount += allotedTransactions.length;
-
-            assertEq(successes.length, allotedTransactions.length);
-
-            for (uint256 j = 0; j < allotedTransactions.length; j++) {
-                assertEq(successes[j], true);
-            }
         }
 
         assertEq(executionCount, txns.length);
@@ -277,5 +274,62 @@ contract TATransactionAllocationTest is
         }
 
         assertEq(testRun, true);
+    }
+
+    ////// Liveness Check Tests //////
+    function _calculatePenalty(uint256 _stake) internal pure returns (uint256) {
+        return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
+    }
+
+    function testMinimumTransactionForLivenessCalculation() external atSnapshot {
+        FixedPointType minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+        assertEq(minTransactions.u256(), 24);
+
+        minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+        assertEq(minTransactions.u256(), 9);
+    }
+
+    function testPenalizeRelayerIfInsufficientTransactionAreSubmitted() external atSnapshot {
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+
+        RelayerAddress activeRelayer = relayerMainAddress[0];
+        ta.debug_setTotalTransactionsProcessedInEpoch(1, 100);
+        ta.debug_setTransactionsProcessedInEpochByRelayer(1, activeRelayer, 10);
+
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
+        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
+        for (uint256 i = 0; i < activeRelayers.length; ++i) {
+            if (activeRelayers[i] == activeRelayer) {
+                continue;
+            }
+
+            vm.expectEmit(true, true, true, false);
+            emit RelayerPenalized(activeRelayers[i], 1, _calculatePenalty(ta.relayerInfo_Stake(activeRelayers[i])));
+        }
+        uint256[] memory relayerIndexMapping = new uint256[](activeRelayers.length);
+        for (uint256 i = 0; i < activeRelayers.length; ++i) {
+            relayerIndexMapping[i] = i;
+        }
+
+        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        ta.processLivenessCheck(
+            TargetEpochData({
+                epochIndex: 1,
+                cdfLogIndex: 1,
+                relayerLogIndex: 1,
+                cdf: cdf,
+                activeRelayers: activeRelayers
+            }),
+            LatestActiveRelayersStakeAndDelegationState({
+                currentStakeArray: stakeArray,
+                currentDelegationArray: delegationArray,
+                activeRelayers: activeRelayers
+            }),
+            relayerIndexMapping
+        );
     }
 }

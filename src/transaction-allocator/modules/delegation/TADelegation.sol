@@ -61,51 +61,61 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
     }
 
-    function delegate(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _prevDelegationArray,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
-        uint256 _relayerIndex,
-        uint256 _amount
-    )
-        external
-        override
-        verifyStakeArrayHash(_currentStakeArray)
-        verifyDelegationArrayHash(_prevDelegationArray)
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
-        onlyStakedRelayer(_activeRelayers[_relayerIndex])
+    function _mintAllPoolShares(RelayerAddress _relayerAddress, DelegatorAddress _delegator, uint256 _amount)
+        internal
     {
-        RMStorage storage rms = getRMStorage();
         TADStorage storage ds = getTADStorage();
-        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
-
-        _updateRelayerProtocolRewards(relayerAddress);
-
-        rms.bondToken.safeTransferFrom(msg.sender, address(this), _amount);
-        DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-
         uint256 length = ds.supportedPools.length;
         if (length == 0) {
-            revert NoSupportedGasTokens(relayerAddress);
+            revert NoSupportedGasTokens();
         }
 
-        for (uint256 i = 0; i < length;) {
-            _mintPoolShares(relayerAddress, delegatorAddress, _amount, ds.supportedPools[i]);
+        for (uint256 i; i != length;) {
+            _mintPoolShares(_relayerAddress, _delegator, _amount, ds.supportedPools[i]);
             unchecked {
                 ++i;
             }
         }
+    }
 
-        ds.delegation[relayerAddress][delegatorAddress] += _amount;
-        ds.totalDelegation[relayerAddress] += _amount;
-
+    function _updateDelegationInCdf(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray,
+        uint256 _relayerIndex,
+        uint256 _updatedDelegationValue
+    ) internal {
         uint32[] memory _newDelegationArray =
-            _prevDelegationArray.update(_relayerIndex, _scaleDelegation(ds.totalDelegation[relayerAddress]));
-
+            _currentDelegationArray.update(_relayerIndex, _scaleDelegation(_updatedDelegationValue));
         _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
+    }
 
-        emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
+    function delegate(
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _prevDelegationArray,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerIndex,
+        uint256 _amount
+    ) external override onlyStakedRelayer(_activeRelayers[_relayerIndex]) {
+        _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
+
+        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
+        _updateRelayerProtocolRewards(relayerAddress);
+
+        getRMStorage().bondToken.safeTransferFrom(msg.sender, address(this), _amount);
+        TADStorage storage ds = getTADStorage();
+
+        {
+            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
+            _mintAllPoolShares(relayerAddress, delegatorAddress, _amount);
+
+            ds.delegation[relayerAddress][delegatorAddress] += _amount;
+            ds.totalDelegation[relayerAddress] += _amount;
+            emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
+        }
+
+        _updateDelegationInCdf(
+            _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[relayerAddress]
+        );
     }
 
     function _processRewards(RelayerAddress _relayerAddress, TokenAddress _pool, DelegatorAddress _delegatorAddress)
@@ -131,44 +141,41 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
         RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
         uint256 _relayerIndex
-    )
-        external
-        override
-        verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, block.number)
-        verifyStakeArrayHash(_currentStakeArray)
-        verifyDelegationArrayHash(_prevDelegationArray)
-    {
+    ) external override {
+        _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
+
         TADStorage storage ds = getTADStorage();
         RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
 
         _updateRelayerProtocolRewards(relayerAddress);
 
-        DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-
-        uint256 length = ds.supportedPools.length;
-
-        for (uint256 i = 0; i < length;) {
-            _processRewards(relayerAddress, ds.supportedPools[i], delegatorAddress);
-            unchecked {
-                ++i;
+        {
+            uint256 length = ds.supportedPools.length;
+            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
+            for (uint256 i; i != length;) {
+                _processRewards(relayerAddress, ds.supportedPools[i], delegatorAddress);
+                unchecked {
+                    ++i;
+                }
             }
         }
 
-        uint256 delegation_ = ds.delegation[relayerAddress][delegatorAddress];
-        ds.totalDelegation[relayerAddress] -= delegation_;
-        ds.delegation[relayerAddress][delegatorAddress] = 0;
+        {
+            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
+            uint256 delegation_ = ds.delegation[relayerAddress][delegatorAddress];
+            ds.totalDelegation[relayerAddress] -= delegation_;
+            ds.delegation[relayerAddress][delegatorAddress] = 0;
+            emit DelegationRemoved(relayerAddress, delegatorAddress, delegation_);
+        }
 
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
         if (_isStakedRelayer(relayerAddress)) {
-            uint32[] memory _newDelegationArray =
-                _prevDelegationArray.update(_relayerIndex, _scaleDelegation(ds.totalDelegation[relayerAddress]));
-            _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
+            _updateDelegationInCdf(
+                _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[relayerAddress]
+            );
         }
-
-        emit DelegationRemoved(relayerAddress, delegatorAddress, delegation_);
     }
 
     function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)

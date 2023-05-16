@@ -16,7 +16,7 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         uint256 _currentRelayerListLogIndex,
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap
-    ) external payable returns (bool[] memory);
+    ) external payable;
 
     function allocateRelayers(
         uint16[] calldata _cdf,
@@ -24,4 +24,25 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         RelayerAddress[] calldata _activeRelayers,
         uint256 _relayerLogIndex
     ) external view returns (RelayerAddress[] memory, uint256[] memory);
+
+    function processLivenessCheck(
+        TargetEpochData calldata _targetEpochData,
+        LatestActiveRelayersStakeAndDelegationState calldata _latestState,
+        uint256[] calldata _targetEpochRelayerIndexToLatestRelayerIndexMapping
+    ) external;
+
+    function calculateMinimumTranasctionsForLiveness(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        FixedPointType _totalTransactions,
+        FixedPointType _zScore
+    ) external pure returns (FixedPointType);
+
+    ////////////////////////// Getters //////////////////////////
+    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
+        external
+        view
+        returns (uint256);
+    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view returns (uint256);
+    function livenessCheckProcessedForEpoch(uint256 _epoch) external view returns (bool);
 }

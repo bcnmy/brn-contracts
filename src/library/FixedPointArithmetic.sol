@@ -29,7 +29,7 @@ library FixedPointTypeHelper {
     }
 
     function sqrt(FixedPointType _a) internal pure returns (FixedPointType) {
-        return FixedPointType.wrap((_a.u256() * MULTIPLIER).sqrt());
+        return FixedPointType.wrap((FixedPointType.unwrap(_a) * MULTIPLIER).sqrt());
     }
 }
 

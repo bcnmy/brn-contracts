@@ -19,7 +19,7 @@ interface ITAHelpers {
     error RelayerIndexDoesNotPointToSelectedCdfInterval();
     error RelayerAddressDoesNotMatchSelectedRelayer();
 
-    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
+    event StakeArrayUpdated(bytes32 indexed stakeArrayHash);
     event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);
     event RelayerProtocolRewardSharesBurnt(
         RelayerAddress indexed relayer,

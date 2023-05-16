@@ -38,3 +38,17 @@ struct AllocateTransactionParams {
     RelayerAddress[] activeRelayers;
     uint256 relayerLogIndex;
 }
+
+struct LatestActiveRelayersStakeAndDelegationState {
+    uint32[] currentStakeArray;
+    uint32[] currentDelegationArray;
+    RelayerAddress[] activeRelayers;
+}
+
+struct TargetEpochData {
+    uint256 epochIndex;
+    uint256 cdfLogIndex;
+    uint256 relayerLogIndex;
+    uint16[] cdf;
+    RelayerAddress[] activeRelayers;
+}
