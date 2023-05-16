@@ -5,7 +5,7 @@ pragma solidity 0.8.19;
 import "src/transaction-allocator/common/TAStructs.sol";
 import "src/transaction-allocator/common/TAHelpers.sol";
 import "src/transaction-allocator/common/TATypes.sol";
-import "src/paymaster/interfaces/IPaymaster.sol";
+import "src/library/ArrayHelpers.sol";
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "../application/base-application/interfaces/IApplicationBase.sol";
@@ -15,6 +15,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     using VersionHistoryManager for VersionHistoryManager.Version[];
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
+    using U32CalldataArrayHelpers for uint32[];
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     function _verifyRelayerWasSelectedForTransaction(bool _success, bytes memory _returndata)
@@ -204,20 +205,20 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Liveness ///////////////////////////////
-    function _calculateConfidenceInterval(
+    function _calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
         FixedPointType _totalTransactions,
         FixedPointType _zScore
-    ) internal pure returns (FixedPointType, FixedPointType) {
+    ) internal pure returns (FixedPointType) {
         FixedPointType p = _relayerStake.fp() / _totalStake.fp();
         FixedPointType s = (p * (FP_ONE - p) / _totalTransactions).sqrt();
         FixedPointType d = _zScore * s;
         if (p > d) {
-            return (p - d, p + d);
+            return p - d;
         }
 
-        return (FP_ZERO, p + d);
+        return FP_ZERO;
     }
 
     function _verifyRelayerLiveness(
@@ -234,13 +235,45 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             relayerStakeNormalized -= _cdf[_relayerIndex - 1];
         }
 
-        (FixedPointType expectedLow, FixedPointType expectedHigh) = _calculateConfidenceInterval(
+        FixedPointType expectedLow = _calculateMinimumTranasctionsForLiveness(
             relayerStakeNormalized, _cdf[_cdf.length - 1], _totalTransactionsInEpoch, LIVENESS_Z_PARAMETER
         );
 
         FixedPointType actualProportion = transactionsProcessedByRelayer.fp() / _totalTransactionsInEpoch;
 
-        return actualProportion >= expectedLow && actualProportion <= expectedHigh;
+        return actualProportion >= expectedLow;
+    }
+
+    function _calculatePenalty(uint256 _stake) internal pure returns (uint256) {
+        return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
+    }
+
+    function _penalizeRelayer(
+        RelayerAddress _relayerAddress,
+        uint256 _relayerIndex,
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray
+    ) internal {
+        uint256 penalty;
+
+        // TODO: What happens if relayer stake is less than minimum stake after penalty?
+        if (_isStakedRelayer(_relayerAddress)) {
+            // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
+            RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[_relayerAddress];
+            penalty = _calculatePenalty(relayerInfo.stake);
+            relayerInfo.stake -= penalty;
+            uint32[] memory newStakeArray = _currentStakeArray.update(_relayerIndex, _scaleStake(relayerInfo.stake));
+            _updateCdf(newStakeArray, true, _currentDelegationArray, false);
+        } else {
+            // If the relayer un-registered itself, then we just subtract from their withdrawl info
+            WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[_relayerAddress];
+            penalty = _calculatePenalty(withdrawalInfo_.amount);
+            withdrawalInfo_.amount -= penalty;
+        }
+
+        // TODO: What should be done with the penalty amount?
+
+        emit RelayerPenalized(_relayerAddress, _epochIndexFromBlock(block.number), penalty);
     }
 
     function _processLivenessCheck(
@@ -248,18 +281,21 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _cdfLogIndex,
         RelayerAddress[] calldata _activeRelayers,
         uint256 _relayerLogIndex,
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray,
         uint256 _epochIndex
     )
         internal
         verifyActiveRelayerList(_activeRelayers, _relayerLogIndex, _epochIndexToStartingBlock(_epochIndex))
         verifyCDF(_cdf, _cdfLogIndex, _epochIndexToStartingBlock(_epochIndex))
+        verifyStakeArrayHash(_currentStakeArray)
+        verifyDelegationArrayHash(_currentDelegationArray)
     {
         FixedPointType totalTransactionsInEpoch = getTAStorage().totalTransactionsSubmitted[_epochIndex].fp();
 
         for (uint256 i; i < _activeRelayers.length;) {
             if (!_verifyRelayerLiveness(_cdf, _activeRelayers, i, totalTransactionsInEpoch)) {
-                // TODO
-                revert("TODO");
+                _penalizeRelayer(_activeRelayers[i], i, _currentStakeArray, _currentDelegationArray);
             }
             unchecked {
                 ++i;

@@ -316,13 +316,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         if (rs.totalShares == FP_ZERO) {
             return FP_ONE;
         }
-
         return (rs.totalStake.fp() + rs.unpaidProtocolRewards.fp()) / rs.totalShares;
     }
 
     function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
-
         FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
         FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.fp();
         return rewards.u256();
