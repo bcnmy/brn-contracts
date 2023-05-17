@@ -31,20 +31,22 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
             string memory endpoint = "test";
-            uint256 delegatorPoolPremiumShare = 1000;
+            uint256 delegatorPoolPremiumShare = 100;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            ta.register(
-                ta.getStakeArray(),
-                ta.getDelegationArray(),
+            vm.stopPrank();
+
+            _register(
+                relayerAddress,
+                ta.getStakeArray(activeRelayers),
+                ta.getDelegationArray(activeRelayers),
                 stake,
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
                 delegatorPoolPremiumShare
             );
-            vm.stopPrank();
         }
 
         // Approval
@@ -59,6 +61,8 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         d1 = delegatorAddresses[1];
         t0 = supportedTokens[0];
         t1 = supportedTokens[1];
+
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -101,20 +105,20 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function delegate(RelayerAddress r, DelegatorAddress d, uint256 amount) internal {
-        uint32[] memory stakeArray = ta.getStakeArray();
-        uint32[] memory delegationArray = ta.getDelegationArray();
+        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
+        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d);
-        ta.delegate(stakeArray, delegationArray, r, amount);
+        ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r), amount);
 
         expDelegation[r][d] += amount;
         expTotalDelegation[r] += amount;
     }
 
     function unDelegate(RelayerAddress r, DelegatorAddress d) internal {
-        uint32[] memory stakeArray = ta.getStakeArray();
-        uint32[] memory delegationArray = ta.getDelegationArray();
+        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
+        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d);
-        ta.unDelegate(stakeArray, delegationArray, r);
+        ta.unDelegate(stakeArray, delegationArray, activeRelayers, r, _findRelayerIndex(r));
 
         expTotalDelegation[r] -= expDelegation[r][d];
         expDelegation[r][d] = 0;
@@ -214,9 +218,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
         expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
 
-        _startPrankRA(r0);
-        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
-        vm.stopPrank();
+        _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
         uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
@@ -232,14 +234,14 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
-        _startPrankRA(r0);
-        ta.unRegister(ta.getStakeArray(), ta.getDelegationArray());
-        vm.stopPrank();
+        _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
 
-        uint32[] memory stakeArray = ta.getStakeArray();
-        uint32[] memory delegationArray = ta.getDelegationArray();
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
+
+        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
+        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d0);
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, r0));
-        ta.delegate(stakeArray, delegationArray, r0, 0.01 ether);
+        vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
+        ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r0), 0.01 ether);
     }
 }

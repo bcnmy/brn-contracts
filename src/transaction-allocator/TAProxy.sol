@@ -74,10 +74,16 @@ contract TAProxy is
         }
 
         // Initial State
-        rms.stakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
+        rms.latestActiveRelayerStakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
         tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
-        rms.cdfHashUpdateLog.push(
-            CdfHashUpdateInfo({cdfHash: keccak256(abi.encodePacked(new uint32[](0))), windowIndex: 0})
+        rms.cdfVersionHistoryManager.push(
+            VersionHistoryManager.Version({contentHash: keccak256(abi.encodePacked(new uint32[](0))), timestamp: 0})
+        );
+        rms.activeRelayerListVersionHistoryManager.push(
+            VersionHistoryManager.Version({
+                contentHash: keccak256(abi.encodePacked(new RelayerAddress[](0))),
+                timestamp: 0
+            })
         );
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }

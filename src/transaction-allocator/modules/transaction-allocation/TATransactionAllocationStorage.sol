@@ -8,7 +8,9 @@ abstract contract TATransactionAllocationStorage {
     bytes32 internal constant TRANSACTION_ALLOCATION_STORAGE_SLOT = keccak256("TransactionAllocation.storage");
 
     struct TAStorage {
-        uint256 __;
+        mapping(uint256 epoch => mapping(RelayerAddress => uint256 transactionsSubmitted)) transactionsSubmitted;
+        mapping(uint256 epoch => uint256 totalTransactionsSubmitted) totalTransactionsSubmitted;
+        mapping(uint256 epoch => bool processed) livenessCheckProcessed;
     }
 
     /* solhint-disable no-inline-assembly */

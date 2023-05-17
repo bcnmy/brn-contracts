@@ -66,6 +66,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         applicationHandler(msg.data)
     {
         // TODO: Handle refunds
+        // TODO: Handle delegator payment????
 
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();

@@ -18,10 +18,14 @@ interface ITATransactionAllocationEventsErrors {
     error InvalidNonce(address sender, uint256 nonce, uint256 expectedNonce);
     error TransactionExecutionFailed(uint256 index);
     error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
+    error CannotProcessLivenessCheckForCurrentOrFutureEpoch();
+    error LivenessCheckAlreadyProcessed();
+    error RelayerIndexMappingMismatch(uint256 oldIndex, uint256 newIndex);
 
     event PrepaymentReceived(uint256 indexed index, uint256 indexed amount, TokenAddress indexed tokenAddress);
     event GasFeeRefunded(
         uint256 indexed index, uint256 indexed gas, uint256 indexed tokenAmount, TokenAddress tokenAddress
     );
-    event TransactionStatus(uint256 indexed index, bool indexed success);
+    event TransactionStatus(uint256 indexed index, bool indexed success, bytes indexed returndata);
+    event RelayerPenalized(RelayerAddress indexed relayerAddress, uint256 indexed epoch, uint256 indexed penaltyAmount);
 }

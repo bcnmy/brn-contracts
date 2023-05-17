@@ -8,6 +8,7 @@ import "src/library/FixedPointArithmetic.sol";
 interface ITAHelpers {
     error InvalidStakeArrayHash();
     error InvalidCdfArrayHash();
+    error InvalidRelayersArrayHash();
     error InvalidDelegationArrayHash();
     error NativeTransferFailed(address to, uint256 amount);
     error InsufficientBalance(TokenAddress token, uint256 balance, uint256 amount);
@@ -18,7 +19,7 @@ interface ITAHelpers {
     error RelayerIndexDoesNotPointToSelectedCdfInterval();
     error RelayerAddressDoesNotMatchSelectedRelayer();
 
-    event StakeArrayUpdated(bytes32 indexed stakePercArrayHash);
+    event StakeArrayUpdated(bytes32 indexed stakeArrayHash);
     event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);
     event RelayerProtocolRewardSharesBurnt(
         RelayerAddress indexed relayer,

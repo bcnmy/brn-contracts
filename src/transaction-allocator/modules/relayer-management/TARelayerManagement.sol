@@ -12,8 +12,7 @@ import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
 import "../../common/TAConstants.sol";
 import "src/library/FixedPointArithmetic.sol";
-
-import "forge-std/console2.sol";
+import "src/library/VersionHistoryManager.sol";
 
 contract TARelayerManagement is
     ITARelayerManagement,
@@ -25,108 +24,14 @@ contract TARelayerManagement is
     using SafeERC20 for IERC20;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
+    using VersionHistoryManager for VersionHistoryManager.Version[];
+    using U32ArrayHelper for uint32[];
+    using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////// Relayer Registration //////////////////////////
 
-    function _addNewRelayerToDelegationArray(uint32[] calldata _delegationArray)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint256 delegationArrayLength = _delegationArray.length;
-        uint32[] memory newDelegationArrayLength = new uint32[](
-            delegationArrayLength + 1
-        );
-
-        for (uint256 i = 0; i < delegationArrayLength;) {
-            newDelegationArrayLength[i] = _delegationArray[i];
-            unchecked {
-                ++i;
-            }
-        }
-        newDelegationArrayLength[delegationArrayLength] = 0;
-
-        return newDelegationArrayLength;
-    }
-
-    function _addNewRelayerToStakeArray(uint32[] calldata _stakeArray, uint256 _stake)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint256 stakeArrayLength = _stakeArray.length;
-        uint32[] memory newStakeArray = new uint32[](stakeArrayLength + 1);
-
-        for (uint256 i = 0; i < stakeArrayLength;) {
-            newStakeArray[i] = _stakeArray[i];
-            unchecked {
-                ++i;
-            }
-        }
-        newStakeArray[stakeArrayLength] = _scaleStake(_stake);
-
-        return newStakeArray;
-    }
-
-    function _removeRelayerFromStakeArray(uint32[] calldata _stakeArray, uint256 _index)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint256 newStakeArrayLength = _stakeArray.length - 1;
-        uint32[] memory newStakeArray = new uint32[](newStakeArrayLength);
-
-        for (uint256 i = 0; i < newStakeArrayLength;) {
-            if (i == _index) {
-                // Remove the node's stake from the array by substituting it with the last element
-                newStakeArray[i] = _stakeArray[newStakeArrayLength];
-            } else {
-                newStakeArray[i] = _stakeArray[i];
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        return newStakeArray;
-    }
-
-    function _removeRelayerFromDelegationArray(uint32[] calldata _delegationArray, uint256 _index)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint256 newDelegationArrayLength = _delegationArray.length - 1;
-        uint32[] memory newDelegationArray = new uint32[](
-            newDelegationArrayLength
-        );
-
-        for (uint256 i = 0; i < newDelegationArrayLength;) {
-            if (i == _index) {
-                // Remove the node's stake from the array by substituting it with the last element
-                newDelegationArray[i] = _delegationArray[newDelegationArrayLength];
-            } else {
-                newDelegationArray[i] = _delegationArray[i];
-            }
-            unchecked {
-                ++i;
-            }
-        }
-
-        return newDelegationArray;
-    }
-
-    function _updateRelayerStakeInStakeArray(uint32[] calldata _stakeArray, uint256 _index, uint32 _scaledAmount)
-        internal
-        pure
-        returns (uint32[] memory)
-    {
-        uint32[] memory newStakeArray = _stakeArray;
-        newStakeArray[_index] = _scaledAmount;
-        return newStakeArray;
-    }
-
     // TODO: Implement a way to increase the relayer's stake
+    // TODO: Cannot stake until the previous stake is withdrawn
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
     /// @param _stake amount to be staked
@@ -135,18 +40,15 @@ contract TARelayerManagement is
     function register(
         uint32[] calldata _previousStakeArray,
         uint32[] calldata _currentDelegationArray,
+        RelayerAddress[] calldata _activeRelayers,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint,
         uint256 _delegatorPoolPremiumShare
-    )
-        external
-        override
-        verifyStakeArrayHash(_previousStakeArray)
-        verifyDelegationArrayHash(_currentDelegationArray)
-        returns (RelayerAddress)
-    {
-        RMStorage storage ds = getRMStorage();
+    ) external override {
+        _verifyExternalStateForCdfUpdation(_previousStakeArray, _currentDelegationArray, _activeRelayers);
+
+        RMStorage storage rms = getRMStorage();
 
         if (_accounts.length == 0) {
             revert NoAccountsProvided();
@@ -155,68 +57,78 @@ contract TARelayerManagement is
             revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
         }
 
-        ds.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+        rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+        {
+            // Store relayer info
+            RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+            RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+            node.stake += _stake;
+            node.endpoint = _endpoint;
+            node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
+            node.rewardShares = _mintProtocolRewardShares(_stake);
+            _setRelayerAccountAddresses(relayerAddress, _accounts);
+            rms.totalStake += _stake;
+            ++rms.relayerCount;
 
-        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        node.stake += _stake;
-        node.endpoint = _endpoint;
-        node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-        node.index = ds.relayerCount;
-        node.rewardShares = _mintProtocolRewardShares(_stake);
-        _setRelayerAccountAddresses(relayerAddress, _accounts);
-        ds.relayerIndexToRelayerAddress[node.index] = relayerAddress;
-        ds.totalStake += _stake;
-        ++ds.relayerCount;
+            // Update Active Relayer List
+            RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_append(relayerAddress);
+            rms.activeRelayerListVersionHistoryManager.addNewVersion(
+                newActiveRelayers.m_hash(), _nextUpdateEffectiveAtWindowIndex()
+            );
+            emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
+        }
 
         // Update stake array and hash
-        uint32[] memory newStakeArray = _addNewRelayerToStakeArray(_previousStakeArray, _stake);
-        uint32[] memory newDelegationArray = _addNewRelayerToDelegationArray(_currentDelegationArray);
-        _updateAccountingState(newStakeArray, true, newDelegationArray, true);
-
-        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
-
-        return relayerAddress;
+        uint32[] memory newStakeArray = _previousStakeArray.cd_append(_scaleStake(_stake));
+        uint32[] memory newDelegationArray = _currentDelegationArray.cd_append(0);
+        _updateCdf(newStakeArray, true, newDelegationArray, true);
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
-    function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _previousDelegationArray)
-        external
-        override
-        verifyStakeArrayHash(_previousStakeArray)
-        verifyDelegationArrayHash(_previousDelegationArray)
-        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
-    {
-        RMStorage storage ds = getRMStorage();
+    function unRegister(
+        uint32[] calldata _previousStakeArray,
+        uint32[] calldata _previousDelegationArray,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerIndex
+    ) external override onlyStakedRelayer(RelayerAddress.wrap(msg.sender)) {
+        _verifyExternalStateForCdfUpdation(_previousStakeArray, _previousDelegationArray, _activeRelayers);
 
-        claimProtocolReward();
-
+        // Verify relayer index
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        ds.totalShares = ds.totalShares - node.rewardShares;
-        uint256 n = ds.relayerCount - 1;
-        uint256 nodeIndex = node.index;
-        uint256 stake = node.stake;
-        _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
-
-        delete ds.relayerInfo[relayerAddress];
-
-        if (nodeIndex != n) {
-            RelayerAddress lastRelayer = ds.relayerIndexToRelayerAddress[n];
-            ds.relayerIndexToRelayerAddress[nodeIndex] = lastRelayer;
-            ds.relayerInfo[lastRelayer].index = nodeIndex;
-            ds.relayerIndexToRelayerAddress[n] = RelayerAddress.wrap(address(0));
+        if (_activeRelayers[_relayerIndex] != relayerAddress) {
+            revert InvalidRelayer(relayerAddress);
         }
 
-        --ds.relayerCount;
-        ds.totalStake -= stake;
+        RMStorage storage rms = getRMStorage();
+
+        // TODO: claimProtocolReward();
+
+        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+        rms.totalShares = rms.totalShares - node.rewardShares;
+        uint256 stake = node.stake;
+        _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
+        delete rms.relayerInfo[relayerAddress];
+
+        --rms.relayerCount;
+        rms.totalStake -= stake;
+
+        // TODO: Ensure that whenever active relayer are updated, stake array and delegation array is also updated
 
         // Update stake percentages array and hash
-        uint32[] memory newStakeArray = _removeRelayerFromStakeArray(_previousStakeArray, nodeIndex);
-        uint32[] memory newDelegationArray = _removeRelayerFromDelegationArray(_previousDelegationArray, nodeIndex);
-        uint256 updateEffectiveAtwindowIndex = _updateAccountingState(newStakeArray, true, newDelegationArray, true);
-        ds.withdrawalInfo[relayerAddress] =
-            WithdrawalInfo(stake, _windowIndexToStartingBlock(updateEffectiveAtwindowIndex));
+        uint32[] memory newStakeArray = _previousStakeArray.cd_remove(_relayerIndex);
+        uint32[] memory newDelegationArray = _previousDelegationArray.cd_remove(_relayerIndex);
+        _updateCdf(newStakeArray, true, newDelegationArray, true);
+
+        // Update Active Relayers
+        uint256 updateEffectiveAtWindowIndex = _nextUpdateEffectiveAtWindowIndex();
+        RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_remove(_relayerIndex);
+        rms.activeRelayerListVersionHistoryManager.addNewVersion(
+            newActiveRelayers.m_hash(), updateEffectiveAtWindowIndex
+        );
+
+        // Create withdrawal Info
+        rms.withdrawalInfo[relayerAddress] = WithdrawalInfo(stake, block.number + RELAYER_WITHDRAW_DELAY_IN_BLOCKS);
+
         emit RelayerUnRegistered(relayerAddress);
     }
 
@@ -260,7 +172,7 @@ contract TARelayerManagement is
         node.relayerAccountAddresses = _accounts;
     }
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts)
+    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
         external
         override
         onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
@@ -300,7 +212,7 @@ contract TARelayerManagement is
 
         RMStorage storage rs = getRMStorage();
 
-        FixedPointType rewardShares = _amount.toFixedPointType() / _protocolRewardRelayerSharePrice();
+        FixedPointType rewardShares = _amount.fp() / _protocolRewardRelayerSharePrice();
         rs.totalShares = rs.totalShares + rewardShares;
 
         emit RelayerProtocolRewardMinted(rewardShares);
@@ -319,10 +231,6 @@ contract TARelayerManagement is
 
     function relayerInfo_Endpoint(RelayerAddress _relayerAddress) external view override returns (string memory) {
         return getRMStorage().relayerInfo[_relayerAddress].endpoint;
-    }
-
-    function relayerInfo_Index(RelayerAddress _relayerAddress) external view override returns (uint256) {
-        return getRMStorage().relayerInfo[_relayerAddress].index;
     }
 
     function relayerInfo_isAccount(RelayerAddress _relayerAddress, RelayerAccountAddress _account)
@@ -350,12 +258,13 @@ contract TARelayerManagement is
         return getRMStorage().blocksPerWindow;
     }
 
-    function cdfHashUpdateLog(uint256 _index) external view override returns (CdfHashUpdateInfo memory) {
-        return getRMStorage().cdfHashUpdateLog[_index];
-    }
+    // TODO
+    // function cdfHashUpdateLog(uint256 _index) external view override returns (CdfHashUpdateInfo memory) {
+    //     return getRMStorage().cdfHashUpdateLog[_index];
+    // }
 
-    function stakeArrayHash() external view override returns (bytes32) {
-        return getRMStorage().stakeArrayHash;
+    function latestActiveRelayerStakeArrayHash() external view override returns (bytes32) {
+        return getRMStorage().latestActiveRelayerStakeArrayHash;
     }
 
     function penaltyDelayBlocks() external view override returns (uint256) {
@@ -371,13 +280,19 @@ contract TARelayerManagement is
     }
 
     ////////////////////////// Getters For Derived State //////////////////////////
-    function getStakeArray() public view override returns (uint32[] memory) {
+    function getStakeArray(RelayerAddress[] calldata _activeRelayers)
+        public
+        view
+        override
+        verifyLatestActiveRelayerList(_activeRelayers)
+        returns (uint32[] memory)
+    {
         RMStorage storage ds = getRMStorage();
 
-        uint256 length = ds.relayerCount;
+        uint256 length = _activeRelayers.length;
         uint32[] memory stakeArray = new uint32[](length);
         for (uint256 i = 0; i < length;) {
-            RelayerAddress relayerAddress = ds.relayerIndexToRelayerAddress[i];
+            RelayerAddress relayerAddress = _activeRelayers[i];
             stakeArray[i] = _scaleStake(ds.relayerInfo[relayerAddress].stake);
             unchecked {
                 ++i;
@@ -386,10 +301,16 @@ contract TARelayerManagement is
         return stakeArray;
     }
 
-    function getCdfArray() public view override returns (uint16[] memory) {
-        uint32[] memory stakeArray = getStakeArray();
-        uint32[] memory delegationArray = ITADelegation(address(this)).getDelegationArray();
-        (uint16[] memory cdfArray,) = _generateCdfArray(stakeArray, delegationArray);
+    function getCdfArray(RelayerAddress[] calldata _activeRelayers)
+        public
+        view
+        override
+        verifyLatestActiveRelayerList(_activeRelayers)
+        returns (uint16[] memory)
+    {
+        uint32[] memory stakeArray = getStakeArray(_activeRelayers);
+        uint32[] memory delegationArray = ITADelegation(address(this)).getDelegationArray(_activeRelayers);
+        uint16[] memory cdfArray = _generateCdfArray(stakeArray, delegationArray);
         return cdfArray;
     }
 }

@@ -9,14 +9,17 @@ interface ITADelegation is ITADelegationEventsErrors {
     function delegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerAddress _relayerAddress,
+        RelayerAddress[] calldata _activeRelayers,
+        uint256 _relayerIndex,
         uint256 _amount
     ) external;
 
     function unDelegate(
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
-        RelayerAddress _relayerAddress
+        RelayerAddress[] calldata _activeRelayers,
+        RelayerAddress _relayerAddress,
+        uint256 _relayerIndex
     ) external;
 
     function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
@@ -55,5 +58,5 @@ interface ITADelegation is ITADelegationEventsErrors {
 
     function supportedPools() external view returns (TokenAddress[] memory);
 
-    function getDelegationArray() external view returns (uint32[] memory);
+    function getDelegationArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint32[] memory);
 }

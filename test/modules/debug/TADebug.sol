@@ -3,10 +3,14 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/ITADebug.sol";
-
 import "src/transaction-allocator/common/TAHelpers.sol";
+import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocationStorage.sol";
+import "forge-std/console2.sol";
 
-contract TADebug is ITADebug, TAHelpers {
+contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
+    using VersionHistoryManager for VersionHistoryManager.Version[];
+    using U16ArrayHelper for uint16[];
+
     constructor() {
         if (block.chainid != 31337) {
             revert("TADebug: only for testing");
@@ -27,7 +31,9 @@ contract TADebug is ITADebug, TAHelpers {
         override
         returns (bool)
     {
-        return _verifyCdfHashAtWindow(_array, __windowIndex, _cdfLogIndex);
+        return getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
+            _array.cd_hash(), _cdfLogIndex, __windowIndex
+        );
     }
 
     function debug_currentWindowIndex() external view override returns (uint256) {
@@ -35,6 +41,30 @@ contract TADebug is ITADebug, TAHelpers {
     }
 
     function debug_cdfHash(uint16[] calldata _cdf) external pure override returns (bytes32) {
-        return _hashUint16ArrayCalldata(_cdf);
+        return _cdf.cd_hash();
+    }
+
+    function debug_printCdfLog() external view override {
+        RMStorage storage rms = getRMStorage();
+        VersionHistoryManager.Version[] storage cdfVersionHistory = rms.cdfVersionHistoryManager;
+        console2.log("CDF Log:");
+        for (uint256 i = 0; i < cdfVersionHistory.length; i++) {
+            console2.log(i, uint256(cdfVersionHistory[i].contentHash), cdfVersionHistory[i].timestamp);
+        }
+    }
+
+    function debug_setTransactionsProcessedInEpochByRelayer(
+        uint256 _epoch,
+        RelayerAddress _relayerAddress,
+        uint256 _transactionsProcessed
+    ) external override {
+        getTAStorage().transactionsSubmitted[_epoch][_relayerAddress] = _transactionsProcessed;
+    }
+
+    function debug_setTotalTransactionsProcessedInEpoch(uint256 _epoch, uint256 _transactionsProcessed)
+        external
+        override
+    {
+        getTAStorage().totalTransactionsSubmitted[_epoch] = _transactionsProcessed;
     }
 }
