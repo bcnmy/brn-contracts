@@ -170,14 +170,13 @@ abstract contract TATestBase is Test {
         activeRelayers.pop();
     }
 
-    function _findRelayerIndex(RelayerAddress _relayer) internal returns (uint256) {
+    function _findRelayerIndex(RelayerAddress _relayer) internal view returns (uint256) {
         for (uint256 i = 0; i < activeRelayers.length; i++) {
             if (activeRelayers[i] == _relayer) {
                 return i;
             }
         }
-        fail("Relayer not found");
-        return 0;
+        return activeRelayers.length;
     }
 
     // Utils

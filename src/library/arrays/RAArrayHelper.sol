@@ -62,6 +62,19 @@ library RAArrayHelper {
         return keccak256(abi.encodePacked((_array)));
     }
 
+    function cd_linearSearch(RelayerAddress[] calldata _array, RelayerAddress _x) internal pure returns (uint256) {
+        uint256 length = _array.length;
+        for (uint256 i; i != length;) {
+            if (_array[i] == _x) {
+                return i;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+        return length;
+    }
+
     function m_hash(RelayerAddress[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }

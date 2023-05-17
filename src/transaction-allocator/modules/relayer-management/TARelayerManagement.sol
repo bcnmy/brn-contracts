@@ -31,6 +31,7 @@ contract TARelayerManagement is
     ////////////////////////// Relayer Registration //////////////////////////
 
     // TODO: Implement a way to increase the relayer's stake
+    // TODO: Cannot stake until the previous stake is withdrawn
     /// @notice register a relayer
     /// @param _previousStakeArray current stake array for verification
     /// @param _stake amount to be staked

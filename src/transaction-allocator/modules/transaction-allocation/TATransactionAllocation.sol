@@ -257,6 +257,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
     }
 
+    // TODO: any relayer can call this
+    // TODO: Split the penalty b/w DAO and relayer
+    // TODO: Jail the relayer, the relayer needs to topup or leave with their money
     function processLivenessCheck(
         TargetEpochData calldata _targetEpochData,
         LatestActiveRelayersStakeAndDelegationState calldata _latestState,

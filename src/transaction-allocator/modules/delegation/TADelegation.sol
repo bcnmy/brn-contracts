@@ -17,6 +17,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
     using U32ArrayHelper for uint32[];
+    using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
 
@@ -95,11 +96,15 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         RelayerAddress[] calldata _activeRelayers,
         uint256 _relayerIndex,
         uint256 _amount
-    ) external override onlyStakedRelayer(_activeRelayers[_relayerIndex]) {
+    ) external override {
+        if (_relayerIndex >= _activeRelayers.length) {
+            revert InvalidRelayerIndex();
+        }
+
         _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
 
         RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
-        _updateRelayerProtocolRewards(relayerAddress);
+        // TODO: _updateRelayerProtocolRewards(relayerAddress);
 
         getRMStorage().bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         TADStorage storage ds = getTADStorage();
@@ -141,20 +146,35 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         uint32[] calldata _currentStakeArray,
         uint32[] calldata _prevDelegationArray,
         RelayerAddress[] calldata _activeRelayers,
+        RelayerAddress _relayerAddress,
         uint256 _relayerIndex
     ) external override {
-        _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
+        bool shouldUpdateCdf = false;
+
+        if (_relayerIndex < _activeRelayers.length && _activeRelayers[_relayerIndex] == _relayerAddress) {
+            // Relayer is active in the pending state, therefore it's CDF should be updated
+            _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
+            shouldUpdateCdf = true;
+        } else {
+            // Relayer is not active in the pending state, therefore it's CDF should not be updated
+            // We need to verify that the relayer is not present in the active relayers array at all,
+            // by scanning the array linearly
+            // In this case, the relayerIndex should not be used.
+            _verifyLatestActiveRelayerList(_activeRelayers);
+            if (_activeRelayers.cd_linearSearch(_relayerAddress) != _activeRelayers.length) {
+                revert RelayerIsActiveInPendingState();
+            }
+        }
 
         TADStorage storage ds = getTADStorage();
-        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
 
-        _updateRelayerProtocolRewards(relayerAddress);
+        // TODO: _updateRelayerProtocolRewards(relayerAddress);
 
         {
             uint256 length = ds.supportedPools.length;
             DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
             for (uint256 i; i != length;) {
-                _processRewards(relayerAddress, ds.supportedPools[i], delegatorAddress);
+                _processRewards(_relayerAddress, ds.supportedPools[i], delegatorAddress);
                 unchecked {
                     ++i;
                 }
@@ -163,17 +183,17 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         {
             DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-            uint256 delegation_ = ds.delegation[relayerAddress][delegatorAddress];
-            ds.totalDelegation[relayerAddress] -= delegation_;
-            ds.delegation[relayerAddress][delegatorAddress] = 0;
-            emit DelegationRemoved(relayerAddress, delegatorAddress, delegation_);
+            uint256 delegation_ = ds.delegation[_relayerAddress][delegatorAddress];
+            ds.totalDelegation[_relayerAddress] -= delegation_;
+            ds.delegation[_relayerAddress][delegatorAddress] = 0;
+            emit DelegationRemoved(_relayerAddress, delegatorAddress, delegation_);
         }
 
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
-        if (_isStakedRelayer(relayerAddress)) {
+        if (shouldUpdateCdf) {
             _updateDelegationInCdf(
-                _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[relayerAddress]
+                _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[_relayerAddress]
             );
         }
     }

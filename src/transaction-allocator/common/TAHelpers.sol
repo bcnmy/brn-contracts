@@ -94,6 +94,19 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
     }
 
+    function _verifCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+        internal
+        view
+    {
+        if (
+            !getRMStorage().activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
+                _activeRelayers.cd_hash(), _relayerLogIndex, _windowIndex(block.number)
+            )
+        ) {
+            revert InvalidRelayersArrayHash();
+        }
+    }
+
     ////////////////////////////// Relayer Selection //////////////////////////////
     function _windowIndex(uint256 _blockNumber) internal view returns (uint256) {
         return _blockNumber / getRMStorage().blocksPerWindow;
