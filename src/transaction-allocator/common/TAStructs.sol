@@ -24,6 +24,7 @@ struct WithdrawalInfo {
 
 struct InitalizerParams {
     uint256 blocksPerWindow;
+    uint256 blocksPerEpoch;
     uint256 relayersPerWindow;
     uint256 penaltyDelayBlocks;
     TokenAddress bondTokenAddress;
@@ -46,7 +47,7 @@ struct LatestActiveRelayersStakeAndDelegationState {
 }
 
 struct TargetEpochData {
-    uint256 epochIndex;
+    EpochId epochId;
     uint256 cdfLogIndex;
     uint256 relayerLogIndex;
     uint16[] cdf;

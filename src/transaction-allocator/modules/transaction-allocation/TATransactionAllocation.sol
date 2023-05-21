@@ -118,11 +118,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Record Liveness Metrics
         TAStorage storage ts = getTAStorage();
-        uint256 epochIndex = _epochIndexFromBlock(block.number);
+        EpochId epochId = _epochId(block.number);
         // TODO: Is extra store for total transactions TRULY required?
         unchecked {
-            ++ts.transactionsSubmitted[epochIndex][_activeRelayers[_relayerIndex]];
-            ++ts.totalTransactionsSubmitted[epochIndex];
+            ++ts.transactionsSubmitted[epochId][_activeRelayers[_relayerIndex]];
+            ++ts.totalTransactionsSubmitted[epochId];
         }
 
         // TODO: Check how to update this logic
@@ -225,7 +225,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         FixedPointType _totalTransactionsInEpoch
     ) internal view returns (bool) {
         uint256 relayerStakeNormalized = _targetEpochData.cdf[_relayerIndex];
-        uint256 transactionsProcessedByRelayer = getTAStorage().transactionsSubmitted[_targetEpochData.epochIndex][_targetEpochData
+        uint256 transactionsProcessedByRelayer = getTAStorage().transactionsSubmitted[_targetEpochData.epochId][_targetEpochData
             .activeRelayers[_relayerIndex]];
 
         if (_relayerIndex != 0) {
@@ -270,30 +270,40 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _latestState.currentStakeArray, _latestState.currentDelegationArray, _latestState.activeRelayers
         );
 
-        // Verify the state of the Epoch for which the liveness check is being processed
-        _verifyExternalStateForTransactionAllocation(
-            _targetEpochData.cdf,
-            _targetEpochData.cdfLogIndex,
-            _targetEpochData.activeRelayers,
-            _targetEpochData.relayerLogIndex,
-            _epochIndexToStartingBlock(_targetEpochData.epochIndex)
-        );
+        {
+            uint256 targetEpochStartingBlock = _epochIdToStartingBlock(_targetEpochData.epochId);
+            uint256 targetEpochEndingBlock =
+                targetEpochStartingBlock + _epochIdToEpochLength(_targetEpochData.epochId) - 1;
 
-        // Verify that the liveness check is being processed for a past epoch
-        if (_targetEpochData.epochIndex >= _epochIndexFromBlock(block.number)) {
-            revert CannotProcessLivenessCheckForCurrentOrFutureEpoch();
+            // Verify the state of the Epoch for which the liveness check is being processed
+            _verifyExternalStateForTransactionAllocation(
+                _targetEpochData.cdf,
+                _targetEpochData.cdfLogIndex,
+                _targetEpochData.activeRelayers,
+                _targetEpochData.relayerLogIndex,
+                targetEpochStartingBlock
+            );
+
+            // Verify that the liveness check is being processed for a past epoch
+            if (targetEpochStartingBlock <= block.number && block.number <= targetEpochEndingBlock) {
+                revert CannotProcessLivenessCheckForCurrentEpoch();
+            }
         }
 
         FixedPointType totalTransactionsInEpoch;
         {
             // Check if the liveness check has already been processed for the epoch
             TAStorage storage ts = getTAStorage();
-            if (ts.livenessCheckProcessed[_targetEpochData.epochIndex]) {
+            if (ts.livenessCheckProcessed[_targetEpochData.epochId]) {
                 revert LivenessCheckAlreadyProcessed();
             }
-            ts.livenessCheckProcessed[_targetEpochData.epochIndex] = true;
+            ts.livenessCheckProcessed[_targetEpochData.epochId] = true;
 
-            totalTransactionsInEpoch = ts.totalTransactionsSubmitted[_targetEpochData.epochIndex].fp();
+            totalTransactionsInEpoch = ts.totalTransactionsSubmitted[_targetEpochData.epochId].fp();
+
+            if (totalTransactionsInEpoch == FP_ZERO) {
+                revert CannotProcessLivenessCheckForEpochWithNoTransactions();
+            }
         }
         uint256 relayerCountInTargetEpoch = _targetEpochData.activeRelayers.length;
 
@@ -334,8 +344,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
 
             // TODO: What should be done with the penalty amount?
-
-            emit RelayerPenalized(relayerAddress, _targetEpochData.epochIndex, penalty);
+            emit RelayerPenalized(relayerAddress, _targetEpochData.epochId, penalty);
 
             unchecked {
                 ++i;
@@ -349,7 +358,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Getters ///////////////////////////////
-    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
+    function transactionsSubmittedInEpochByRelayer(EpochId _epoch, RelayerAddress _relayerAddress)
         external
         view
         override
@@ -358,11 +367,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return getTAStorage().transactionsSubmitted[_epoch][_relayerAddress];
     }
 
-    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view override returns (uint256) {
+    function totalTransactionsSubmittedInEpoch(EpochId _epoch) external view override returns (uint256) {
         return getTAStorage().totalTransactionsSubmitted[_epoch];
     }
 
-    function livenessCheckProcessedForEpoch(uint256 _epoch) external view override returns (bool) {
+    function livenessCheckProcessedForEpoch(EpochId _epoch) external view override returns (bool) {
         return getTAStorage().livenessCheckProcessed[_epoch];
     }
 }

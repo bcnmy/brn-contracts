@@ -39,10 +39,10 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
     ) external pure returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
-    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
+    function transactionsSubmittedInEpochByRelayer(EpochId _epoch, RelayerAddress _relayerAddress)
         external
         view
         returns (uint256);
-    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view returns (uint256);
-    function livenessCheckProcessedForEpoch(uint256 _epoch) external view returns (bool);
+    function totalTransactionsSubmittedInEpoch(EpochId _epoch) external view returns (uint256);
+    function livenessCheckProcessedForEpoch(EpochId _epoch) external view returns (bool);
 }

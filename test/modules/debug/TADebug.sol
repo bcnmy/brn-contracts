@@ -36,8 +36,12 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         );
     }
 
-    function debug_currentWindowIndex() external view override returns (uint256) {
-        return _windowIndex(block.number);
+    function debug_currentWindowId() external view override returns (WindowId) {
+        return _windowId(block.number);
+    }
+
+    function debug_currentEpochId() external view override returns (EpochId) {
+        return _epochId(block.number);
     }
 
     function debug_cdfHash(uint16[] calldata _cdf) external pure override returns (bytes32) {
@@ -47,21 +51,20 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     function debug_printCdfLog() external view override {
         RMStorage storage rms = getRMStorage();
         VersionHistoryManager.Version[] storage cdfVersionHistory = rms.cdfVersionHistoryManager;
-        console2.log("CDF Log:");
         for (uint256 i = 0; i < cdfVersionHistory.length; i++) {
             console2.log(i, uint256(cdfVersionHistory[i].contentHash), cdfVersionHistory[i].timestamp);
         }
     }
 
     function debug_setTransactionsProcessedInEpochByRelayer(
-        uint256 _epoch,
+        EpochId _epoch,
         RelayerAddress _relayerAddress,
         uint256 _transactionsProcessed
     ) external override {
         getTAStorage().transactionsSubmitted[_epoch][_relayerAddress] = _transactionsProcessed;
     }
 
-    function debug_setTotalTransactionsProcessedInEpoch(uint256 _epoch, uint256 _transactionsProcessed)
+    function debug_setTotalTransactionsProcessedInEpoch(EpochId _epoch, uint256 _transactionsProcessed)
         external
         override
     {

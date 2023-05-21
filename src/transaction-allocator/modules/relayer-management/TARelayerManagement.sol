@@ -73,7 +73,7 @@ contract TARelayerManagement is
             // Update Active Relayer List
             RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_append(relayerAddress);
             rms.activeRelayerListVersionHistoryManager.addNewVersion(
-                newActiveRelayers.m_hash(), _nextUpdateEffectiveAtWindowIndex()
+                newActiveRelayers.m_hash(), _nextUpdateEffectiveAtBlock(block.number)
             );
             emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
         }
@@ -112,15 +112,13 @@ contract TARelayerManagement is
         --rms.relayerCount;
         rms.totalStake -= stake;
 
-        // TODO: Ensure that whenever active relayer are updated, stake array and delegation array is also updated
-
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _previousStakeArray.cd_remove(_relayerIndex);
         uint32[] memory newDelegationArray = _previousDelegationArray.cd_remove(_relayerIndex);
         _updateCdf(newStakeArray, true, newDelegationArray, true);
 
         // Update Active Relayers
-        uint256 updateEffectiveAtWindowIndex = _nextUpdateEffectiveAtWindowIndex();
+        uint256 updateEffectiveAtWindowIndex = _nextUpdateEffectiveAtBlock(block.number);
         RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_remove(_relayerIndex);
         rms.activeRelayerListVersionHistoryManager.addNewVersion(
             newActiveRelayers.m_hash(), updateEffectiveAtWindowIndex
@@ -258,10 +256,9 @@ contract TARelayerManagement is
         return getRMStorage().blocksPerWindow;
     }
 
-    // TODO
-    // function cdfHashUpdateLog(uint256 _index) external view override returns (CdfHashUpdateInfo memory) {
-    //     return getRMStorage().cdfHashUpdateLog[_index];
-    // }
+    function blocksPerEpoch() external view override returns (uint256) {
+        return getRMStorage().blocksPerEpoch;
+    }
 
     function latestActiveRelayerStakeArrayHash() external view override returns (bytes32) {
         return getRMStorage().latestActiveRelayerStakeArrayHash;

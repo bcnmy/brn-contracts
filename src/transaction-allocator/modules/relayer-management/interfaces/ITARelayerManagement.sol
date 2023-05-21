@@ -56,6 +56,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function blocksPerWindow() external view returns (uint256);
 
+    function blocksPerEpoch() external view returns (uint256);
+
     function latestActiveRelayerStakeArrayHash() external view returns (bytes32);
 
     function penaltyDelayBlocks() external view returns (uint256);

@@ -49,3 +49,27 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 }
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
+
+type WindowId is uint256;
+
+function windowIdentifierEquality(WindowId a, WindowId b) pure returns (bool) {
+    return WindowId.unwrap(a) == WindowId.unwrap(b);
+}
+
+function windowIdentifierInequality(WindowId a, WindowId b) pure returns (bool) {
+    return WindowId.unwrap(a) != WindowId.unwrap(b);
+}
+
+using {windowIdentifierEquality as ==, windowIdentifierInequality as !=} for WindowId global;
+
+type EpochId is uint256;
+
+function epochIdentifierEquality(EpochId a, EpochId b) pure returns (bool) {
+    return EpochId.unwrap(a) == EpochId.unwrap(b);
+}
+
+function epochIdentifierInequality(EpochId a, EpochId b) pure returns (bool) {
+    return EpochId.unwrap(a) != EpochId.unwrap(b);
+}
+
+using {epochIdentifierEquality as ==, epochIdentifierInequality as !=} for EpochId global;

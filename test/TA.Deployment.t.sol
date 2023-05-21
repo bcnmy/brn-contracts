@@ -20,6 +20,7 @@ contract TADeploymentTest is Test {
         supportedTokens.push(TokenAddress.wrap(address(this)));
         InitalizerParams memory params = InitalizerParams({
             blocksPerWindow: 1,
+            blocksPerEpoch: 2,
             relayersPerWindow: 3,
             penaltyDelayBlocks: 4,
             bondTokenAddress: TokenAddress.wrap(address(this)),
@@ -29,6 +30,7 @@ contract TADeploymentTest is Test {
         ITransactionAllocator ta = script.deploy(privateKey, params, false);
 
         assertEq(ta.blocksPerWindow(), params.blocksPerWindow);
+        assertEq(ta.blocksPerEpoch(), params.blocksPerEpoch);
         assertEq(ta.relayersPerWindow(), params.relayersPerWindow);
         assertEq(ta.penaltyDelayBlocks(), block.number + params.penaltyDelayBlocks);
         assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);

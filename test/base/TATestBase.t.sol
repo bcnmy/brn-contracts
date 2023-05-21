@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/contracts/utils/cryptography/ECDSA.sol";
 import "forge-std/Test.sol";
+import "forge-std/console2.sol";
 
 import "src/library/FixedPointArithmetic.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
@@ -27,7 +28,8 @@ abstract contract TATestBase is Test {
 
     TokenAddress[] internal supportedTokens;
     InitalizerParams deployParams = InitalizerParams({
-        blocksPerWindow: 10,
+        blocksPerWindow: 15,
+        blocksPerEpoch: 40,
         relayersPerWindow: 10,
         penaltyDelayBlocks: 10,
         bondTokenAddress: TokenAddress.wrap(address(0)),
@@ -180,7 +182,6 @@ abstract contract TATestBase is Test {
     }
 
     // Utils
-
     function _stringConcat2(string memory a, string memory b) internal pure returns (string memory) {
         return string(abi.encodePacked(a, b));
     }

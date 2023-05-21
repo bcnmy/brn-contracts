@@ -21,6 +21,7 @@ abstract contract TARelayerManagementStorage {
         // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
+        uint256 blocksPerEpoch;
         // cdf array hash
         VersionHistoryManager.Version[] cdfVersionHistoryManager;
         VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;

@@ -117,7 +117,7 @@ contract WormholeApplicationTest is
     }
 
     function testWHTransactionExecution() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         // Setup Mocks
         vm.mockCall(
@@ -181,7 +181,7 @@ contract WormholeApplicationTest is
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
@@ -223,7 +223,7 @@ contract WormholeApplicationTest is
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -262,7 +262,7 @@ contract WormholeApplicationTest is
 
     // TODO: This test is suspicious
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1, activeRelayers, 1);

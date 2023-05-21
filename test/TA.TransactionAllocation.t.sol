@@ -102,7 +102,7 @@ contract TATransactionAllocationTest is
     }
 
     function testTransactionExecution() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
@@ -145,7 +145,7 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
@@ -187,7 +187,7 @@ contract TATransactionAllocationTest is
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -228,7 +228,7 @@ contract TATransactionAllocationTest is
 
     // TODO: This test is suspicious
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1, activeRelayers, 1);
@@ -292,11 +292,13 @@ contract TATransactionAllocationTest is
     }
 
     function testPenalizeRelayerIfInsufficientTransactionAreSubmitted() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
+
+        EpochId epochId = ta.debug_currentEpochId();
 
         RelayerAddress activeRelayer = relayerMainAddress[0];
-        ta.debug_setTotalTransactionsProcessedInEpoch(1, 100);
-        ta.debug_setTransactionsProcessedInEpochByRelayer(1, activeRelayer, 10);
+        ta.debug_setTotalTransactionsProcessedInEpoch(epochId, 100);
+        ta.debug_setTransactionsProcessedInEpochByRelayer(epochId, activeRelayer, 10);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
@@ -308,17 +310,19 @@ contract TATransactionAllocationTest is
             }
 
             vm.expectEmit(true, true, true, false);
-            emit RelayerPenalized(activeRelayers[i], 1, _calculatePenalty(ta.relayerInfo_Stake(activeRelayers[i])));
+            emit RelayerPenalized(
+                activeRelayers[i], epochId, _calculatePenalty(ta.relayerInfo_Stake(activeRelayers[i]))
+            );
         }
         uint256[] memory relayerIndexMapping = new uint256[](activeRelayers.length);
         for (uint256 i = 0; i < activeRelayers.length; ++i) {
             relayerIndexMapping[i] = i;
         }
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
+        vm.roll(block.number + deployParams.blocksPerWindow * deployParams.blocksPerWindow);
         ta.processLivenessCheck(
             TargetEpochData({
-                epochIndex: 1,
+                epochId: epochId,
                 cdfLogIndex: 1,
                 relayerLogIndex: 1,
                 cdf: cdf,
