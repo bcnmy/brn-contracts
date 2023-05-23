@@ -107,29 +107,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         TAStorage storage ts = getTAStorage();
 
-        // If this is the first transaction of the epoch, run the liveness check
-        if (ts.epochEndTimestamp >= block.timestamp) {
-            // Run the liveness check
-            _processLivenessCheck(
-                _params.cdf, _params.currentStakeArray, _params.currentDelegationArray, _params.activeRelayers
-            );
-
-            // Process any pending Updates
-            RMStorage storage rms = getRMStorage();
-            WindowIndex nextWindowIndex = WindowIndex.wrap(WindowIndex.unwrap(_windowIndex(block.number)) + 1);
-
-            if (rms.cdfVersionManager.pendingHash != bytes32(0)) {
-                rms.cdfVersionManager.setPendingStateForActivation(nextWindowIndex);
-            }
-
-            if (rms.activeRelayerListVersionManager.pendingHash != bytes32(0)) {
-                rms.activeRelayerListVersionManager.setPendingStateForActivation(nextWindowIndex);
-            }
-
-            // Update the epoch end time
-            ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
-        }
-
         // Record Liveness Metrics
         // TODO: Is extra store for total transactions TRULY required?
         unchecked {
@@ -255,14 +232,56 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
+    function processLivenessCheck(ProcessLivenessCheckParams calldata _params) external override {
+        // If this is the first transaction of the epoch, run the liveness check
+        TAStorage storage ts = getTAStorage();
+        RMStorage storage rms = getRMStorage();
+
+        if (ts.epochEndTimestamp < block.timestamp) {
+            revert LivenessCheckAlreadyProcessed();
+        }
+
+        // Verify the currently active CDF and active relayers
+        _verifyExternalStateForTransactionAllocation(_params.currentCdf, _params.currentActiveRelayers, block.number);
+
+        // Verify the state against which the new CDF would be calculated
+        _verifyExternalStateForCdfUpdation(
+            _params.latestStakeArray, _params.latestDelegationArray, _params.pendingActiveRelayers
+        );
+
+        // Run the liveness check
+        _processLivenessCheck(_params);
+
+        // Process any pending Updates
+        WindowIndex nextWindowIndex = WindowIndex.wrap(WindowIndex.unwrap(_windowIndex(block.number)) + 1);
+
+        // TODO: We don't necessarily need to store this in two different hashes. These can be combined to save gas.
+        if (rms.cdfVersionManager.pendingHash != bytes32(0)) {
+            rms.cdfVersionManager.setPendingStateForActivation(nextWindowIndex);
+        }
+
+        if (rms.activeRelayerListVersionManager.pendingHash != bytes32(0)) {
+            rms.activeRelayerListVersionManager.setPendingStateForActivation(nextWindowIndex);
+        }
+
+        // Update the epoch end time
+        ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
+    }
+
+    function _checkRelayerIndexInNewMapping(
+        RelayerAddress[] calldata _oldRelayerIndexToRelayerMapping,
+        RelayerAddress[] calldata _newRelayerIndexToRelayerMapping,
+        uint256 _oldIndex,
+        uint256 _proposedNewIndex
+    ) internal pure {
+        if (_oldRelayerIndexToRelayerMapping[_oldIndex] != _newRelayerIndexToRelayerMapping[_proposedNewIndex]) {
+            revert RelayerIndexMappingMismatch(_oldIndex, _proposedNewIndex);
+        }
+    }
+
     // TODO: Split the penalty b/w DAO and relayer
     // TODO: Jail the relayer, the relayer needs to topup or leave with their money
-    function _processLivenessCheck(
-        uint16[] calldata _cdf,
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray,
-        RelayerAddress[] calldata _activeRelayers
-    ) internal {
+    function _processLivenessCheck(ProcessLivenessCheckParams calldata _params) internal {
         TAStorage storage ts = getTAStorage();
         uint256 epochEndTimestamp = ts.epochEndTimestamp;
         FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp].fp();
@@ -272,16 +291,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             return;
         }
 
-        // Verify the state against which the new CDF would be calculated
-        _verifyExternalStateForCdfUpdation(_currentStakeArray, _currentDelegationArray, _activeRelayers);
+        uint256 relayerCount = _params.currentActiveRelayers.length;
 
-        uint256 relayerCount = _activeRelayers.length;
-
-        uint32[] memory newStakeArray = _currentStakeArray;
+        uint32[] memory newStakeArray = _params.latestStakeArray;
         bool shouldUpdateCdf = false;
 
         for (uint256 i; i != relayerCount;) {
-            if (_verifyRelayerLiveness(_cdf, _activeRelayers, i, epochEndTimestamp, totalTransactionsInEpoch)) {
+            if (
+                _verifyRelayerLiveness(
+                    _params.currentCdf, _params.currentActiveRelayers, i, epochEndTimestamp, totalTransactionsInEpoch
+                )
+            ) {
                 unchecked {
                     ++i;
                 }
@@ -290,7 +310,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             // Penalize the relayer
             uint256 penalty;
-            RelayerAddress relayerAddress = _activeRelayers[i];
+            RelayerAddress relayerAddress = _params.currentActiveRelayers[i];
 
             // TODO: What happens if relayer stake is less than minimum stake after penalty?
             // TODO: Change withdrawl pattern so that the status of the relayer is set to pending exit
@@ -299,7 +319,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
                 penalty = _calculatePenalty(relayerInfo.stake);
                 relayerInfo.stake -= penalty;
-                newStakeArray[i] = _scaleStake(relayerInfo.stake);
+
+                // Find the index of the relayer in the pending state
+                uint256 newIndex = _params.currentActiveRelayerToPendingActiveRelayersIndex[i];
+                _checkRelayerIndexInNewMapping(
+                    _params.currentActiveRelayers, _params.pendingActiveRelayers, i, newIndex
+                );
+
+                newStakeArray[newIndex] = _scaleStake(relayerInfo.stake);
                 shouldUpdateCdf = true;
             } else {
                 // If the relayer un-registered itself, then we just subtract from their withdrawl info
@@ -319,7 +346,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Process All CDF Updates if Necessary
         if (shouldUpdateCdf) {
-            _updateCdf(newStakeArray, true, _currentDelegationArray, false);
+            _updateCdf(newStakeArray, true, _params.latestDelegationArray, false);
         }
     }
 

@@ -11,14 +11,23 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;
         uint16[] cdf;
-        uint32[] currentStakeArray;
-        uint32[] currentDelegationArray;
         RelayerAddress[] activeRelayers;
         uint256 relayerIndex;
         uint256 relayerGenerationIterationBitmap;
     }
 
     function execute(ExecuteParams calldata _data) external payable;
+
+    struct ProcessLivenessCheckParams {
+        uint16[] currentCdf;
+        RelayerAddress[] currentActiveRelayers;
+        RelayerAddress[] pendingActiveRelayers;
+        uint256[] currentActiveRelayerToPendingActiveRelayersIndex;
+        uint32[] latestStakeArray;
+        uint32[] latestDelegationArray;
+    }
+
+    function processLivenessCheck(ProcessLivenessCheckParams calldata _params) external;
 
     function allocateRelayers(uint16[] calldata _cdf, RelayerAddress[] calldata _activeRelayers)
         external

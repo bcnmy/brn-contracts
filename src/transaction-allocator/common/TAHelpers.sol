@@ -67,9 +67,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     function _verifyExternalStateForTransactionAllocation(
         uint16[] calldata _cdf,
-        // uint256 _cdfLogIndex,
         RelayerAddress[] calldata _activeRelayers,
-        // uint256 _relayerLogIndex,
         uint256 _blockNumber
     ) internal view {
         RMStorage storage rs = getRMStorage();
