@@ -44,7 +44,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     function _updateRelayerProtocolRewards(RelayerAddress _relayer) internal {
-        if (_isStakedRelayer(_relayer)) {
+        if (_isActiveRelayer(_relayer)) {
             _updateProtocolRewards();
             (uint256 relayerRewards, uint256 delegatorRewards) = _burnRewardSharesForRelayerAndGetRewards(_relayer);
 

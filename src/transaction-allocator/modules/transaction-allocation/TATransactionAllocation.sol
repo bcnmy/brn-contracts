@@ -261,13 +261,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
 
         // TODO: We don't necessarily need to store this in two different hashes. These can be combined to save gas.
-        if (rms.cdfVersionManager.pendingHash != bytes32(0)) {
-            rms.cdfVersionManager.setPendingStateForActivation(updateWindowIndex);
-        }
-
-        if (rms.activeRelayerListVersionManager.pendingHash != bytes32(0)) {
-            rms.activeRelayerListVersionManager.setPendingStateForActivation(updateWindowIndex);
-        }
+        rms.cdfVersionManager.setPendingStateForActivation(updateWindowIndex);
+        rms.activeRelayerListVersionManager.setPendingStateForActivation(updateWindowIndex);
 
         // Update the epoch end time
         ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
@@ -289,7 +284,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 relayerCount = _params.currentActiveRelayers.length;
 
         uint32[] memory newStakeArray = _params.latestStakeArray;
-        bool shouldUpdateCdf;
+        uint32[] memory newDelegationArray = _params.latestDelegationArray;
+        bool shouldUpdateStakeArray;
+        bool shouldUpdateDelegationArray;
 
         for (uint256 i; i != relayerCount;) {
             if (
@@ -308,24 +305,16 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 uint256 penalty;
                 RelayerAddress relayerAddress = _params.currentActiveRelayers[i];
 
-                // TODO: What happens if relayer stake is less than minimum stake after penalty?
-                // TODO: Change withdrawl pattern so that the status of the relayer is set to pending exit
-
                 RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
                 penalty = _calculatePenalty(relayerInfo.stake);
                 relayerInfo.stake -= penalty;
 
-                // If the relayer is not exiting, then we need to update the stake array and CDF
-                if (_isStakedRelayer(relayerAddress)) {
-                    // Find the index of the relayer in the pending state
-                    uint256 newIndex = _params.currentActiveRelayerToPendingActiveRelayersIndex[i];
-                    _checkRelayerIndexInNewMapping(
-                        _params.currentActiveRelayers, _params.pendingActiveRelayers, i, newIndex
-                    );
-
-                    // Update the stake array and CDF
-                    newStakeArray[newIndex] = _scaleStake(relayerInfo.stake);
-                    shouldUpdateCdf = true;
+                if (relayerInfo.stake < MINIMUM_STAKE_AMOUNT) {
+                    // TODO: Jail the relayer
+                } else if (_isActiveRelayer(relayerAddress)) {
+                    // If the relayer is not exiting, then we need to update the stake array and CDF
+                    _handleUpdateForActiveRelayer(_params, i, newStakeArray, relayerInfo.stake);
+                    shouldUpdateStakeArray = true;
                 }
 
                 // TODO: What should be done with the penalty amount?
@@ -339,8 +328,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         // Process All CDF Updates if Necessary
-        if (shouldUpdateCdf) {
-            _updateCdf(newStakeArray, true, _params.latestDelegationArray, false);
+        if (shouldUpdateStakeArray || shouldUpdateDelegationArray) {
+            _updateCdf(newStakeArray, shouldUpdateStakeArray, newDelegationArray, shouldUpdateDelegationArray);
         }
     }
 
@@ -353,6 +342,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         if (_oldRelayerIndexToRelayerMapping[_oldIndex] != _newRelayerIndexToRelayerMapping[_proposedNewIndex]) {
             revert RelayerIndexMappingMismatch(_oldIndex, _proposedNewIndex);
         }
+    }
+
+    function _handleUpdateForActiveRelayer(
+        ProcessLivenessCheckParams calldata _params,
+        uint256 _relayerIndex,
+        uint32[] memory _newStakeArray,
+        uint256 _newStake
+    ) internal pure {
+        // Find the index of the relayer in the pending state
+        uint256 newIndex = _params.currentActiveRelayerToPendingActiveRelayersIndex[_relayerIndex];
+        _checkRelayerIndexInNewMapping(
+            _params.currentActiveRelayers, _params.pendingActiveRelayers, _relayerIndex, newIndex
+        );
+
+        // Update the stake array and CDF
+        _newStakeArray[newIndex] = _scaleStake(_newStake);
     }
 
     ///////////////////////////////// Getters ///////////////////////////////

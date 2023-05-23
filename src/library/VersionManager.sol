@@ -50,6 +50,11 @@ library VersionManager {
     }
 
     function setPendingStateForActivation(VersionManagerState storage _v, uint256 _activationTime) internal {
+        if (_v.pendingHashActivationTime != 0) {
+            // Existing pending state is already scheduled for activation
+            return;
+        }
+
         _v.pendingHashActivationTime = _activationTime;
     }
 }

@@ -55,4 +55,16 @@ library U32ArrayHelper {
     function m_hash(uint32[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }
+
+    function m_remove(uint32[] memory _array, uint256 _index) internal pure {
+        uint256 length = _array.length - 1;
+        if (_index != length) {
+            _array[_index] = _array[length];
+        }
+
+        // Reduce the array sizes
+        assembly {
+            mstore(_array, sub(mload(_array), 1))
+        }
+    }
 }

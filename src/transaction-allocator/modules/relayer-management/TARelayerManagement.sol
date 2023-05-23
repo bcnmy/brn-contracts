@@ -89,7 +89,7 @@ contract TARelayerManagement is
         uint32[] calldata _latestDelegationArray,
         RelayerAddress[] calldata _latestActiveRelayers,
         uint256 _relayerIndex
-    ) external override onlyStakedRelayer(RelayerAddress.wrap(msg.sender)) {
+    ) external override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
         _verifyExternalStateForCdfUpdation(_latestStakeArray, _latestDelegationArray, _latestActiveRelayers);
 
         // Verify relayer index
@@ -169,7 +169,7 @@ contract TARelayerManagement is
     function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
         external
         override
-        onlyStakedRelayer(RelayerAddress.wrap(msg.sender))
+        onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         _setRelayerAccountAddresses(relayerAddress, _accounts);
@@ -180,7 +180,7 @@ contract TARelayerManagement is
     // TODO: Jailed relayers should not be able to update their configuration
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
-    function claimProtocolReward() public override onlyStakedRelayer(RelayerAddress.wrap(msg.sender)) {
+    function claimProtocolReward() public override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
         _updateProtocolRewards();
 
         // Calculate Rewards

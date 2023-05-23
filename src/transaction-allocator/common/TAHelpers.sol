@@ -28,8 +28,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////////// Verification Helpers //////////////////////////////
-    modifier onlyStakedRelayer(RelayerAddress _relayer) {
-        if (!_isStakedRelayer(_relayer)) {
+    modifier onlyActiveRelayer(RelayerAddress _relayer) {
+        if (!_isActiveRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
         }
         _;
@@ -40,7 +40,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
+    function _isActiveRelayer(RelayerAddress _relayer) internal view returns (bool) {
         return getRMStorage().relayerInfo[_relayer].status == RelayerStatus.Active;
     }
 
