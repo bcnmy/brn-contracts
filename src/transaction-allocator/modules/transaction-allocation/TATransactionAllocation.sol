@@ -212,19 +212,24 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerIndex,
         uint256 _epochEndTimestamp,
         FixedPointType _totalTransactionsInEpoch
-    ) internal view returns (bool) {
-        uint256 relayerStakeNormalized = _cdf[_relayerIndex];
-        uint256 transactionsProcessedByRelayer =
-            getTAStorage().transactionsSubmitted[_epochEndTimestamp][_activeRelayers[_relayerIndex]];
+    ) internal returns (bool) {
+        TAStorage storage ts = getTAStorage();
+        FixedPointType minimumTransactions;
+        {
+            uint256 relayerStakeNormalized = _cdf[_relayerIndex];
 
-        if (_relayerIndex != 0) {
-            relayerStakeNormalized -= _cdf[_relayerIndex - 1];
+            if (_relayerIndex != 0) {
+                relayerStakeNormalized -= _cdf[_relayerIndex - 1];
+            }
+
+            minimumTransactions = calculateMinimumTranasctionsForLiveness(
+                relayerStakeNormalized, _cdf[_cdf.length - 1], _totalTransactionsInEpoch, LIVENESS_Z_PARAMETER
+            );
         }
 
-        FixedPointType minimumTransactions = calculateMinimumTranasctionsForLiveness(
-            relayerStakeNormalized, _cdf[_cdf.length - 1], _totalTransactionsInEpoch, LIVENESS_Z_PARAMETER
-        );
-
+        uint256 transactionsProcessedByRelayer =
+            ts.transactionsSubmitted[_epochEndTimestamp][_activeRelayers[_relayerIndex]];
+        delete ts.transactionsSubmitted[_epochEndTimestamp][_activeRelayers[_relayerIndex]];
         return transactionsProcessedByRelayer.fp() >= minimumTransactions;
     }
 
@@ -268,23 +273,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
     }
 
-    function _checkRelayerIndexInNewMapping(
-        RelayerAddress[] calldata _oldRelayerIndexToRelayerMapping,
-        RelayerAddress[] calldata _newRelayerIndexToRelayerMapping,
-        uint256 _oldIndex,
-        uint256 _proposedNewIndex
-    ) internal pure {
-        if (_oldRelayerIndexToRelayerMapping[_oldIndex] != _newRelayerIndexToRelayerMapping[_proposedNewIndex]) {
-            revert RelayerIndexMappingMismatch(_oldIndex, _proposedNewIndex);
-        }
-    }
-
     // TODO: Split the penalty b/w DAO and relayer
     // TODO: Jail the relayer, the relayer needs to topup or leave with their money
     function _processLivenessCheck(ProcessLivenessCheckParams calldata _params) internal {
         TAStorage storage ts = getTAStorage();
         uint256 epochEndTimestamp = ts.epochEndTimestamp;
         FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp].fp();
+        delete ts.totalTransactionsSubmitted[epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (totalTransactionsInEpoch == FP_ZERO) {
@@ -294,7 +289,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 relayerCount = _params.currentActiveRelayers.length;
 
         uint32[] memory newStakeArray = _params.latestStakeArray;
-        bool shouldUpdateCdf = false;
+        bool shouldUpdateCdf;
 
         for (uint256 i; i != relayerCount;) {
             if (
@@ -346,6 +341,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Process All CDF Updates if Necessary
         if (shouldUpdateCdf) {
             _updateCdf(newStakeArray, true, _params.latestDelegationArray, false);
+        }
+    }
+
+    function _checkRelayerIndexInNewMapping(
+        RelayerAddress[] calldata _oldRelayerIndexToRelayerMapping,
+        RelayerAddress[] calldata _newRelayerIndexToRelayerMapping,
+        uint256 _oldIndex,
+        uint256 _proposedNewIndex
+    ) internal pure {
+        if (_oldRelayerIndexToRelayerMapping[_oldIndex] != _newRelayerIndexToRelayerMapping[_proposedNewIndex]) {
+            revert RelayerIndexMappingMismatch(_oldIndex, _proposedNewIndex);
         }
     }
 
