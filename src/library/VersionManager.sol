@@ -10,7 +10,6 @@ library VersionManager {
         bytes32 nextHash;
         bytes32 pendingHash;
         WindowIndex nextHashActivationWindowIndex;
-        uint128 pendingHashActivationTimestamp;
     }
 
     function initialize(VersionManagerState storage _v, bytes32 _currentHash) internal {
@@ -51,18 +50,6 @@ library VersionManager {
 
     function setPendingState(VersionManagerState storage _v, bytes32 _hash) internal {
         _v.pendingHash = _hash;
-    }
-
-    function setPendingStateActivationTimestamp(VersionManagerState storage _v, uint128 _timestamp) internal {
-        _v.pendingHashActivationTimestamp = _timestamp;
-    }
-
-    function shouldSetPendingStateForActivation(VersionManagerState storage _v, uint128 _currentTimestamp)
-        internal
-        view
-        returns (bool)
-    {
-        return _v.pendingHash != bytes32(0) && _v.pendingHashActivationTimestamp <= _currentTimestamp;
     }
 
     function setPendingStateForActivation(VersionManagerState storage _v, WindowIndex _activationWindow) internal {

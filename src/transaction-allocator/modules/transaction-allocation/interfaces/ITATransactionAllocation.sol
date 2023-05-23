@@ -7,29 +7,23 @@ import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITATransactionAllocationEventsErrors.sol";
 
 interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
-    function execute(
-        bytes[] calldata _reqs,
-        uint256[] calldata _forwardedNativeAmounts,
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _currentRelayerListLogIndex,
-        uint256 _relayerIndex,
-        uint256 _relayerGenerationIterationBitmap
-    ) external payable;
+    struct ExecuteParams {
+        bytes[] reqs;
+        uint256[] forwardedNativeAmounts;
+        uint16[] cdf;
+        uint32[] currentStakeArray;
+        uint32[] currentDelegationArray;
+        RelayerAddress[] activeRelayers;
+        uint256 relayerIndex;
+        uint256 relayerGenerationIterationBitmap;
+    }
 
-    function allocateRelayers(
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex
-    ) external view returns (RelayerAddress[] memory, uint256[] memory);
+    function execute(ExecuteParams calldata _data) external payable;
 
-    function processLivenessCheck(
-        TargetEpochData calldata _targetEpochData,
-        LatestActiveRelayersStakeAndDelegationState calldata _latestState,
-        uint256[] calldata _targetEpochRelayerIndexToLatestRelayerIndexMapping
-    ) external;
+    function allocateRelayers(uint16[] calldata _cdf, RelayerAddress[] calldata _activeRelayers)
+        external
+        view
+        returns (RelayerAddress[] memory, uint256[] memory);
 
     function calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
@@ -39,10 +33,6 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
     ) external pure returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
-    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
-        external
-        view
-        returns (uint256);
-    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view returns (uint256);
-    function livenessCheckProcessedForEpoch(uint256 _epoch) external view returns (bool);
+    function transactionsSubmittedRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
+    function totalTransactionsSubmitted() external view returns (uint256);
 }

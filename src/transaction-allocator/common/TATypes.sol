@@ -50,7 +50,7 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
 
-type WindowIndex is uint64;
+type WindowIndex is uint256;
 
 function windowIndexEquality(WindowIndex a, WindowIndex b) pure returns (bool) {
     return WindowIndex.unwrap(a) == WindowIndex.unwrap(b);

@@ -27,5 +27,5 @@ interface ITATransactionAllocationEventsErrors {
         uint256 indexed index, uint256 indexed gas, uint256 indexed tokenAmount, TokenAddress tokenAddress
     );
     event TransactionStatus(uint256 indexed index, bool indexed success, bytes indexed returndata);
-    event RelayerPenalized(RelayerAddress indexed relayerAddress, uint256 indexed epoch, uint256 indexed penaltyAmount);
+    event RelayerPenalized(RelayerAddress indexed relayerAddress, uint256 indexed penaltyAmount);
 }

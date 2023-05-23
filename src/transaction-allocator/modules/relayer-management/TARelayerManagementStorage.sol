@@ -5,7 +5,7 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 import "src/library/FixedPointArithmetic.sol";
-import "src/library/VersionHistoryManager.sol";
+import "src/library/VersionManager.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
 
@@ -22,8 +22,11 @@ abstract contract TARelayerManagementStorage {
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
         // cdf array hash
-        VersionHistoryManager.Version[] cdfVersionHistoryManager;
-        VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;
+        // VersionHistoryManager.Version[] cdfVersionHistoryManager;
+        // VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;
+        VersionManager.VersionManagerState cdfVersionManager;
+        VersionManager.VersionManagerState activeRelayerListVersionManager;
+        // TODO: This should be combined with delegation array hash
         bytes32 latestActiveRelayerStakeArrayHash;
         // Maps relayer address to pending withdrawals
         mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;

@@ -22,7 +22,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using SafeCast for uint256;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
-    using VersionHistoryManager for VersionHistoryManager.Version[];
+    using VersionManager for VersionManager.VersionManagerState;
     using U32ArrayHelper for uint32[];
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
@@ -60,47 +60,40 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             revert InvalidDelegationArrayHash();
         }
 
-        if (!rs.activeRelayerListVersionHistoryManager.verifyLatestContentHash(_latestActiveRelayerArray.cd_hash())) {
+        if (!rs.activeRelayerListVersionManager.verifyHashAgainstPendingState(_latestActiveRelayerArray.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
 
     function _verifyExternalStateForTransactionAllocation(
         uint16[] calldata _cdf,
-        uint256 _cdfLogIndex,
+        // uint256 _cdfLogIndex,
         RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
+        // uint256 _relayerLogIndex,
         uint256 _blockNumber
     ) internal view {
         RMStorage storage rs = getRMStorage();
-        uint256 windowIndex = _windowIndex(_blockNumber);
+        WindowIndex windowIndex = _windowIndex(_blockNumber);
 
-        if (!rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(_cdf.cd_hash(), _cdfLogIndex, windowIndex)) {
+        if (!rs.cdfVersionManager.verifyHashAgainstActiveState(_cdf.cd_hash(), windowIndex)) {
             revert InvalidCdfArrayHash();
         }
 
-        if (
-            !rs.activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _activeRelayers.cd_hash(), _relayerLogIndex, windowIndex
-            )
-        ) {
+        if (!rs.activeRelayerListVersionManager.verifyHashAgainstActiveState(_activeRelayers.cd_hash(), windowIndex)) {
             revert InvalidRelayersArrayHash();
         }
     }
 
     function _verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
-        if (!getRMStorage().activeRelayerListVersionHistoryManager.verifyLatestContentHash(_activeRelayers.cd_hash())) {
+        if (!getRMStorage().activeRelayerListVersionManager.verifyHashAgainstPendingState(_activeRelayers.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
 
-    function _verifCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
-        internal
-        view
-    {
+    function _verifyCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
         if (
-            !getRMStorage().activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _activeRelayers.cd_hash(), _relayerLogIndex, _windowIndex(block.number)
+            !getRMStorage().activeRelayerListVersionManager.verifyHashAgainstActiveState(
+                _activeRelayers.cd_hash(), _windowIndex(block.number)
             )
         ) {
             revert InvalidRelayersArrayHash();
@@ -108,29 +101,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
-    function _windowIndex(uint256 _blockNumber) internal view returns (uint256) {
-        return _blockNumber / getRMStorage().blocksPerWindow;
+    function _windowIndex(uint256 _blockNumber) internal view returns (WindowIndex) {
+        return WindowIndex.wrap((_blockNumber / getRMStorage().blocksPerWindow).toUint64());
     }
 
     function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
         return __windowIndex * getRMStorage().blocksPerWindow;
-    }
-
-    // TODO: windows per epoch should be read from storage
-    function _epochIndexFromBlock(uint256 _blockNumber) internal view returns (uint256) {
-        return _epochIndexFromWindowIndex(_windowIndex(_blockNumber));
-    }
-
-    function _epochIndexFromWindowIndex(uint256 __windowIndex) internal pure returns (uint256) {
-        return __windowIndex / WINDOWS_PER_EPOCH;
-    }
-
-    function _epochIndexToStartingWindowIndex(uint256 __epochIndex) internal pure returns (uint256) {
-        return __epochIndex * WINDOWS_PER_EPOCH;
-    }
-
-    function _epochIndexToStartingBlock(uint256 __epochIndex) internal view returns (uint256) {
-        return _windowIndexToStartingBlock(_epochIndexToStartingWindowIndex(__epochIndex));
     }
 
     function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
@@ -147,16 +123,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _verifyRelayerSelection(
         address _relayer,
         uint16[] calldata _cdf,
-        uint256 _cdfLogIndex,
         RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
     ) internal view returns (bool) {
-        _verifyExternalStateForTransactionAllocation(
-            _cdf, _cdfLogIndex, _activeRelayers, _relayerLogIndex, _blockNumber
-        );
+        _verifyExternalStateForTransactionAllocation(_cdf, _activeRelayers, _blockNumber);
 
         RMStorage storage ds = getRMStorage();
 
@@ -233,11 +205,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _nextUpdateEffectiveAtWindowIndex() internal view returns (uint256) {
-        uint256 windowIndex = _windowIndex(block.number);
-        return windowIndex + WINDOWS_PER_EPOCH - (windowIndex % WINDOWS_PER_EPOCH);
-    }
-
     function _updateCdf(
         uint32[] memory _stakeArray,
         bool _shouldUpdateStakeAccounting,
@@ -265,7 +232,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update cdf hash
         bytes32 cdfHash = _generateCdfArray(_stakeArray, _delegationArray).m_hash();
-        ds.cdfVersionHistoryManager.addNewVersion(cdfHash, _nextUpdateEffectiveAtWindowIndex());
+        ds.cdfVersionManager.setPendingState(cdfHash);
     }
 
     ////////////////////////////// Delegation ////////////////////////

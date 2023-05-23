@@ -8,8 +8,8 @@ import "src/transaction-allocator/modules/transaction-allocation/TATransactionAl
 import "forge-std/console2.sol";
 
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
-    using VersionHistoryManager for VersionHistoryManager.Version[];
     using U16ArrayHelper for uint16[];
+    using VersionManager for VersionManager.VersionManagerState;
 
     constructor() {
         if (block.chainid != 31337) {
@@ -25,18 +25,16 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         ds.unclaimedRewards[_relayerAddress][_pool] += _amount;
     }
 
-    function debug_verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex)
+    function debug_verifyCdfHashAtWindow(uint16[] calldata _array, WindowIndex __windowIndex)
         external
         view
         override
         returns (bool)
     {
-        return getRMStorage().cdfVersionHistoryManager.verifyContentHashAtTimestamp(
-            _array.cd_hash(), _cdfLogIndex, __windowIndex
-        );
+        return getRMStorage().cdfVersionManager.verifyHashAgainstActiveState(_array.cd_hash(), __windowIndex);
     }
 
-    function debug_currentWindowIndex() external view override returns (uint256) {
+    function debug_currentWindowIndex() external view override returns (WindowIndex) {
         return _windowIndex(block.number);
     }
 
@@ -44,27 +42,14 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         return _cdf.cd_hash();
     }
 
-    function debug_printCdfLog() external view override {
-        RMStorage storage rms = getRMStorage();
-        VersionHistoryManager.Version[] storage cdfVersionHistory = rms.cdfVersionHistoryManager;
-        console2.log("CDF Log:");
-        for (uint256 i = 0; i < cdfVersionHistory.length; i++) {
-            console2.log(i, uint256(cdfVersionHistory[i].contentHash), cdfVersionHistory[i].timestamp);
-        }
-    }
-
-    function debug_setTransactionsProcessedInEpochByRelayer(
-        uint256 _epoch,
-        RelayerAddress _relayerAddress,
-        uint256 _transactionsProcessed
-    ) external override {
-        getTAStorage().transactionsSubmitted[_epoch][_relayerAddress] = _transactionsProcessed;
-    }
-
-    function debug_setTotalTransactionsProcessedInEpoch(uint256 _epoch, uint256 _transactionsProcessed)
+    function debug_setTransactionsProcessedByRelayer(RelayerAddress _relayerAddress, uint256 _transactionsProcessed)
         external
         override
     {
-        getTAStorage().totalTransactionsSubmitted[_epoch] = _transactionsProcessed;
+        getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress] = _transactionsProcessed;
+    }
+
+    function debug_setTotalTransactionsProcessed(uint256 _transactionsProcessed) external override {
+        getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp] = _transactionsProcessed;
     }
 }

@@ -11,6 +11,7 @@ import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
 import "src/transaction-allocator/common/TAStructs.sol";
 import "src/transaction-allocator/common/TATypes.sol";
+import "src/library/VersionManager.sol";
 
 contract TAProxy is
     ITAProxy,
@@ -19,6 +20,8 @@ contract TAProxy is
     TARelayerManagementStorage,
     TATransactionAllocationStorage
 {
+    using VersionManager for VersionManager.VersionManagerState;
+
     constructor(address[] memory modules, bytes4[][] memory selectors, InitalizerParams memory _params) {
         if (modules.length != selectors.length) {
             revert ParameterLengthMismatch();
@@ -54,9 +57,11 @@ contract TAProxy is
 
     /* solhint-enable no-complex-fallback, payable-fallback, no-inline-assembly */
 
+    // TODO: Move to custom calldata?
     function _initialize(InitalizerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
         TADStorage storage tds = getTADStorage();
+        TAStorage storage tas = getTAStorage();
 
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
@@ -64,6 +69,7 @@ contract TAProxy is
         rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
+        tas.epochLengthInSec = _params.epochLengthInSec;
 
         uint256 length = _params.supportedTokens.length;
         for (uint256 i = 0; i < length;) {
@@ -76,15 +82,8 @@ contract TAProxy is
         // Initial State
         rms.latestActiveRelayerStakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
         tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
-        rms.cdfVersionHistoryManager.push(
-            VersionHistoryManager.Version({contentHash: keccak256(abi.encodePacked(new uint32[](0))), timestamp: 0})
-        );
-        rms.activeRelayerListVersionHistoryManager.push(
-            VersionHistoryManager.Version({
-                contentHash: keccak256(abi.encodePacked(new RelayerAddress[](0))),
-                timestamp: 0
-            })
-        );
+        rms.cdfVersionManager.initialize(keccak256(abi.encodePacked(new uint32[](0))));
+        rms.activeRelayerListVersionManager.initialize(keccak256(abi.encodePacked(new RelayerAddress[](0))));
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
 

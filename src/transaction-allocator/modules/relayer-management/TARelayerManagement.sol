@@ -12,7 +12,7 @@ import "../transaction-allocation/TATransactionAllocationStorage.sol";
 import "../../common/TAHelpers.sol";
 import "../../common/TAConstants.sol";
 import "src/library/FixedPointArithmetic.sol";
-import "src/library/VersionHistoryManager.sol";
+import "src/library/VersionManager.sol";
 
 contract TARelayerManagement is
     ITARelayerManagement,
@@ -24,7 +24,7 @@ contract TARelayerManagement is
     using SafeERC20 for IERC20;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
-    using VersionHistoryManager for VersionHistoryManager.Version[];
+    using VersionManager for VersionManager.VersionManagerState;
     using U32ArrayHelper for uint32[];
     using RAArrayHelper for RelayerAddress[];
 
@@ -72,9 +72,7 @@ contract TARelayerManagement is
 
             // Update Active Relayer List
             RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_append(relayerAddress);
-            rms.activeRelayerListVersionHistoryManager.addNewVersion(
-                newActiveRelayers.m_hash(), _nextUpdateEffectiveAtWindowIndex()
-            );
+            rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash());
             emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
         }
 
@@ -112,19 +110,14 @@ contract TARelayerManagement is
         --rms.relayerCount;
         rms.totalStake -= stake;
 
-        // TODO: Ensure that whenever active relayer are updated, stake array and delegation array is also updated
-
         // Update stake percentages array and hash
         uint32[] memory newStakeArray = _previousStakeArray.cd_remove(_relayerIndex);
         uint32[] memory newDelegationArray = _previousDelegationArray.cd_remove(_relayerIndex);
         _updateCdf(newStakeArray, true, newDelegationArray, true);
 
         // Update Active Relayers
-        uint256 updateEffectiveAtWindowIndex = _nextUpdateEffectiveAtWindowIndex();
         RelayerAddress[] memory newActiveRelayers = _activeRelayers.cd_remove(_relayerIndex);
-        rms.activeRelayerListVersionHistoryManager.addNewVersion(
-            newActiveRelayers.m_hash(), updateEffectiveAtWindowIndex
-        );
+        rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash());
 
         // Create withdrawal Info
         rms.withdrawalInfo[relayerAddress] = WithdrawalInfo(stake, block.number + RELAYER_WITHDRAW_DELAY_IN_BLOCKS);

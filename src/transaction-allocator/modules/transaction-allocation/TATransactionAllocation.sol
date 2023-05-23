@@ -12,9 +12,9 @@ import "../application/base-application/interfaces/IApplicationBase.sol";
 import "../relayer-management/TARelayerManagementStorage.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
-    using VersionHistoryManager for VersionHistoryManager.Version[];
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
+    using VersionManager for VersionManager.VersionManagerState;
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     function _executeTransaction(
@@ -74,33 +74,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @notice allows relayer to execute a tx on behalf of a client
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     // TODO: Non Reentrant?
-    function execute(
-        bytes[] calldata _reqs,
-        uint256[] calldata _forwardedNativeAmounts,
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex,
-        uint256 _relayerIndex,
-        uint256 _relayerGenerationIterationBitmap
-    ) public payable override {
-        uint256 length = _reqs.length;
-        if (length != _forwardedNativeAmounts.length) {
+    function execute(ExecuteParams calldata _params) public payable {
+        uint256 length = _params.reqs.length;
+        if (length != _params.forwardedNativeAmounts.length) {
             revert ParameterLengthMismatch();
         }
 
-        _verifySufficientValueAttached(_forwardedNativeAmounts);
+        _verifySufficientValueAttached(_params.forwardedNativeAmounts);
 
         // Verify Relayer Selection
         if (
             !_verifyRelayerSelection(
                 msg.sender,
-                _cdf,
-                _currentCdfLogIndex,
-                _activeRelayers,
-                _relayerLogIndex,
-                _relayerIndex,
-                _relayerGenerationIterationBitmap,
+                _params.cdf,
+                _params.activeRelayers,
+                _params.relayerIndex,
+                _params.relayerGenerationIterationBitmap,
                 block.number
             )
         ) {
@@ -109,20 +98,43 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Execute Transactions
         _executeTransactions(
-            _reqs,
-            _forwardedNativeAmounts,
-            _activeRelayers.length,
-            _activeRelayers[_relayerIndex],
-            _relayerGenerationIterationBitmap
+            _params.reqs,
+            _params.forwardedNativeAmounts,
+            _params.activeRelayers.length,
+            _params.activeRelayers[_params.relayerIndex],
+            _params.relayerGenerationIterationBitmap
         );
 
-        // Record Liveness Metrics
         TAStorage storage ts = getTAStorage();
-        uint256 epochIndex = _epochIndexFromBlock(block.number);
+
+        // If this is the first transaction of the epoch, run the liveness check
+        if (ts.epochEndTimestamp >= block.timestamp) {
+            // Run the liveness check
+            _processLivenessCheck(
+                _params.cdf, _params.currentStakeArray, _params.currentDelegationArray, _params.activeRelayers
+            );
+
+            // Process any pending Updates
+            RMStorage storage rms = getRMStorage();
+            WindowIndex nextWindowIndex = WindowIndex.wrap(WindowIndex.unwrap(_windowIndex(block.number)) + 1);
+
+            if (rms.cdfVersionManager.pendingHash != bytes32(0)) {
+                rms.cdfVersionManager.setPendingStateForActivation(nextWindowIndex);
+            }
+
+            if (rms.activeRelayerListVersionManager.pendingHash != bytes32(0)) {
+                rms.activeRelayerListVersionManager.setPendingStateForActivation(nextWindowIndex);
+            }
+
+            // Update the epoch end time
+            ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
+        }
+
+        // Record Liveness Metrics
         // TODO: Is extra store for total transactions TRULY required?
         unchecked {
-            ++ts.transactionsSubmitted[epochIndex][_activeRelayers[_relayerIndex]];
-            ++ts.totalTransactionsSubmitted[epochIndex];
+            ++ts.transactionsSubmitted[ts.epochEndTimestamp][_params.activeRelayers[_params.relayerIndex]];
+            ++ts.totalTransactionsSubmitted[ts.epochEndTimestamp];
         }
 
         // TODO: Check how to update this logic
@@ -158,15 +170,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
     /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
-    function allocateRelayers(
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex
-    ) external view override returns (RelayerAddress[] memory selectedRelayers, uint256[] memory cdfIndex) {
-        _verifyExternalStateForTransactionAllocation(
-            _cdf, _currentCdfLogIndex, _activeRelayers, _relayerLogIndex, block.number
-        );
+    function allocateRelayers(uint16[] calldata _cdf, RelayerAddress[] calldata _activeRelayers)
+        external
+        view
+        override
+        returns (RelayerAddress[] memory selectedRelayers, uint256[] memory cdfIndex)
+    {
+        _verifyExternalStateForTransactionAllocation(_cdf, _activeRelayers, block.number);
 
         if (_cdf.length == 0) {
             revert NoRelayersRegistered();
@@ -220,23 +230,22 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     function _verifyRelayerLiveness(
-        TargetEpochData calldata _targetEpochData,
+        uint16[] calldata _cdf,
+        RelayerAddress[] calldata _activeRelayers,
         uint256 _relayerIndex,
+        uint256 _epochEndTimestamp,
         FixedPointType _totalTransactionsInEpoch
     ) internal view returns (bool) {
-        uint256 relayerStakeNormalized = _targetEpochData.cdf[_relayerIndex];
-        uint256 transactionsProcessedByRelayer = getTAStorage().transactionsSubmitted[_targetEpochData.epochIndex][_targetEpochData
-            .activeRelayers[_relayerIndex]];
+        uint256 relayerStakeNormalized = _cdf[_relayerIndex];
+        uint256 transactionsProcessedByRelayer =
+            getTAStorage().transactionsSubmitted[_epochEndTimestamp][_activeRelayers[_relayerIndex]];
 
         if (_relayerIndex != 0) {
-            relayerStakeNormalized -= _targetEpochData.cdf[_relayerIndex - 1];
+            relayerStakeNormalized -= _cdf[_relayerIndex - 1];
         }
 
         FixedPointType minimumTransactions = calculateMinimumTranasctionsForLiveness(
-            relayerStakeNormalized,
-            _targetEpochData.cdf[_targetEpochData.cdf.length - 1],
-            _totalTransactionsInEpoch,
-            LIVENESS_Z_PARAMETER
+            relayerStakeNormalized, _cdf[_cdf.length - 1], _totalTransactionsInEpoch, LIVENESS_Z_PARAMETER
         );
 
         return transactionsProcessedByRelayer.fp() >= minimumTransactions;
@@ -246,62 +255,33 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
-    function _checkRelayerIndexInNewMapping(
-        RelayerAddress[] calldata _oldRelayerIndexToRelayerMapping,
-        RelayerAddress[] calldata _newRelayerIndexToRelayerMapping,
-        uint256 _oldIndex,
-        uint256 _proposedNewIndex
-    ) internal pure {
-        if (_oldRelayerIndexToRelayerMapping[_oldIndex] != _newRelayerIndexToRelayerMapping[_proposedNewIndex]) {
-            revert RelayerIndexMappingMismatch(_oldIndex, _proposedNewIndex);
-        }
-    }
-
-    // TODO: any relayer can call this
     // TODO: Split the penalty b/w DAO and relayer
     // TODO: Jail the relayer, the relayer needs to topup or leave with their money
-    function processLivenessCheck(
-        TargetEpochData calldata _targetEpochData,
-        LatestActiveRelayersStakeAndDelegationState calldata _latestState,
-        uint256[] calldata _targetEpochRelayerIndexToLatestRelayerIndexMapping
-    ) external override {
+    function _processLivenessCheck(
+        uint16[] calldata _cdf,
+        uint32[] calldata _currentStakeArray,
+        uint32[] calldata _currentDelegationArray,
+        RelayerAddress[] calldata _activeRelayers
+    ) internal {
+        TAStorage storage ts = getTAStorage();
+        uint256 epochEndTimestamp = ts.epochEndTimestamp;
+        FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp].fp();
+
+        // If no transactions were submitted in the epoch, then no need to process liveness check
+        if (totalTransactionsInEpoch == FP_ZERO) {
+            return;
+        }
+
         // Verify the state against which the new CDF would be calculated
-        _verifyExternalStateForCdfUpdation(
-            _latestState.currentStakeArray, _latestState.currentDelegationArray, _latestState.activeRelayers
-        );
+        _verifyExternalStateForCdfUpdation(_currentStakeArray, _currentDelegationArray, _activeRelayers);
 
-        // Verify the state of the Epoch for which the liveness check is being processed
-        _verifyExternalStateForTransactionAllocation(
-            _targetEpochData.cdf,
-            _targetEpochData.cdfLogIndex,
-            _targetEpochData.activeRelayers,
-            _targetEpochData.relayerLogIndex,
-            _epochIndexToStartingBlock(_targetEpochData.epochIndex)
-        );
+        uint256 relayerCount = _activeRelayers.length;
 
-        // Verify that the liveness check is being processed for a past epoch
-        if (_targetEpochData.epochIndex >= _epochIndexFromBlock(block.number)) {
-            revert CannotProcessLivenessCheckForCurrentOrFutureEpoch();
-        }
-
-        FixedPointType totalTransactionsInEpoch;
-        {
-            // Check if the liveness check has already been processed for the epoch
-            TAStorage storage ts = getTAStorage();
-            if (ts.livenessCheckProcessed[_targetEpochData.epochIndex]) {
-                revert LivenessCheckAlreadyProcessed();
-            }
-            ts.livenessCheckProcessed[_targetEpochData.epochIndex] = true;
-
-            totalTransactionsInEpoch = ts.totalTransactionsSubmitted[_targetEpochData.epochIndex].fp();
-        }
-        uint256 relayerCountInTargetEpoch = _targetEpochData.activeRelayers.length;
-
-        uint32[] memory newStakeArray = _latestState.currentStakeArray;
+        uint32[] memory newStakeArray = _currentStakeArray;
         bool shouldUpdateCdf = false;
 
-        for (uint256 i; i != relayerCountInTargetEpoch;) {
-            if (_verifyRelayerLiveness(_targetEpochData, i, totalTransactionsInEpoch)) {
+        for (uint256 i; i != relayerCount;) {
+            if (_verifyRelayerLiveness(_cdf, _activeRelayers, i, epochEndTimestamp, totalTransactionsInEpoch)) {
                 unchecked {
                     ++i;
                 }
@@ -310,21 +290,16 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             // Penalize the relayer
             uint256 penalty;
-            RelayerAddress relayerAddress = _targetEpochData.activeRelayers[i];
+            RelayerAddress relayerAddress = _activeRelayers[i];
 
             // TODO: What happens if relayer stake is less than minimum stake after penalty?
+            // TODO: Change withdrawl pattern so that the status of the relayer is set to pending exit
             if (_isStakedRelayer(relayerAddress)) {
                 // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
                 RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
                 penalty = _calculatePenalty(relayerInfo.stake);
                 relayerInfo.stake -= penalty;
-
-                // Update the stake array, we need to get the new relayer index based on the provided mapping
-                uint256 newRelayerIndex = _targetEpochRelayerIndexToLatestRelayerIndexMapping[i];
-                _checkRelayerIndexInNewMapping(
-                    _targetEpochData.activeRelayers, _latestState.activeRelayers, i, newRelayerIndex
-                );
-                newStakeArray[newRelayerIndex] = _scaleStake(relayerInfo.stake);
+                newStakeArray[i] = _scaleStake(relayerInfo.stake);
                 shouldUpdateCdf = true;
             } else {
                 // If the relayer un-registered itself, then we just subtract from their withdrawl info
@@ -335,7 +310,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             // TODO: What should be done with the penalty amount?
 
-            emit RelayerPenalized(relayerAddress, _targetEpochData.epochIndex, penalty);
+            emit RelayerPenalized(relayerAddress, penalty);
 
             unchecked {
                 ++i;
@@ -344,25 +319,16 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Process All CDF Updates if Necessary
         if (shouldUpdateCdf) {
-            _updateCdf(newStakeArray, true, _latestState.currentDelegationArray, false);
+            _updateCdf(newStakeArray, true, _currentDelegationArray, false);
         }
     }
 
     ///////////////////////////////// Getters ///////////////////////////////
-    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
-        external
-        view
-        override
-        returns (uint256)
-    {
-        return getTAStorage().transactionsSubmitted[_epoch][_relayerAddress];
+    function transactionsSubmittedRelayer(RelayerAddress _relayerAddress) external view override returns (uint256) {
+        return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
     }
 
-    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view override returns (uint256) {
-        return getTAStorage().totalTransactionsSubmitted[_epoch];
-    }
-
-    function livenessCheckProcessedForEpoch(uint256 _epoch) external view override returns (bool) {
-        return getTAStorage().livenessCheckProcessed[_epoch];
+    function totalTransactionsSubmitted() external view override returns (uint256) {
+        return getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp];
     }
 }
