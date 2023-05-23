@@ -16,7 +16,6 @@ abstract contract TARelayerManagementStorage {
     struct RMStorage {
         // Config
         IERC20 bondToken;
-        uint256 penaltyDelayBlocks;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
         // TODO: Dynamic?
         uint256 relayersPerWindow;
@@ -29,7 +28,6 @@ abstract contract TARelayerManagementStorage {
         // TODO: This should be combined with delegation array hash
         bytes32 latestActiveRelayerStakeArrayHash;
         // Maps relayer address to pending withdrawals
-        mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
         mapping(TokenAddress => bool) isGasTokenSupported;
         // Constant Rate Rewards
         uint256 unpaidProtocolRewards;

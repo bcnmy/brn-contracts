@@ -9,6 +9,17 @@ import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITARelayerManagementEventsErrors.sol";
 
 interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
+    struct RelayerInfoView {
+        uint256 stake;
+        string endpoint;
+        uint256 delegatorPoolPremiumShare;
+        RelayerAccountAddress[] relayerAccountAddresses;
+        RelayerStatus status;
+        uint256 minExitBlockNumber;
+        uint256 unpaidProtocolRewards;
+        FixedPointType rewardShares;
+    }
+
     function getStakeArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint32[] memory);
 
     function getCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
@@ -39,16 +50,9 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function claimProtocolReward() external;
 
     ////////////////////// Getters //////////////////////
-
     function relayerCount() external view returns (uint256);
 
-    function relayerInfo_Stake(RelayerAddress) external view returns (uint256);
-
-    function relayerInfo_Endpoint(RelayerAddress) external view returns (string memory);
-
-    function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
-
-    function relayerInfo_delegatorPoolPremiumShare(RelayerAddress) external view returns (uint256);
+    function relayerInfo(RelayerAddress) external view returns (RelayerInfoView memory);
 
     function isGasTokenSupported(TokenAddress) external view returns (bool);
 
@@ -57,10 +61,6 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
     function blocksPerWindow() external view returns (uint256);
 
     function latestActiveRelayerStakeArrayHash() external view returns (bytes32);
-
-    function penaltyDelayBlocks() external view returns (uint256);
-
-    function withdrawalInfo(RelayerAddress) external view returns (WithdrawalInfo memory);
 
     function bondTokenAddress() external view returns (TokenAddress);
 }

@@ -15,7 +15,7 @@ library RAArrayHelper {
             length + 1
         );
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             newArray[i] = _array[i];
             unchecked {
                 ++i;
@@ -34,7 +34,7 @@ library RAArrayHelper {
         uint256 length = _array.length - 1;
         RelayerAddress[] memory newArray = new RelayerAddress[](length);
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             if (i != _index) {
                 newArray[i] = _array[i];
             } else {

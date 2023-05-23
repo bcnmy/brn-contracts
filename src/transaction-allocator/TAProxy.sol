@@ -28,7 +28,7 @@ contract TAProxy is
         }
 
         uint256 length = modules.length;
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             _addModule(modules[i], selectors[i]);
             unchecked {
                 ++i;
@@ -66,13 +66,12 @@ contract TAProxy is
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
         rms.relayersPerWindow = _params.relayersPerWindow;
-        rms.penaltyDelayBlocks = block.number + _params.penaltyDelayBlocks;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
         tas.epochLengthInSec = _params.epochLengthInSec;
 
         uint256 length = _params.supportedTokens.length;
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             rms.isGasTokenSupported[_params.supportedTokens[i]] = true;
             unchecked {
                 ++i;

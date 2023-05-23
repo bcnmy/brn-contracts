@@ -41,7 +41,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
-        return getRMStorage().relayerInfo[_relayer].stake > 0;
+        return getRMStorage().relayerInfo[_relayer].status == RelayerStatus.Active;
     }
 
     function _verifyExternalStateForCdfUpdation(
@@ -183,7 +183,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint16[] memory cdf = new uint16[](_stakeArray.length);
         uint256 totalStakeSum = 0;
         uint256 length = _stakeArray.length;
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             totalStakeSum += _stakeArray[i] + _delegationArray[i];
             unchecked {
                 ++i;
@@ -192,7 +192,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Scale the values to fit uint16 and get the CDF
         uint256 sum = 0;
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             sum += _stakeArray[i] + _delegationArray[i];
             cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
             unchecked {
@@ -241,6 +241,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
+    // TODO: The relayer count and total stake should not come from storage
     function _protocolRewardRate() internal view returns (uint256) {
         return (
             BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.fp() * MINIMUM_STAKE_AMOUNT.fp()

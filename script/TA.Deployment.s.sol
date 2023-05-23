@@ -40,7 +40,6 @@ contract TADeploymentScript is Script {
             blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
             epochLengthInSec: vm.parseJsonUint(deploymentConfigStr, ".epochLengthInSec"),
             relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
-            penaltyDelayBlocks: vm.parseJsonUint(deploymentConfigStr, ".penaltyDelayBlocks"),
             bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
             supportedTokens: supportedTokens
         });
@@ -48,7 +47,6 @@ contract TADeploymentScript is Script {
         console2.log("  blocksPerWindow: ", params.blocksPerWindow);
         console2.log("  epochLengthInSec: ", params.epochLengthInSec);
         console2.log("  relayersPerWindow: ", params.relayersPerWindow);
-        console2.log("  penaltyDelayBlocks: ", params.penaltyDelayBlocks);
         console2.log("  bondToken: ", TokenAddress.unwrap(params.bondTokenAddress));
         console2.log("  supportedTokens: ");
         for (uint256 i = 0; i < params.supportedTokens.length; i++) {

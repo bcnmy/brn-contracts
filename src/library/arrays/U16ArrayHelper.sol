@@ -9,7 +9,7 @@ library U16ArrayHelper {
             length + 1
         );
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             newArray[i] = _array[i];
             unchecked {
                 ++i;
@@ -24,7 +24,7 @@ library U16ArrayHelper {
         uint256 length = _array.length - 1;
         uint16[] memory newArray = new uint16[](length);
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             if (i != _index) {
                 newArray[i] = _array[i];
             } else {

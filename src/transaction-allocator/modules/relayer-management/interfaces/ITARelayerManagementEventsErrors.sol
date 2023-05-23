@@ -9,14 +9,13 @@ interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
     error InvalidWithdrawal(uint256 amount, uint256 currentBlock, uint256 minValidBlock);
-    error InvalidRelayerWindowForReporter();
-    error InvalidAbsenteeBlockNumber();
-    error InvalidAbsenteeCdfArrayHash();
-    error InvalidRelayerWindowForAbsentee();
     error AbsenteeWasPresent(uint256 absenteewindowIndex);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error GasTokenAlreadySupported(TokenAddress token);
     error GasTokenNotSupported(TokenAddress token);
+    error RelayerAlreadyRegistered();
+    error RelayerNotActive();
+    error RelayerNotExiting();
 
     event RelayerRegistered(
         RelayerAddress indexed relayer,

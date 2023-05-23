@@ -309,35 +309,34 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
 
             // Penalize the relayer
-            uint256 penalty;
-            RelayerAddress relayerAddress = _params.currentActiveRelayers[i];
+            {
+                uint256 penalty;
+                RelayerAddress relayerAddress = _params.currentActiveRelayers[i];
 
-            // TODO: What happens if relayer stake is less than minimum stake after penalty?
-            // TODO: Change withdrawl pattern so that the status of the relayer is set to pending exit
-            if (_isStakedRelayer(relayerAddress)) {
-                // If the relayer is still registered at this point of time, then we need to update the stake array and CDF
+                // TODO: What happens if relayer stake is less than minimum stake after penalty?
+                // TODO: Change withdrawl pattern so that the status of the relayer is set to pending exit
+
                 RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
                 penalty = _calculatePenalty(relayerInfo.stake);
                 relayerInfo.stake -= penalty;
 
-                // Find the index of the relayer in the pending state
-                uint256 newIndex = _params.currentActiveRelayerToPendingActiveRelayersIndex[i];
-                _checkRelayerIndexInNewMapping(
-                    _params.currentActiveRelayers, _params.pendingActiveRelayers, i, newIndex
-                );
+                // If the relayer is not exiting, then we need to update the stake array and CDF
+                if (_isStakedRelayer(relayerAddress)) {
+                    // Find the index of the relayer in the pending state
+                    uint256 newIndex = _params.currentActiveRelayerToPendingActiveRelayersIndex[i];
+                    _checkRelayerIndexInNewMapping(
+                        _params.currentActiveRelayers, _params.pendingActiveRelayers, i, newIndex
+                    );
 
-                newStakeArray[newIndex] = _scaleStake(relayerInfo.stake);
-                shouldUpdateCdf = true;
-            } else {
-                // If the relayer un-registered itself, then we just subtract from their withdrawl info
-                WithdrawalInfo storage withdrawalInfo_ = getRMStorage().withdrawalInfo[relayerAddress];
-                penalty = _calculatePenalty(withdrawalInfo_.amount);
-                withdrawalInfo_.amount -= penalty;
+                    // Update the stake array and CDF
+                    newStakeArray[newIndex] = _scaleStake(relayerInfo.stake);
+                    shouldUpdateCdf = true;
+                }
+
+                // TODO: What should be done with the penalty amount?
+
+                emit RelayerPenalized(relayerAddress, penalty);
             }
-
-            // TODO: What should be done with the penalty amount?
-
-            emit RelayerPenalized(relayerAddress, penalty);
 
             unchecked {
                 ++i;
