@@ -51,14 +51,14 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(newCdf.length, relayerCount);
 
         // Verify that at this point of time, CDF hash has not been updated
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, block.number, 0), true);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, block.number, 0), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 0), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 0), false);
 
-        vm.roll(block.number + deployParams.blocksPerWindow * ta.blocksPerWindow());
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         // CDF hash should be updated now
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, block.number, 1), false);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, block.number, 1), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), true);
     }
 
     function testRelayerUnRegistration() external atSnapshot {
@@ -83,7 +83,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             );
         }
 
-        vm.roll(block.number + deployParams.blocksPerWindow * ta.blocksPerWindow());
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         // De-register all Relayers
@@ -109,14 +109,14 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(newCdf.length, 0);
 
         // Verify that at this point of time, CDF hash has not been updated
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, block.number, 1), true);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, block.number, 1), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
 
-        vm.roll(block.number + deployParams.blocksPerWindow * ta.blocksPerWindow());
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         // CDF hash should be updated now
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, block.number, 2), false);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, block.number, 2), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 2), true);
     }
 
     function testWithdrawal() external atSnapshot {

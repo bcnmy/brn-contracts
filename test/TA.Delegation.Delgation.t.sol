@@ -62,7 +62,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         t0 = supportedTokens[0];
         t1 = supportedTokens[1];
 
-        vm.roll(block.number + deployParams.blocksPerWindow * ta.blocksPerWindow());
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -236,7 +236,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
         _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
 
-        vm.roll(block.number + deployParams.blocksPerWindow * ta.blocksPerWindow());
+        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
         uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);

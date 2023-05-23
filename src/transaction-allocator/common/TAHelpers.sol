@@ -14,7 +14,6 @@ import "../modules/delegation/TADelegationStorage.sol";
 import "src/library/arrays/U32ArrayHelper.sol";
 import "src/library/arrays/RAArrayHelper.sol";
 import "src/library/arrays/U16ArrayHelper.sol";
-import "src/library/GcdLcm.sol";
 
 import "forge-std/console2.sol";
 
@@ -74,14 +73,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint256 _blockNumber
     ) internal view {
         RMStorage storage rs = getRMStorage();
+        uint256 windowIndex = _windowIndex(_blockNumber);
 
-        if (!rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(_cdf.cd_hash(), _cdfLogIndex, _blockNumber)) {
+        if (!rs.cdfVersionHistoryManager.verifyContentHashAtTimestamp(_cdf.cd_hash(), _cdfLogIndex, windowIndex)) {
             revert InvalidCdfArrayHash();
         }
 
         if (
             !rs.activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _activeRelayers.cd_hash(), _relayerLogIndex, _blockNumber
+                _activeRelayers.cd_hash(), _relayerLogIndex, windowIndex
             )
         ) {
             revert InvalidRelayersArrayHash();
@@ -94,69 +94,52 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
     }
 
-    function _verifyCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
+    function _verifCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers, uint256 _relayerLogIndex)
         internal
         view
     {
         if (
             !getRMStorage().activeRelayerListVersionHistoryManager.verifyContentHashAtTimestamp(
-                _activeRelayers.cd_hash(), _relayerLogIndex, block.number
+                _activeRelayers.cd_hash(), _relayerLogIndex, _windowIndex(block.number)
             )
         ) {
             revert InvalidRelayersArrayHash();
         }
     }
 
-    ////////////////////////////// Interval Logic //////////////////////////////
-    function _windowId(uint256 _blockNumber) internal view returns (WindowId) {
-        uint256 blocksPerWindow = getRMStorage().blocksPerWindow;
-        uint256 startBlock = _blockNumber - (_blockNumber % blocksPerWindow);
-        return WindowId.wrap((startBlock << INTERVAL_IDENTIIFER_STARTING_BLOCK_OFFSET) | blocksPerWindow);
-    }
-
-    function _windowIdToStartingBlock(WindowId __windowId) internal pure returns (uint256) {
-        return WindowId.unwrap(__windowId) >> INTERVAL_IDENTIIFER_STARTING_BLOCK_OFFSET;
-    }
-
-    function _windowIdToWindowLength(WindowId __windowId) internal pure returns (uint256) {
-        return WindowId.unwrap(__windowId) & INTERVAL_LENGTH_MASK;
-    }
-
-    function _epochId(uint256 _blockNumber) internal view returns (EpochId) {
-        uint256 blocksPerEpoch = getRMStorage().blocksPerEpoch;
-        uint256 startBlock = _blockNumber - (_blockNumber % blocksPerEpoch);
-        return EpochId.wrap((startBlock << INTERVAL_IDENTIIFER_STARTING_BLOCK_OFFSET) | blocksPerEpoch);
-    }
-
-    function _epochIdToStartingBlock(EpochId __epochId) internal pure returns (uint256) {
-        return EpochId.unwrap(__epochId) >> INTERVAL_IDENTIIFER_STARTING_BLOCK_OFFSET;
-    }
-
-    function _epochIdToEpochLength(EpochId __epochId) internal pure returns (uint256) {
-        return EpochId.unwrap(__epochId) & INTERVAL_LENGTH_MASK;
-    }
-
-    function _nextUpdateEffectiveAtBlock(uint256 _blockNumber) internal view returns (uint256) {
-        RMStorage storage rs = getRMStorage();
-        uint256 blocksPerWindow = rs.blocksPerWindow;
-        uint256 blocksPerEpoch = rs.blocksPerEpoch;
-
-        // TODO: Measure gas cost, should this be cached in storage?
-        uint256 windowsInPeriod = blocksPerEpoch / GcdLcm.gcd(blocksPerEpoch, blocksPerWindow);
-        uint256 currentWindowIndex = _blockNumber / blocksPerWindow;
-        uint256 updateWindowIndex = currentWindowIndex + windowsInPeriod - (currentWindowIndex % windowsInPeriod);
-        uint256 updateBlockNumber = updateWindowIndex * blocksPerWindow;
-        return updateBlockNumber;
-    }
-
     ////////////////////////////// Relayer Selection //////////////////////////////
+    function _windowIndex(uint256 _blockNumber) internal view returns (uint256) {
+        return _blockNumber / getRMStorage().blocksPerWindow;
+    }
+
+    function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
+        return __windowIndex * getRMStorage().blocksPerWindow;
+    }
+
+    // TODO: windows per epoch should be read from storage
+    function _epochIndexFromBlock(uint256 _blockNumber) internal view returns (uint256) {
+        return _epochIndexFromWindowIndex(_windowIndex(_blockNumber));
+    }
+
+    function _epochIndexFromWindowIndex(uint256 __windowIndex) internal pure returns (uint256) {
+        return __windowIndex / WINDOWS_PER_EPOCH;
+    }
+
+    function _epochIndexToStartingWindowIndex(uint256 __epochIndex) internal pure returns (uint256) {
+        return __epochIndex * WINDOWS_PER_EPOCH;
+    }
+
+    function _epochIndexToStartingBlock(uint256 __epochIndex) internal view returns (uint256) {
+        return _windowIndexToStartingBlock(_epochIndexToStartingWindowIndex(__epochIndex));
+    }
+
     function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
         internal
         view
         returns (uint256)
     {
         // The seed for jth iteration is a function of the base seed and j
-        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowId(_blockNumber))));
+        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
         return (seed % _max);
     }
@@ -250,6 +233,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
+    function _nextUpdateEffectiveAtWindowIndex() internal view returns (uint256) {
+        uint256 windowIndex = _windowIndex(block.number);
+        return windowIndex + WINDOWS_PER_EPOCH - (windowIndex % WINDOWS_PER_EPOCH);
+    }
+
     function _updateCdf(
         uint32[] memory _stakeArray,
         bool _shouldUpdateStakeAccounting,
@@ -277,7 +265,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update cdf hash
         bytes32 cdfHash = _generateCdfArray(_stakeArray, _delegationArray).m_hash();
-        ds.cdfVersionHistoryManager.addNewVersion(cdfHash, _nextUpdateEffectiveAtBlock(block.number));
+        ds.cdfVersionHistoryManager.addNewVersion(cdfHash, _nextUpdateEffectiveAtWindowIndex());
     }
 
     ////////////////////////////// Delegation ////////////////////////

@@ -16,8 +16,6 @@ FixedPointType constant FP_ONE = FixedPointType.wrap(MULTIPLIER);
 
 type FixedPointType is uint256;
 
-// TODO: Should we just use PRB Math?
-
 // Wrappers
 library Uint256WrapperHelper {
     function fp(uint256 _value) internal pure returns (FixedPointType) {

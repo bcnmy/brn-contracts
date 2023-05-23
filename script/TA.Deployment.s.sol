@@ -38,7 +38,6 @@ contract TADeploymentScript is Script {
 
         InitalizerParams memory params = InitalizerParams({
             blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
-            blocksPerEpoch: vm.parseJsonUint(deploymentConfigStr, ".blocksPerEpoch"),
             relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
             penaltyDelayBlocks: vm.parseJsonUint(deploymentConfigStr, ".penaltyDelayBlocks"),
             bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
@@ -46,7 +45,6 @@ contract TADeploymentScript is Script {
         });
         console2.log("Deployment Config: ");
         console2.log("  blocksPerWindow: ", params.blocksPerWindow);
-        console2.log("  blocksPerWindow: ", params.blocksPerEpoch);
         console2.log("  relayersPerWindow: ", params.relayersPerWindow);
         console2.log("  penaltyDelayBlocks: ", params.penaltyDelayBlocks);
         console2.log("  bondToken: ", TokenAddress.unwrap(params.bondTokenAddress));
