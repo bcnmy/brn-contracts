@@ -14,5 +14,6 @@ uint256 constant MINIMUM_DELGATION_AMOUNT = 1 ether;
 uint256 constant RELAYER_PREMIUM_PERCENTAGE = 900; // % * PERCENTAGE_MULTIPLIER
 uint256 constant BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC = 1003000000000; // Assume 18 decimals
 uint256 constant RELAYER_WITHDRAW_DELAY_IN_BLOCKS = 10;
+uint256 constant CDF_UPDATE_DELAY_IN_WINDOWS = 1;
 TokenAddress constant NATIVE_TOKEN = TokenAddress.wrap(0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE);
 FixedPointType constant LIVENESS_Z_PARAMETER = FixedPointType.wrap(33 * MULTIPLIER / 10);

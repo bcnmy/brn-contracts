@@ -71,7 +71,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint256 _blockNumber
     ) internal view {
         RMStorage storage rs = getRMStorage();
-        WindowIndex windowIndex = _windowIndex(_blockNumber);
+        uint256 windowIndex = _windowIndex(_blockNumber);
 
         if (!rs.cdfVersionManager.verifyHashAgainstActiveState(_cdf.cd_hash(), windowIndex)) {
             revert InvalidCdfArrayHash();
@@ -99,8 +99,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
-    function _windowIndex(uint256 _blockNumber) internal view returns (WindowIndex) {
-        return WindowIndex.wrap((_blockNumber / getRMStorage().blocksPerWindow).toUint64());
+    function _windowIndex(uint256 _blockNumber) internal view returns (uint256) {
+        return _blockNumber / getRMStorage().blocksPerWindow;
+    }
+
+    function _nextWindowForUpdate(uint256 _blockNumber) internal view returns (uint256) {
+        return _windowIndex(_blockNumber) + CDF_UPDATE_DELAY_IN_WINDOWS;
     }
 
     function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {

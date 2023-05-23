@@ -49,38 +49,3 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 }
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
-
-type WindowIndex is uint256;
-
-function windowIndexEquality(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) == WindowIndex.unwrap(b);
-}
-
-function windowIndexInequality(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) != WindowIndex.unwrap(b);
-}
-
-function windowIndexGte(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) >= WindowIndex.unwrap(b);
-}
-
-function windowIndexLte(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) <= WindowIndex.unwrap(b);
-}
-
-function windowIndexGt(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) > WindowIndex.unwrap(b);
-}
-
-function windowIndexLt(WindowIndex a, WindowIndex b) pure returns (bool) {
-    return WindowIndex.unwrap(a) < WindowIndex.unwrap(b);
-}
-
-using {
-    windowIndexEquality as ==,
-    windowIndexInequality as !=,
-    windowIndexGte as >=,
-    windowIndexLte as <=,
-    windowIndexGt as >,
-    windowIndexLt as <
-} for WindowIndex global;

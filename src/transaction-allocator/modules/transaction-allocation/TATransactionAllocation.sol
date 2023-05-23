@@ -253,15 +253,15 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         _processLivenessCheck(_params);
 
         // Process any pending Updates
-        WindowIndex nextWindowIndex = WindowIndex.wrap(WindowIndex.unwrap(_windowIndex(block.number)) + 1);
+        uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
 
         // TODO: We don't necessarily need to store this in two different hashes. These can be combined to save gas.
         if (rms.cdfVersionManager.pendingHash != bytes32(0)) {
-            rms.cdfVersionManager.setPendingStateForActivation(nextWindowIndex);
+            rms.cdfVersionManager.setPendingStateForActivation(updateWindowIndex);
         }
 
         if (rms.activeRelayerListVersionManager.pendingHash != bytes32(0)) {
-            rms.activeRelayerListVersionManager.setPendingStateForActivation(nextWindowIndex);
+            rms.activeRelayerListVersionManager.setPendingStateForActivation(updateWindowIndex);
         }
 
         // Update the epoch end time

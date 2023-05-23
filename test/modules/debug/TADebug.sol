@@ -25,7 +25,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         ds.unclaimedRewards[_relayerAddress][_pool] += _amount;
     }
 
-    function debug_verifyCdfHashAtWindow(uint16[] calldata _array, WindowIndex __windowIndex)
+    function debug_verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex)
         external
         view
         override
@@ -34,7 +34,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         return getRMStorage().cdfVersionManager.verifyHashAgainstActiveState(_array.cd_hash(), __windowIndex);
     }
 
-    function debug_currentWindowIndex() external view override returns (WindowIndex) {
+    function debug_currentWindowIndex() external view override returns (uint256) {
         return _windowIndex(block.number);
     }
 
