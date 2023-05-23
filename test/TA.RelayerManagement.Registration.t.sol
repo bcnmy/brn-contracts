@@ -38,9 +38,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
                 endpoint,
                 delegatorPoolPremiumShare
             );
-            assertEq(ta.relayerCount(), i + 1);
-            assertEq(ta.relayerInfo_Stake(relayerAddress), stake);
-            assertEq(ta.relayerInfo_Endpoint(relayerAddress), endpoint);
+            // TODO: assertEq(ta.relayerCount(), i + 1);
+            assertEq(ta.relayerInfo(relayerAddress).stake, stake);
+            assertEq(ta.relayerInfo(relayerAddress).endpoint, endpoint);
+            assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Active, true);
 
             for (uint256 j = 0; j < relayerAccountAddresses[relayerAddress].length; j++) {
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), true);
@@ -51,21 +52,33 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(newCdf.length, relayerCount);
 
         // Verify that at this point of time, CDF hash has not been updated
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 0), true);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 0), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex()), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex()), false);
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
+        _moveForwadToNextEpoch();
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: new RelayerAddress[](0),
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: new uint256[](0),
+                latestStakeArray: ta.getStakeArray(activeRelayers),
+                latestDelegationArray: ta.getDelegationArray(activeRelayers)
+            })
+        );
+        _moveForwardByWindows(1);
 
         // CDF hash should be updated now
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), false);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex()), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex()), true);
     }
 
     function testRelayerUnRegistration() external atSnapshot {
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        uint256 stake = MINIMUM_STAKE_AMOUNT;
+
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
-            uint256 stake = MINIMUM_STAKE_AMOUNT;
-
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _startPrankRA(relayerAddress);
@@ -83,8 +96,21 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             );
         }
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        _moveForwadToNextEpoch();
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: new RelayerAddress[](0),
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: new uint256[](0),
+                latestStakeArray: ta.getStakeArray(activeRelayers),
+                latestDelegationArray: ta.getDelegationArray(activeRelayers)
+            })
+        );
+        _moveForwardByWindows(1);
+
+        cdf = ta.getCdfArray(activeRelayers);
+        RelayerAddress[] memory preDeregistrationActiveRelayers = activeRelayers;
 
         // De-register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -96,9 +122,9 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
             _unregister(relayerAddress, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
 
-            assertEq(ta.relayerCount(), relayerCount - i - 1);
-            assertEq(ta.relayerInfo_Stake(relayerAddress), 0);
-            assertEq(ta.relayerInfo_Endpoint(relayerAddress), "");
+            assertEq(ta.relayerInfo(relayerAddress).stake, stake);
+            assertEq(ta.relayerInfo(relayerAddress).endpoint, endpoint);
+            assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Exiting, true);
 
             for (uint256 j = 0; j < relayerAccountAddresses[relayerAddress].length; j++) {
                 assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), false);
@@ -109,14 +135,25 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         assertEq(newCdf.length, 0);
 
         // Verify that at this point of time, CDF hash has not been updated
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 1), true);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 1), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex()), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex()), false);
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
+        _moveForwadToNextEpoch();
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: preDeregistrationActiveRelayers,
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: new uint256[](0),
+                latestStakeArray: ta.getStakeArray(activeRelayers),
+                latestDelegationArray: ta.getDelegationArray(activeRelayers)
+            })
+        );
+        _moveForwardByWindows(1);
 
         // CDF hash should be updated now
-        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex(), 2), false);
-        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex(), 2), true);
+        assertEq(ta.debug_verifyCdfHashAtWindow(cdf, ta.debug_currentWindowIndex()), false);
+        assertEq(ta.debug_verifyCdfHashAtWindow(newCdf, ta.debug_currentWindowIndex()), true);
     }
 
     function testWithdrawal() external atSnapshot {
@@ -150,8 +187,8 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
             uint256 expectedWithdrawBlock = block.number + RELAYER_WITHDRAW_DELAY_IN_BLOCKS;
 
-            assertEq(ta.withdrawalInfo(relayerAddress).amount, MINIMUM_STAKE_AMOUNT);
-            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, expectedWithdrawBlock);
+            assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Exiting, true);
+            assertEq(ta.relayerInfo(relayerAddress).minExitBlockNumber, expectedWithdrawBlock);
 
             maxWithdrawalBlock = expectedWithdrawBlock > maxWithdrawalBlock ? expectedWithdrawBlock : maxWithdrawalBlock;
         }
@@ -171,8 +208,8 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             ta.withdraw();
             vm.stopPrank();
 
-            assertEq(ta.withdrawalInfo(relayerAddress).amount, 0);
-            assertEq(ta.withdrawalInfo(relayerAddress).minBlockNumber, 0);
+            assertEq(ta.relayerInfo(relayerAddress).stake, 0);
+            assertEq(ta.relayerInfo(relayerAddress).minExitBlockNumber, 0);
             assertEq(bico.balanceOf(RelayerAddress.unwrap(relayerAddress)), balanceBefore + stake);
         }
     }

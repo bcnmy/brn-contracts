@@ -277,9 +277,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     // TODO: Jail the relayer, the relayer needs to topup or leave with their money
     function _processLivenessCheck(ProcessLivenessCheckParams calldata _params) internal {
         TAStorage storage ts = getTAStorage();
-        uint256 epochEndTimestamp = ts.epochEndTimestamp;
-        FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp].fp();
-        delete ts.totalTransactionsSubmitted[epochEndTimestamp];
+        uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
+        FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp_].fp();
+        delete ts.totalTransactionsSubmitted[epochEndTimestamp_];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (totalTransactionsInEpoch == FP_ZERO) {
@@ -294,7 +294,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         for (uint256 i; i != relayerCount;) {
             if (
                 _verifyRelayerLiveness(
-                    _params.currentCdf, _params.currentActiveRelayers, i, epochEndTimestamp, totalTransactionsInEpoch
+                    _params.currentCdf, _params.currentActiveRelayers, i, epochEndTimestamp_, totalTransactionsInEpoch
                 )
             ) {
                 unchecked {
@@ -362,5 +362,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     function totalTransactionsSubmitted() external view override returns (uint256) {
         return getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp];
+    }
+
+    function epochLengthInSec() external view override returns (uint256) {
+        return getTAStorage().epochLengthInSec;
+    }
+
+    function epochEndTimestamp() external view override returns (uint256) {
+        return getTAStorage().epochEndTimestamp;
     }
 }

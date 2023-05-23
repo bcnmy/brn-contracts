@@ -221,6 +221,14 @@ abstract contract TATestBase is Test {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
     }
 
+    function _moveForwardByWindows(uint256 _windows) internal {
+        vm.roll(block.number + _windows * ta.blocksPerWindow());
+    }
+
+    function _moveForwadToNextEpoch() internal {
+        vm.roll(ta.epochEndTimestamp());
+    }
+
     // add this to be excluded from coverage report
     function test() public {}
 }

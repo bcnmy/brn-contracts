@@ -67,7 +67,7 @@ contract TARelayerManagement is
             node.stake += _stake;
             node.endpoint = _endpoint;
             node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-            node.rewardShares = _mintProtocolRewardShares(_stake);
+            //TODO: node.rewardShares = _mintProtocolRewardShares(_stake);
             node.status = RelayerStatus.Active;
             _setRelayerAccountAddresses(relayerAddress, _accounts);
 
@@ -233,6 +233,15 @@ contract TARelayerManagement is
             unpaidProtocolRewards: node.unpaidProtocolRewards,
             rewardShares: node.rewardShares
         });
+    }
+
+    function relayerInfo_isAccount(RelayerAddress _relayerAddress, RelayerAccountAddress _account)
+        external
+        view
+        override
+        returns (bool)
+    {
+        return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
     }
 
     function isGasTokenSupported(TokenAddress _token) external view override returns (bool) {

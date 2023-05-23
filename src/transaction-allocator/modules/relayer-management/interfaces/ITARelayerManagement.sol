@@ -54,6 +54,8 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function relayerInfo(RelayerAddress) external view returns (RelayerInfoView memory);
 
+    function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
+
     function isGasTokenSupported(TokenAddress) external view returns (bool);
 
     function relayersPerWindow() external view returns (uint256);

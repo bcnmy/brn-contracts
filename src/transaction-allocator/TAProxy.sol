@@ -69,6 +69,7 @@ contract TAProxy is
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
         tas.epochLengthInSec = _params.epochLengthInSec;
+        tas.epochEndTimestamp = block.timestamp + _params.epochLengthInSec;
 
         uint256 length = _params.supportedTokens.length;
         for (uint256 i; i != length;) {

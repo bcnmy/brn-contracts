@@ -27,6 +27,8 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         supportedTokens.push(TokenAddress.wrap(address(bico)));
         supportedTokens.push(NATIVE_TOKEN);
 
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
             uint256 stake = _initialStakeAmount;
@@ -62,7 +64,18 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         t0 = supportedTokens[0];
         t1 = supportedTokens[1];
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
+        _moveForwadToNextEpoch();
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: new RelayerAddress[](0),
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: new uint256[](0),
+                latestStakeArray: ta.getStakeArray(activeRelayers),
+                latestDelegationArray: ta.getDelegationArray(activeRelayers)
+            })
+        );
+        _moveForwardByWindows(1);
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -235,8 +248,6 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
 
     function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
         _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
-
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
 
         uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
         uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);

@@ -20,8 +20,8 @@ contract TADeploymentTest is Test {
         supportedTokens.push(TokenAddress.wrap(address(this)));
         InitalizerParams memory params = InitalizerParams({
             blocksPerWindow: 1,
+            epochLengthInSec: 100,
             relayersPerWindow: 3,
-            penaltyDelayBlocks: 4,
             bondTokenAddress: TokenAddress.wrap(address(this)),
             supportedTokens: supportedTokens
         });
@@ -30,7 +30,7 @@ contract TADeploymentTest is Test {
 
         assertEq(ta.blocksPerWindow(), params.blocksPerWindow);
         assertEq(ta.relayersPerWindow(), params.relayersPerWindow);
-        assertEq(ta.penaltyDelayBlocks(), block.number + params.penaltyDelayBlocks);
+        assertEq(ta.epochLengthInSec(), params.epochLengthInSec);
         assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);
         assertEq(ta.supportedPools()[0] == params.supportedTokens[0], true);
     }

@@ -6,26 +6,24 @@ import "./base/TATestBase.t.sol";
 import "src/transaction-allocator/common/TAConstants.sol";
 import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
-import "src/transaction-allocator/modules/application/wormhole/interfaces/IWormholeApplicationEventsErrors.sol";
+import "./modules/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
 
-contract WormholeApplicationTest is
+contract TATransactionAllocationTest is
     TATestBase,
     ITATransactionAllocationEventsErrors,
     ITAHelpers,
-    IWormholeApplicationEventsErrors
+    IMinimalApplicationEventsErrors
 {
+    using FixedPointTypeHelper for FixedPointType;
+    using Uint256WrapperHelper for uint256;
+
     uint256 constant initialApplicationFunds = 10 ether;
 
     uint256 private _postRegistrationSnapshotId;
     uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
     bytes[] private txns;
 
-    bytes constant defaultVAA =
-        hex"01000000000100dd9410ea42cce096a51f9c02a91ed565d71e5cfdd09966e5246c1d3cd4064ad97fb8bce9993227fbaf4d366fc8b3e73029bc7565f6ad4473f29a3532e8b1f9060163bff8f400000041000500000000000000000000000084fee39095b18962b875588df7f9ad1be87e86530000000000000041c875e5f7065b71d698d6ab1bf73f7b0604a5c9f3015ab01248fbc127af5a8e3c2a";
-
-    IDelivery deliveryMock = IDelivery(address(0xFFF01));
-    IWormhole wormholeMock = IWormhole(address(0xFFF02));
-    IWormholeApplication taw;
+    IMinimalApplication tam;
 
     function setUp() public override {
         if (_postRegistrationSnapshotId != 0) {
@@ -38,8 +36,9 @@ contract WormholeApplicationTest is
 
         super.setUp();
 
-        taw = IWormholeApplication(address(ta));
-        taw.initialize(wormholeMock, deliveryMock);
+        tam = IMinimalApplication(address(ta));
+
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -64,20 +63,21 @@ contract WormholeApplicationTest is
         }
 
         for (uint256 i = 0; i < userCount; i++) {
-            txns.push(
-                abi.encodeCall(
-                    taw.executeWormhole,
-                    (
-                        IDelivery.TargetDeliveryParameters({
-                            encodedVMs: new bytes[](0),
-                            encodedDeliveryVAA: defaultVAA,
-                            relayerRefundAddress: payable(address(taw)),
-                            overrides: bytes("")
-                        })
-                    )
-                )
-            );
+            txns.push(abi.encodeCall(IMinimalApplication.executeMinimalApplication, (keccak256(abi.encodePacked(i)))));
         }
+
+        _moveForwadToNextEpoch();
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: new RelayerAddress[](0),
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: new uint256[](0),
+                latestStakeArray: ta.getStakeArray(activeRelayers),
+                latestDelegationArray: ta.getDelegationArray(activeRelayers)
+            })
+        );
+        _moveForwardByWindows(1);
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -86,7 +86,7 @@ contract WormholeApplicationTest is
         return _postRegistrationSnapshotId;
     }
 
-    function _getRelayerAssignedToTx(bytes memory _tx, uint16[] memory _cdf, uint256 _currentCdfLogIndex)
+    function _getRelayerAssignedToTx(bytes memory _tx, uint16[] memory _cdf)
         internal
         returns (RelayerAddress, uint256, uint256)
     {
@@ -96,14 +96,12 @@ contract WormholeApplicationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            taw.allocateWormholeDeliveryVAA(
+            tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns_,
                     cdf: _cdf,
-                    currentCdfLogIndex: _currentCdfLogIndex,
-                    activeRelayers: activeRelayers,
-                    relayerLogIndex: 1
+                    activeRelayers: activeRelayers
                 })
             );
 
@@ -116,30 +114,18 @@ contract WormholeApplicationTest is
         return (RelayerAddress.wrap(address(0)), 0, 0);
     }
 
-    function testWHTransactionExecution() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
-
-        // Setup Mocks
-        vm.mockCall(
-            address(wormholeMock), abi.encodePacked(wormholeMock.publishMessage.selector), abi.encode(uint64(1))
-        );
-        vm.etch(address(wormholeMock), address(ta).code);
-        vm.mockCall(address(deliveryMock), abi.encodePacked(deliveryMock.deliver.selector), bytes(""));
-        vm.etch(address(deliveryMock), address(ta).code);
-
+    function testTransactionExecution() external atSnapshot {
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            taw.allocateWormholeDeliveryVAA(
+            tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1,
-                    activeRelayers: activeRelayers,
-                    relayerLogIndex: 1
+                    activeRelayers: activeRelayers
                 })
             );
 
@@ -148,28 +134,15 @@ contract WormholeApplicationTest is
             }
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
-
-            // Create native value array
-            uint256[] memory values = new uint256[](allotedTransactions.length);
-            for (uint256 j = 0; j < allotedTransactions.length; j++) {
-                values[j] = 0.001 ether;
-            }
-
-            // Check Events
-            for (uint256 j = 0; j < allotedTransactions.length; ++j) {
-                vm.expectEmit(true, true, false, false);
-                emit WormholeDeliveryExecuted(defaultVAA);
-            }
-
-            ta.execute{value: 0.001 ether * allotedTransactions.length}(
-                allotedTransactions,
-                values,
-                cdf,
-                1,
-                activeRelayers,
-                1,
-                selectedRelayerCdfIndex,
-                relayerGenerationIterations
+            ta.execute(
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    cdf: cdf,
+                    activeRelayers: activeRelayers,
+                    relayerIndex: selectedRelayerCdfIndex,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations
+                })
             );
             vm.stopPrank();
 
@@ -177,12 +150,10 @@ contract WormholeApplicationTest is
         }
 
         assertEq(executionCount, txns.length);
-        vm.clearMockedCalls();
+        assertEq(tam.count(), executionCount);
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
-
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
         // Corrupt the CDF
@@ -191,14 +162,12 @@ contract WormholeApplicationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            taw.allocateWormholeDeliveryVAA(
+            tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1,
-                    activeRelayers: activeRelayers,
-                    relayerLogIndex: 1
+                    activeRelayers: activeRelayers
                 })
             );
 
@@ -209,34 +178,31 @@ contract WormholeApplicationTest is
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidCdfArrayHash.selector);
             ta.execute(
-                allotedTransactions,
-                new uint256[](allotedTransactions.length),
-                cdf2,
-                1,
-                activeRelayers,
-                1,
-                selectedRelayerCdfIndex,
-                relayerGenerationIterations
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    cdf: cdf2,
+                    activeRelayers: activeRelayers,
+                    relayerIndex: selectedRelayerCdfIndex,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations
+                })
             );
             vm.stopPrank();
         }
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            taw.allocateWormholeDeliveryVAA(
+            tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1,
-                    activeRelayers: activeRelayers,
-                    relayerLogIndex: 1
+                    activeRelayers: activeRelayers
                 })
             );
 
@@ -244,17 +210,19 @@ contract WormholeApplicationTest is
                 continue;
             }
 
-            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[(i + 1) % relayerMainAddress.length]][0]);
+            uint256 testRelayerIndex = (i + 1) % relayerMainAddress.length;
+
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[testRelayerIndex]][0]);
             vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
             ta.execute(
-                allotedTransactions,
-                new uint256[](allotedTransactions.length),
-                cdf,
-                1,
-                activeRelayers,
-                1,
-                selectedRelayerCdfIndex + 1,
-                relayerGenerationIterations
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    cdf: cdf,
+                    activeRelayers: activeRelayers,
+                    relayerIndex: selectedRelayerCdfIndex + 1,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations
+                })
             );
             vm.stopPrank();
         }
@@ -262,23 +230,19 @@ contract WormholeApplicationTest is
 
     // TODO: This test is suspicious
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
-        vm.roll(block.number + WINDOWS_PER_EPOCH * deployParams.blocksPerWindow);
-
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
-        (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, 1, activeRelayers, 1);
+        (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, activeRelayers);
         bool testRun = false;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            (bytes[] memory allotedTransactions, uint256 relayerGenerationIteration, uint256 selectedRelayerCdfIndex) =
-            taw.allocateWormholeDeliveryVAA(
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+            tam.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
                     cdf: cdf,
-                    currentCdfLogIndex: 1,
-                    activeRelayers: activeRelayers,
-                    relayerLogIndex: 1
+                    activeRelayers: activeRelayers
                 })
             );
 
@@ -286,27 +250,76 @@ contract WormholeApplicationTest is
                 continue;
             }
 
-            if (selectedRelayers[1] == relayerAddress) {
+            if (selectedRelayers[0] == relayerAddress) {
                 continue;
             }
 
             testRun = true;
 
-            _startPrankRAA(relayerAccountAddresses[selectedRelayers[1]][0]);
+            _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
             vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
             ta.execute(
-                allotedTransactions,
-                new uint256[](allotedTransactions.length),
-                cdf,
-                1,
-                activeRelayers,
-                1,
-                selectedRelayerCdfIndex + 1,
-                relayerGenerationIteration
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    cdf: cdf,
+                    activeRelayers: activeRelayers,
+                    relayerIndex: selectedRelayerCdfIndex + 1,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations
+                })
             );
             vm.stopPrank();
         }
 
         assertEq(testRun, true);
+    }
+
+    ////// Liveness Check Tests //////
+    function _calculatePenalty(uint256 _stake) internal pure returns (uint256) {
+        return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
+    }
+
+    function testMinimumTransactionForLivenessCalculation() external atSnapshot {
+        FixedPointType minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+        assertEq(minTransactions.u256(), 24);
+
+        minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+        assertEq(minTransactions.u256(), 9);
+    }
+
+    function testPenalizeRelayerIfInsufficientTransactionAreSubmitted() external atSnapshot {
+        RelayerAddress activeRelayer = relayerMainAddress[0];
+        ta.debug_setTotalTransactionsProcessed(100);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 10);
+
+        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
+        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
+        for (uint256 i = 0; i < activeRelayers.length; ++i) {
+            if (activeRelayers[i] == activeRelayer) {
+                continue;
+            }
+
+            vm.expectEmit(true, true, true, false);
+            emit RelayerPenalized(activeRelayers[i], _calculatePenalty(ta.relayerInfo(activeRelayers[i]).stake));
+        }
+        uint256[] memory relayerIndexMapping = new uint256[](activeRelayers.length);
+        for (uint256 i = 0; i < activeRelayers.length; ++i) {
+            relayerIndexMapping[i] = i;
+        }
+
+        ta.processLivenessCheck(
+            ITATransactionAllocation.ProcessLivenessCheckParams({
+                currentCdf: cdf,
+                currentActiveRelayers: activeRelayers,
+                pendingActiveRelayers: activeRelayers,
+                currentActiveRelayerToPendingActiveRelayersIndex: relayerIndexMapping,
+                latestStakeArray: stakeArray,
+                latestDelegationArray: delegationArray
+            })
+        );
     }
 }
