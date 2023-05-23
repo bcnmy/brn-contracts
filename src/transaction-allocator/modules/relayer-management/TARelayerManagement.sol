@@ -2,7 +2,6 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/ITARelayerManagement.sol";
@@ -20,7 +19,6 @@ contract TARelayerManagement is
     TAHelpers,
     TATransactionAllocationStorage
 {
-    using SafeCast for uint256;
     using SafeERC20 for IERC20;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
@@ -75,7 +73,7 @@ contract TARelayerManagement is
 
             // Update Active Relayer List
             RelayerAddress[] memory newActiveRelayers = _latestActiveRelayers.cd_append(relayerAddress);
-            rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash());
+            rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash(), _windowIndex(block.number));
             emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
         }
 
@@ -115,7 +113,7 @@ contract TARelayerManagement is
 
         // Queue Update to Active Relayers
         RelayerAddress[] memory newActiveRelayers = _latestActiveRelayers.cd_remove(_relayerIndex);
-        rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash());
+        rms.activeRelayerListVersionManager.setPendingState(newActiveRelayers.m_hash(), _windowIndex(block.number));
 
         // Set withdrawal Info
         node.status = RelayerStatus.Exiting;

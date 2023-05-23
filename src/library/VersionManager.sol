@@ -33,11 +33,7 @@ library VersionManager {
         return _hash == _activeStateHash(_v, _currentTime);
     }
 
-    function verifyHashAgainstPendingState(VersionManagerState storage _v, bytes32 _hash)
-        internal
-        view
-        returns (bool)
-    {
+    function verifyHashAgainstLatestState(VersionManagerState storage _v, bytes32 _hash) internal view returns (bool) {
         if (_v.pendingHash != bytes32(0)) {
             return _hash == _v.pendingHash;
         }
@@ -45,8 +41,10 @@ library VersionManager {
         return _hash == _v.currentHash;
     }
 
-    function setPendingState(VersionManagerState storage _v, bytes32 _hash) internal {
-        _v.currentHash = _v.pendingHash;
+    function setPendingState(VersionManagerState storage _v, bytes32 _hash, uint256 _currentTime) internal {
+        if (_v.pendingHashActivationTime != 0 && _currentTime >= _v.pendingHashActivationTime) {
+            _v.currentHash = _v.pendingHash;
+        }
         _v.pendingHash = _hash;
         delete _v.pendingHashActivationTime;
     }

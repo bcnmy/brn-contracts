@@ -60,7 +60,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             revert InvalidDelegationArrayHash();
         }
 
-        if (!rs.activeRelayerListVersionManager.verifyHashAgainstPendingState(_latestActiveRelayerArray.cd_hash())) {
+        if (!rs.activeRelayerListVersionManager.verifyHashAgainstLatestState(_latestActiveRelayerArray.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
@@ -83,7 +83,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     function _verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
-        if (!getRMStorage().activeRelayerListVersionManager.verifyHashAgainstPendingState(_activeRelayers.cd_hash())) {
+        if (!getRMStorage().activeRelayerListVersionManager.verifyHashAgainstLatestState(_activeRelayers.cd_hash())) {
             revert InvalidRelayersArrayHash();
         }
     }
@@ -234,7 +234,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Update cdf hash
         bytes32 cdfHash = _generateCdfArray(_stakeArray, _delegationArray).m_hash();
-        ds.cdfVersionManager.setPendingState(cdfHash);
+        ds.cdfVersionManager.setPendingState(cdfHash, _windowIndex(block.number));
     }
 
     ////////////////////////////// Delegation ////////////////////////
