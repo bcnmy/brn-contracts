@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();

@@ -2,13 +2,11 @@
 
 pragma solidity 0.8.19;
 
-import "src/library/FixedPointArithmetic.sol";
-import "src/transaction-allocator/common/TAConstants.sol";
-import "src/interfaces/IDebug_GasConsumption.sol";
-
 import "./ITARelayerManagementEventsErrors.sol";
+import "src/library/FixedPointArithmetic.sol";
+import "ta-common/TAConstants.sol";
 
-interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
+interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
 
     ////////////////////////// Relayer Registration //////////////////////////

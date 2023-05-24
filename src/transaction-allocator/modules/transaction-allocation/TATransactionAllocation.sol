@@ -2,13 +2,12 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TAHelpers.sol";
-import "src/transaction-allocator/common/TATypes.sol";
-
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
-import "../application/base-application/interfaces/IApplicationBase.sol";
-import "../relayer-management/TARelayerManagementStorage.sol";
+import "ta-base-application/interfaces/IApplicationBase.sol";
+import "ta-relayer-management/TARelayerManagementStorage.sol";
+import "ta-common/TAHelpers.sol";
+import "ta-common/TATypes.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     using FixedPointTypeHelper for FixedPointType;

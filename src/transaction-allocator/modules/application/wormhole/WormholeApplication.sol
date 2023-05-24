@@ -2,10 +2,10 @@
 
 pragma solidity 0.8.19;
 
-import "lib/solidity-bytes-utils/contracts/BytesLib.sol";
+import "solidity-bytes-utils/contracts/BytesLib.sol";
 import "./interfaces/IWormholeApplication.sol";
 import "./WormholeApplicationStorage.sol";
-import "../base-application/ApplicationBase.sol";
+import "ta-base-application/ApplicationBase.sol";
 
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;

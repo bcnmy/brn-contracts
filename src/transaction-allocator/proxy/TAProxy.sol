@@ -6,11 +6,10 @@ import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
-import "./modules/delegation/TADelegationStorage.sol";
-import "./modules/relayer-management/TARelayerManagementStorage.sol";
-import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
-
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-delegation/TADelegationStorage.sol";
+import "ta-relayer-management/TARelayerManagementStorage.sol";
+import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+import "ta-common/TATypes.sol";
 import "src/library/VersionManager.sol";
 
 contract TAProxy is

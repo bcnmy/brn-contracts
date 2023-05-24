@@ -3,8 +3,8 @@ pragma solidity 0.8.19;
 
 import "./interfaces/IApplicationBase.sol";
 
-import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocation.sol";
-import "src/transaction-allocator/modules/relayer-management/TARelayerManagementStorage.sol";
+import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
+import "ta-relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
     modifier applicationHandler(bytes calldata _dataToHash) {

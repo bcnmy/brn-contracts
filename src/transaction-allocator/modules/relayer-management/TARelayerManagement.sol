@@ -5,11 +5,11 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/ITARelayerManagement.sol";
-import "../delegation/interfaces/ITADelegation.sol";
 import "./TARelayerManagementStorage.sol";
-import "../transaction-allocation/TATransactionAllocationStorage.sol";
-import "../../common/TAHelpers.sol";
-import "../../common/TAConstants.sol";
+import "ta-delegation/interfaces/ITADelegation.sol";
+import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+import "ta-common/TAHelpers.sol";
+import "ta-common/TAConstants.sol";
 import "src/library/FixedPointArithmetic.sol";
 import "src/library/VersionManager.sol";
 

@@ -3,7 +3,7 @@
 pragma solidity 0.8.19;
 
 import "./ITADelegationEventsErrors.sol";
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 
 interface ITADelegation is ITADelegationEventsErrors {
     function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external;

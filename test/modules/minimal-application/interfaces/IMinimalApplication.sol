@@ -3,7 +3,7 @@
 pragma solidity ^0.8.19;
 
 import "./IMinimalApplicationEventsErrors.sol";
-import "src/transaction-allocator/modules/application/base-application/interfaces/IApplicationBase.sol";
+import "ta-base-application/interfaces/IApplicationBase.sol";
 
 interface IMinimalApplication is IMinimalApplicationEventsErrors, IApplicationBase {
     function count() external view returns (uint256);

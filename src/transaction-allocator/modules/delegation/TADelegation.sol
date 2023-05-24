@@ -10,8 +10,8 @@ import "src/library/FixedPointArithmetic.sol";
 
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
-import "../../common/TAConstants.sol";
-import "../../common/TAHelpers.sol";
+import "ta-common/TAConstants.sol";
+import "ta-common/TAHelpers.sol";
 
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;

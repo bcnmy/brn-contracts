@@ -3,9 +3,9 @@
 pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
-import "src/transaction-allocator/common/TAConstants.sol";
-import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
-import "src/transaction-allocator/modules/delegation/interfaces/ITADelegationEventsErrors.sol";
+import "ta-common/TAConstants.sol";
+import "ta-common/interfaces/ITAHelpers.sol";
+import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
 
 // TODO: Add tests related to delayed CDF Updation
 // TODO: Testing mechanism needs to change

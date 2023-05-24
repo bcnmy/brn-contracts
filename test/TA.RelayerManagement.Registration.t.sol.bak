@@ -3,9 +3,9 @@
 pragma solidity 0.8.19;
 
 import "./base/TATestBase.t.sol";
-import "src/transaction-allocator/common/TAConstants.sol";
-import "src/transaction-allocator/modules/relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
-import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
+import "ta-common/TAConstants.sol";
+import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
+import "ta-common/interfaces/ITAHelpers.sol";
 
 // TODO: check delayed update for relayer index
 contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {

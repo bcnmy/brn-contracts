@@ -2,12 +2,11 @@
 
 pragma solidity 0.8.19;
 
-import "src/interfaces/IDebug_GasConsumption.sol";
-import "src/transaction-allocator/common/TATypes.sol";
-import "src/library/FixedPointArithmetic.sol";
 import "./ITATransactionAllocationEventsErrors.sol";
+import "ta-common/TATypes.sol";
+import "src/library/FixedPointArithmetic.sol";
 
-interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
+interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
     struct ExecuteParams {
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;

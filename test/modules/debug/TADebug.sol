@@ -3,8 +3,9 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/ITADebug.sol";
-import "src/transaction-allocator/common/TAHelpers.sol";
-import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocationStorage.sol";
+import "ta-common/TAHelpers.sol";
+import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+
 import "forge-std/console2.sol";
 
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {

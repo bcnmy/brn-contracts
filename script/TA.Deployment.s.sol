@@ -4,18 +4,17 @@ pragma solidity 0.8.19;
 
 import "forge-std/Script.sol";
 
-import "src/transaction-allocator/TAProxy.sol";
-import "src/transaction-allocator/modules/delegation/TADelegation.sol";
-import "src/transaction-allocator/modules/relayer-management/TARelayerManagement.sol";
-import "src/transaction-allocator/modules/transaction-allocation/TATransactionAllocation.sol";
-import "src/transaction-allocator/interfaces/ITransactionAllocator.sol";
-import "src/transaction-allocator/modules/application/wormhole/WormholeApplication.sol";
+import "ta/interfaces/ITransactionAllocator.sol";
+import "ta-proxy/TAProxy.sol";
+import "ta-delegation/TADelegation.sol";
+import "ta-relayer-management/TARelayerManagement.sol";
+import "ta-transaction-allocation/TATransactionAllocation.sol";
+import "ta-wormhole-application/WormholeApplication.sol";
+import "ta-common/TATypes.sol";
 
 import "test/modules/debug/TADebug.sol";
 import "test/modules/minimal-application/MinimalApplication.sol";
 import "test/modules/ITransactionAllocatorDebug.sol";
-
-import "src/transaction-allocator/common/TATypes.sol";
 
 contract TADeploymentScript is Script {
     error EmptyDeploymentConfigPath();

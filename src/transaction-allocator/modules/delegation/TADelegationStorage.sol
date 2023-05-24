@@ -3,8 +3,9 @@
 pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
+
 import "src/library/FixedPointArithmetic.sol";
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 
 abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");

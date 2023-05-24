@@ -3,7 +3,7 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/IMinimalApplication.sol";
-import "src/transaction-allocator/modules/application/base-application/ApplicationBase.sol";
+import "ta-base-application/ApplicationBase.sol";
 
 contract MinimalApplication is IMinimalApplication, ApplicationBase {
     uint256 public count = 0;

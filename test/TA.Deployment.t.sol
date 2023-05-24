@@ -3,7 +3,7 @@
 pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
-import "../script/TA.Deployment.s.sol";
+import "script/TA.Deployment.s.sol";
 
 contract TADeploymentTest is Test {
     TADeploymentScript script;
