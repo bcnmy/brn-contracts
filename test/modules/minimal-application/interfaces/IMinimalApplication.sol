@@ -2,13 +2,15 @@
 
 pragma solidity ^0.8.19;
 
-import "src/transaction-allocator/common/TAStructs.sol";
 import "./IMinimalApplicationEventsErrors.sol";
+import "src/transaction-allocator/modules/application/base-application/interfaces/IApplicationBase.sol";
 
-interface IMinimalApplication is IMinimalApplicationEventsErrors {
+interface IMinimalApplication is IMinimalApplicationEventsErrors, IApplicationBase {
     function count() external view returns (uint256);
     function executeMinimalApplication(bytes32 _data) external payable;
-    function allocateMinimalApplicationTransaction(AllocateTransactionParams calldata _params)
-        external
-        returns (bytes[] memory, uint256, uint256);
+    function allocateMinimalApplicationTransaction(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external returns (bytes[] memory, uint256, uint256);
 }

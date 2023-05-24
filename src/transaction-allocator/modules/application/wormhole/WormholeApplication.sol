@@ -49,13 +49,12 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         sequenceNumber = _encodedVAA.toUint64(index);
     }
 
-    function allocateWormholeDeliveryVAA(AllocateTransactionParams calldata _params)
-        external
-        view
-        override
-        returns (bytes[] memory, uint256, uint256)
-    {
-        return _allocateTransaction(_params);
+    function allocateWormholeDeliveryVAA(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external view override returns (bytes[] memory, uint256, uint256) {
+        return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
 
     /// Execution Logic

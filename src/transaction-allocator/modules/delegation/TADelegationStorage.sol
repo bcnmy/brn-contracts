@@ -17,7 +17,6 @@ abstract contract TADelegationStorage {
         // TODO: Add C*Time
         mapping(RelayerAddress => mapping(TokenAddress => uint256)) unclaimedRewards;
         TokenAddress[] supportedPools;
-        bytes32 delegationArrayHash;
     }
 
     /* solhint-disable no-inline-assembly */

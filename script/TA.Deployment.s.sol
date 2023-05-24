@@ -15,7 +15,6 @@ import "test/modules/debug/TADebug.sol";
 import "test/modules/minimal-application/MinimalApplication.sol";
 import "test/modules/ITransactionAllocatorDebug.sol";
 
-import "src/transaction-allocator/common/TAStructs.sol";
 import "src/transaction-allocator/common/TATypes.sol";
 
 contract TADeploymentScript is Script {
@@ -36,7 +35,7 @@ contract TADeploymentScript is Script {
             supportedTokens[i] = TokenAddress.wrap(supportedTokenAddresses[i]);
         }
 
-        InitalizerParams memory params = InitalizerParams({
+        ITAProxy.InitalizerParams memory params = ITAProxy.InitalizerParams({
             blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
             epochLengthInSec: vm.parseJsonUint(deploymentConfigStr, ".epochLengthInSec"),
             relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
@@ -62,7 +61,7 @@ contract TADeploymentScript is Script {
     //TODO: Create2/Create3
     function _deploy(
         uint256 _deployerPrivateKey,
-        InitalizerParams memory _params,
+        ITAProxy.InitalizerParams memory _params,
         address[] memory modules,
         bytes4[][] memory selectors,
         bool _debug
@@ -89,7 +88,7 @@ contract TADeploymentScript is Script {
         return proxy;
     }
 
-    function deploy(uint256 _deployerPrivateKey, InitalizerParams memory _params, bool _debug)
+    function deploy(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params, bool _debug)
         public
         returns (ITransactionAllocator)
     {
@@ -112,7 +111,7 @@ contract TADeploymentScript is Script {
         return ITransactionAllocator(address(proxy));
     }
 
-    function deployTest(uint256 _deployerPrivateKey, InitalizerParams memory _params, bool _debug)
+    function deployTest(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params, bool _debug)
         public
         returns (ITransactionAllocatorDebug)
     {

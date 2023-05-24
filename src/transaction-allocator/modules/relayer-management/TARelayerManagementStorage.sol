@@ -7,10 +7,23 @@ import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "src/library/FixedPointArithmetic.sol";
 import "src/library/VersionManager.sol";
 import "src/transaction-allocator/common/TATypes.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
 
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
+
+    // Relayer Information
+    struct RelayerInfo {
+        uint256 stake;
+        string endpoint;
+        uint256 delegatorPoolPremiumShare; // *100
+        RelayerAccountAddress[] relayerAccountAddresses;
+        mapping(RelayerAccountAddress => bool) isAccount;
+        RelayerStatus status;
+        uint256 minExitBlockNumber;
+        // TODO: Reward share related data should be moved to it's own mapping
+        uint256 unpaidProtocolRewards;
+        FixedPointType rewardShares;
+    }
 
     // TODO: Check packing
     struct RMStorage {
@@ -20,15 +33,9 @@ abstract contract TARelayerManagementStorage {
         // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
-        // cdf array hash
-        // VersionHistoryManager.Version[] cdfVersionHistoryManager;
-        // VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;
-        VersionManager.VersionManagerState cdfVersionManager;
-        VersionManager.VersionManagerState activeRelayerListVersionManager;
-        // TODO: This should be combined with delegation array hash
-        bytes32 latestActiveRelayerStakeArrayHash;
+        VersionManager.VersionManagerState relayerStateVersionManager;
         // Maps relayer address to pending withdrawals
-        mapping(TokenAddress => bool) isGasTokenSupported;
+        mapping(TokenAddress => bool isGasTokenSupported) isGasTokenSupported;
         // Constant Rate Rewards
         uint256 unpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;

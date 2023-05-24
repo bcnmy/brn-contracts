@@ -35,66 +35,40 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         _;
     }
 
-    modifier verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) {
-        _verifyLatestActiveRelayerList(_activeRelayers);
-        _;
-    }
-
     function _isActiveRelayer(RelayerAddress _relayer) internal view returns (bool) {
         return getRMStorage().relayerInfo[_relayer].status == RelayerStatus.Active;
     }
 
-    function _verifyExternalStateForCdfUpdation(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray,
-        RelayerAddress[] calldata _latestActiveRelayerArray
-    ) internal view {
+    function _getRelayerStateHash(bytes32 _cdfHash, bytes32 _relayerArrayHash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_cdfHash, _relayerArrayHash));
+    }
+
+    function _verifyExternalStateForCdfUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash) internal view {
         RMStorage storage rs = getRMStorage();
-        TADStorage storage ds = getTADStorage();
 
-        if (rs.latestActiveRelayerStakeArrayHash != _currentStakeArray.cd_hash()) {
-            revert InvalidStakeArrayHash();
-        }
-
-        if (ds.delegationArrayHash != _currentDelegationArray.cd_hash()) {
-            revert InvalidDelegationArrayHash();
-        }
-
-        if (!rs.activeRelayerListVersionManager.verifyHashAgainstLatestState(_latestActiveRelayerArray.cd_hash())) {
+        if (
+            !rs.relayerStateVersionManager.verifyHashAgainstLatestState(
+                _getRelayerStateHash(_cdfHash, _activeRelayersHash)
+            )
+        ) {
             revert InvalidRelayersArrayHash();
         }
     }
 
     function _verifyExternalStateForTransactionAllocation(
-        uint16[] calldata _cdf,
-        RelayerAddress[] calldata _activeRelayers,
+        bytes32 _cdfHash,
+        bytes32 _activeRelayersHash,
         uint256 _blockNumber
     ) internal view {
         RMStorage storage rs = getRMStorage();
         uint256 windowIndex = _windowIndex(_blockNumber);
 
-        if (!rs.cdfVersionManager.verifyHashAgainstActiveState(_cdf.cd_hash(), windowIndex)) {
-            revert InvalidCdfArrayHash();
-        }
-
-        if (!rs.activeRelayerListVersionManager.verifyHashAgainstActiveState(_activeRelayers.cd_hash(), windowIndex)) {
-            revert InvalidRelayersArrayHash();
-        }
-    }
-
-    function _verifyLatestActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
-        if (!getRMStorage().activeRelayerListVersionManager.verifyHashAgainstLatestState(_activeRelayers.cd_hash())) {
-            revert InvalidRelayersArrayHash();
-        }
-    }
-
-    function _verifyCurrentlyActiveRelayerList(RelayerAddress[] calldata _activeRelayers) internal view {
         if (
-            !getRMStorage().activeRelayerListVersionManager.verifyHashAgainstActiveState(
-                _activeRelayers.cd_hash(), _windowIndex(block.number)
+            !rs.relayerStateVersionManager.verifyHashAgainstActiveState(
+                _getRelayerStateHash(_cdfHash, _activeRelayersHash), windowIndex
             )
         ) {
-            revert InvalidRelayersArrayHash();
+            revert InvalidCdfArrayHash();
         }
     }
 
@@ -124,19 +98,20 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     function _verifyRelayerSelection(
         address _relayer,
-        uint16[] calldata _cdf,
-        RelayerAddress[] calldata _activeRelayers,
+        RelayerState calldata _activeState,
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
     ) internal view returns (bool) {
-        _verifyExternalStateForTransactionAllocation(_cdf, _activeRelayers, _blockNumber);
+        _verifyExternalStateForTransactionAllocation(
+            _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), _blockNumber
+        );
 
         RMStorage storage ds = getRMStorage();
 
         {
             // Verify Each Iteration against _cdfIndex in _cdf
-            uint256 stakeSum = _cdf[_cdf.length - 1];
+            uint256 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
 
             // TODO: Optimize iteration over set bits (potentially using x & -x flow)
@@ -148,12 +123,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
                     // Verify if correct stake prefix sum index has been provided
                     uint256 randomRelayerStake =
-                        _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, stakeSum);
+                        _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, maxCdfElement);
 
                     if (
                         !(
-                            (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
-                                && randomRelayerStake <= _cdf[_relayerIndex]
+                            (_relayerIndex == 0 || _activeState.cdf[_relayerIndex - 1] < randomRelayerStake)
+                                && randomRelayerStake <= _activeState.cdf[_relayerIndex]
                         )
                     ) {
                         // The supplied index does not point to the correct interval
@@ -168,7 +143,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             }
         }
 
-        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
+        RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
         RelayerInfo storage node = ds.relayerInfo[relayerAddress];
 
         if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
@@ -179,16 +154,17 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
-    function _generateCdfArray(uint32[] memory _stakeArray, uint32[] memory _delegationArray)
-        internal
-        pure
-        returns (uint16[] memory)
-    {
-        uint16[] memory cdf = new uint16[](_stakeArray.length);
+    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers) internal view returns (uint16[] memory) {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
+
+        uint256 length = _activeRelayers.length;
+        uint16[] memory cdf = new uint16[](length);
         uint256 totalStakeSum = 0;
-        uint256 length = _stakeArray.length;
+
         for (uint256 i; i != length;) {
-            totalStakeSum += _stakeArray[i] + _delegationArray[i];
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
             unchecked {
                 ++i;
             }
@@ -197,7 +173,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         // Scale the values to fit uint16 and get the CDF
         uint256 sum = 0;
         for (uint256 i; i != length;) {
-            sum += _stakeArray[i] + _delegationArray[i];
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
             cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
             unchecked {
                 ++i;
@@ -207,34 +184,54 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _updateCdf(
-        uint32[] memory _stakeArray,
-        bool _shouldUpdateStakeAccounting,
-        uint32[] memory _delegationArray,
-        bool _shouldUpdateDelegationAccounting
-    ) internal {
-        if (_stakeArray.length != _delegationArray.length) {
-            revert ParameterLengthMismatch();
+    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers) internal view returns (uint16[] memory) {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
+
+        uint256 length = _activeRelayers.length;
+        uint16[] memory cdf = new uint16[](length);
+        uint256 totalStakeSum = 0;
+
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
+            unchecked {
+                ++i;
+            }
         }
 
-        RMStorage storage ds = getRMStorage();
-
-        // Update Stake Array Hash
-        if (_shouldUpdateStakeAccounting) {
-            ds.latestActiveRelayerStakeArrayHash = _stakeArray.m_hash();
-            emit StakeArrayUpdated(ds.latestActiveRelayerStakeArrayHash);
+        // Scale the values to fit uint16 and get the CDF
+        uint256 sum = 0;
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
+            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
+            unchecked {
+                ++i;
+            }
         }
 
-        // Update Delegation Array Hash
-        if (_shouldUpdateDelegationAccounting) {
-            TADStorage storage tds = getTADStorage();
-            tds.delegationArrayHash = _delegationArray.m_hash();
-            emit DelegationArrayUpdated(tds.delegationArrayHash);
-        }
+        return cdf;
+    }
 
+    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal {
         // Update cdf hash
-        bytes32 cdfHash = _generateCdfArray(_stakeArray, _delegationArray).m_hash();
-        ds.cdfVersionManager.setPendingState(cdfHash, _windowIndex(block.number));
+        bytes32 cdfHash = _generateCdfArray_c(_relayerAddresses).m_hash();
+        bytes32 relayerArrayHash = _relayerAddresses.cd_hash();
+
+        getRMStorage().relayerStateVersionManager.setPendingState(
+            _getRelayerStateHash(cdfHash, relayerArrayHash), _windowIndex(block.number)
+        );
+    }
+
+    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal {
+        // Update cdf hash
+        bytes32 cdfHash = _generateCdfArray_m(_relayerAddresses).m_hash();
+        bytes32 relayerArrayHash = _relayerAddresses.m_hash();
+
+        getRMStorage().relayerStateVersionManager.setPendingState(
+            _getRelayerStateHash(cdfHash, relayerArrayHash), _windowIndex(block.number)
+        );
     }
 
     ////////////////////////////// Delegation ////////////////////////

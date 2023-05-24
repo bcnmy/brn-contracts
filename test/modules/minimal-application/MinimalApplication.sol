@@ -17,12 +17,11 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
         emit MessageEmitted(_data);
     }
 
-    function allocateMinimalApplicationTransaction(AllocateTransactionParams calldata _params)
-        external
-        view
-        override
-        returns (bytes[] memory, uint256, uint256)
-    {
-        return _allocateTransaction(_params);
+    function allocateMinimalApplicationTransaction(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external view override returns (bytes[] memory, uint256, uint256) {
+        return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
 }

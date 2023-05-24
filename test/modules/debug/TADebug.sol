@@ -31,7 +31,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         override
         returns (bool)
     {
-        return getRMStorage().cdfVersionManager.verifyHashAgainstActiveState(_array.cd_hash(), __windowIndex);
+        return getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(_array.cd_hash(), __windowIndex);
     }
 
     function debug_currentWindowIndex() external view override returns (uint256) {

@@ -9,7 +9,7 @@ import "./TAProxyStorage.sol";
 import "./modules/delegation/TADelegationStorage.sol";
 import "./modules/relayer-management/TARelayerManagementStorage.sol";
 import "./modules/transaction-allocation/TATransactionAllocationStorage.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
+
 import "src/transaction-allocator/common/TATypes.sol";
 import "src/library/VersionManager.sol";
 
@@ -80,10 +80,7 @@ contract TAProxy is
         }
 
         // Initial State
-        rms.latestActiveRelayerStakeArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
-        tds.delegationArrayHash = keccak256(abi.encodePacked(new uint32[](0)));
-        rms.cdfVersionManager.initialize(keccak256(abi.encodePacked(new uint32[](0))));
-        rms.activeRelayerListVersionManager.initialize(keccak256(abi.encodePacked(new RelayerAddress[](0))));
+        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(new uint32[](0))));
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
 

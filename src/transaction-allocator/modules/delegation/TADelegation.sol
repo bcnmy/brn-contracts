@@ -16,6 +16,7 @@ import "../../common/TAHelpers.sol";
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
+    using U16ArrayHelper for uint16[];
     using U32ArrayHelper for uint32[];
     using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
@@ -79,31 +80,14 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
     }
 
-    function _updateDelegationInCdf(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray,
-        uint256 _relayerIndex,
-        uint256 _updatedDelegationValue
-    ) internal {
-        uint32[] memory _newDelegationArray =
-            _currentDelegationArray.cd_update(_relayerIndex, _scaleDelegation(_updatedDelegationValue));
-        _updateCdf(_currentStakeArray, false, _newDelegationArray, true);
-    }
-
-    function delegate(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _prevDelegationArray,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerIndex,
-        uint256 _amount
-    ) external override {
-        if (_relayerIndex >= _activeRelayers.length) {
+    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external override {
+        if (_relayerIndex >= _latestState.relayers.length) {
             revert InvalidRelayerIndex();
         }
 
-        _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
+        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
-        RelayerAddress relayerAddress = _activeRelayers[_relayerIndex];
+        RelayerAddress relayerAddress = _latestState.relayers[_relayerIndex];
         // TODO: _updateRelayerProtocolRewards(relayerAddress);
 
         getRMStorage().bondToken.safeTransferFrom(msg.sender, address(this), _amount);
@@ -118,9 +102,8 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
         }
 
-        _updateDelegationInCdf(
-            _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[relayerAddress]
-        );
+        // Update the CDF
+        _updateCdf_c(_latestState.relayers);
     }
 
     function _processRewards(RelayerAddress _relayerAddress, TokenAddress _pool, DelegatorAddress _delegatorAddress)
@@ -142,26 +125,22 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     // TODO: Non Reentrant
-    function unDelegate(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _prevDelegationArray,
-        RelayerAddress[] calldata _activeRelayers,
-        RelayerAddress _relayerAddress,
-        uint256 _relayerIndex
-    ) external override {
+    function unDelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
+        external
+        override
+    {
         bool shouldUpdateCdf = false;
 
-        if (_relayerIndex < _activeRelayers.length && _activeRelayers[_relayerIndex] == _relayerAddress) {
+        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        if (_relayerIndex < _latestState.relayers.length && _latestState.relayers[_relayerIndex] == _relayerAddress) {
             // Relayer is active in the pending state, therefore it's CDF should be updated
-            _verifyExternalStateForCdfUpdation(_currentStakeArray, _prevDelegationArray, _activeRelayers);
             shouldUpdateCdf = true;
         } else {
             // Relayer is not active in the pending state, therefore it's CDF should not be updated
             // We need to verify that the relayer is not present in the active relayers array at all,
             // by scanning the array linearly
             // In this case, the relayerIndex should not be used.
-            _verifyLatestActiveRelayerList(_activeRelayers);
-            if (_activeRelayers.cd_linearSearch(_relayerAddress) != _activeRelayers.length) {
+            if (_latestState.relayers.cd_linearSearch(_relayerAddress) != _latestState.relayers.length) {
                 revert RelayerIsActiveInPendingState();
             }
         }
@@ -192,9 +171,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
         if (shouldUpdateCdf) {
-            _updateDelegationInCdf(
-                _currentStakeArray, _prevDelegationArray, _relayerIndex, ds.totalDelegation[_relayerAddress]
-            );
+            _updateCdf_c(_latestState.relayers);
         }
     }
 
@@ -273,28 +250,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     {
         TADStorage storage ds = getTADStorage();
         return ds.unclaimedRewards[_relayerAddress][_tokenAddress];
-    }
-
-    function getDelegationArray(RelayerAddress[] calldata _activeRelayers)
-        external
-        view
-        override
-        verifyLatestActiveRelayerList(_activeRelayers)
-        returns (uint32[] memory)
-    {
-        TADStorage storage ds = getTADStorage();
-        uint256 length = _activeRelayers.length;
-        uint32[] memory delegationArray = new uint32[](length);
-
-        for (uint256 i; i != length;) {
-            RelayerAddress relayerAddress = _activeRelayers[i];
-            delegationArray[i] = _scaleDelegation(ds.totalDelegation[relayerAddress]);
-            unchecked {
-                ++i;
-            }
-        }
-
-        return delegationArray;
     }
 
     function supportedPools() external view override returns (TokenAddress[] memory) {
