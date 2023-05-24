@@ -15,6 +15,7 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
         uint256 relayerGenerationIterationBitmap;
         RelayerState activeState;
         RelayerState latestState;
+        uint256[] activeStateToPendingStateMap;
     }
 
     function execute(ExecuteParams calldata _data) external payable;

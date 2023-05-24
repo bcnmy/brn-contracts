@@ -54,13 +54,23 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         );
 
         // Run liveness checks for last epoch, if neeeded
-        _processLivenessCheck(_params.activeState, _params.latestState);
+        _processLivenessCheck(_params.activeState, _params.latestState, _params.activeStateToPendingStateMap);
+
+        // Process any pending Updates
+        uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
+        getRMStorage().relayerStateVersionManager.setPendingStateForActivation(updateWindowIndex);
+
+        TAStorage storage ts = getTAStorage();
+
+        // Update the epoch end time
+        uint256 newEpochEndTimestamp = block.timestamp + ts.epochLengthInSec;
+        ts.epochEndTimestamp = newEpochEndTimestamp;
+        emit EpochEndTimestampUpdated(newEpochEndTimestamp);
 
         // Record Liveness Metrics
-        TAStorage storage ts = getTAStorage();
         unchecked {
-            ++ts.transactionsSubmitted[ts.epochEndTimestamp][relayerAddress];
-            ++ts.totalTransactionsSubmitted[ts.epochEndTimestamp];
+            ++ts.transactionsSubmitted[newEpochEndTimestamp][relayerAddress];
+            ++ts.totalTransactionsSubmitted[newEpochEndTimestamp];
         }
 
         // TODO: Check how to update this logic
@@ -175,13 +185,24 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ///////////////////////////////// Liveness ///////////////////////////////
     // TODO: Split the penalty b/w DAO and relayer
     // TODO: Jail the relayer, the relayer needs to topup or leave with their money
-    function _processLivenessCheck(RelayerState calldata _activeState, RelayerState calldata _pendingState) internal {
+
+    struct ProcessLivenessCheckMemoryState {
+        uint256 activeRelayersJailedCount;
+        uint256 totalPenalty;
+        RelayerAddress[] newRelayerList;
+    }
+
+    function _processLivenessCheck(
+        RelayerState calldata _activeState,
+        RelayerState calldata _pendingState,
+        uint256[] calldata _activeStateToPendingStateMap
+    ) internal {
         TAStorage storage ts = getTAStorage();
         RMStorage storage rms = getRMStorage();
 
         uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
 
-        if (ts.epochEndTimestamp < block.timestamp) {
+        if (epochEndTimestamp_ < block.timestamp) {
             emit LivenessCheckAlreadyProcessed();
             return;
         }
@@ -195,12 +216,30 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             return;
         }
 
-        uint256 relayerCount = _activeState.relayers.length;
-        bool shouldUpdateCdf;
+        // Save stuff to memory to help with stack too deep error
+        ProcessLivenessCheckMemoryState memory state;
 
-        for (uint256 i; i != relayerCount;) {
-            if (_processLivnessCheckForRelayer(_activeState, i, epochEndTimestamp_, totalTransactionsInEpoch)) {
-                shouldUpdateCdf = true;
+        uint256 activeRelayerCount = _activeState.relayers.length;
+        for (uint256 i; i != activeRelayerCount;) {
+            RelayerStatus statusBeforeLivenessCheck = rms.relayerInfo[_activeState.relayers[i]].status;
+
+            (bool relayerWasJailed, uint256 penalty) =
+                _processLivenessCheckForRelayer(_activeState, i, epochEndTimestamp_, totalTransactionsInEpoch);
+
+            state.totalPenalty += penalty;
+
+            // If the relayer was active and jailed, we need to remove it from the list of active relayers
+            if (relayerWasJailed && statusBeforeLivenessCheck == RelayerStatus.Active) {
+                // Initialize jailedRelayers array if it is not initialized
+                if (state.activeRelayersJailedCount == 0) {
+                    state.newRelayerList = _pendingState.relayers;
+                }
+                _removeRelayerFromRelayerList(
+                    state.newRelayerList, _activeState.relayers[i], _activeStateToPendingStateMap[i]
+                );
+                unchecked {
+                    ++state.activeRelayersJailedCount;
+                }
             }
 
             unchecked {
@@ -208,51 +247,89 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
         }
 
-        // Schedule CDF Update if Necessary
-        if (shouldUpdateCdf) {
-            _verifyExternalStateForCdfUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
-            _updateCdf_c(_pendingState.relayers);
-        }
+        _postLivnessCheck(_pendingState, state.totalPenalty, state.activeRelayersJailedCount, state.newRelayerList);
 
-        // Process any pending Updates
-        uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
-        rms.relayerStateVersionManager.setPendingStateForActivation(updateWindowIndex);
-
-        // Update the epoch end time
-        ts.epochEndTimestamp = block.timestamp + ts.epochLengthInSec;
-        emit EpochEndTimestampUpdated(ts.epochEndTimestamp);
+        emit LivenessCheckProcessed(epochEndTimestamp_);
     }
 
-    function _processLivnessCheckForRelayer(
+    function _processLivenessCheckForRelayer(
         RelayerState calldata _activeState,
         uint256 _relayerIndex,
         uint256 _epochEndTimestamp,
         FixedPointType _totalTransactionsInEpoch
-    ) internal returns (bool) {
+    ) internal returns (bool relayerWasJailed, uint256 penalty) {
         if (_verifyRelayerLiveness(_activeState, _relayerIndex, _epochEndTimestamp, _totalTransactionsInEpoch)) {
-            return false;
+            return (false, penalty);
         }
 
         RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
 
         // Penalize the relayer
-        (uint256 newStake, uint256 penalty) = _penalizeRelayer(relayerAddress);
+        (uint256 stakeAfterPenalization, uint256 penalty_) = _penalizeRelayer(relayerAddress);
+        penalty = penalty_;
 
-        if (newStake < MINIMUM_STAKE_AMOUNT) {
-            // TODO: Jail the relayer
+        if (stakeAfterPenalization < MINIMUM_STAKE_AMOUNT) {
+            _jailRelayer(relayerAddress);
+            relayerWasJailed = true;
+        }
+    }
+
+    function _postLivnessCheck(
+        RelayerState calldata _pendingState,
+        uint256 _totalPenalty,
+        uint256 _activeRelayersJailedCount,
+        RelayerAddress[] memory _postJailRelayerList
+    ) internal {
+        RMStorage storage rms = getRMStorage();
+
+        // Update Global Counters
+        if (_totalPenalty != 0) {
+            rms.totalStake -= _totalPenalty;
+        }
+        if (_activeRelayersJailedCount != 0) {
+            rms.relayerCount -= _activeRelayersJailedCount;
         }
 
-        // TODO: What should be done with the penalty amount?
-        emit RelayerPenalized(relayerAddress, newStake, penalty);
+        // Schedule CDF Update if Necessary
+        if (_totalPenalty != 0 || _activeRelayersJailedCount != 0) {
+            _verifyExternalStateForCdfUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
+            if (_activeRelayersJailedCount == 0) {
+                _updateCdf_c(_pendingState.relayers);
+            } else {
+                _updateCdf_m(_postJailRelayerList);
+            }
+        }
 
-        return true;
+        // Transfer the penalty to the caller
+        if (_totalPenalty != 0) {
+            _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, _totalPenalty);
+        }
+    }
+
+    function _jailRelayer(RelayerAddress _relayerAddress) internal {
+        getRMStorage().relayerInfo[_relayerAddress].status = RelayerStatus.Jailed;
+        emit RelayerJailed(_relayerAddress);
     }
 
     function _penalizeRelayer(RelayerAddress _relayerAddress) internal returns (uint256, uint256) {
         RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[_relayerAddress];
         uint256 penalty = _calculatePenalty(relayerInfo.stake);
         relayerInfo.stake -= penalty;
+
+        emit RelayerPenalized(_relayerAddress, relayerInfo.stake, penalty);
+
         return (relayerInfo.stake, penalty);
+    }
+
+    function _removeRelayerFromRelayerList(
+        RelayerAddress[] memory _relayerList,
+        RelayerAddress _expectedRelayerAddress,
+        uint256 _relayerIndex
+    ) internal pure {
+        if (_relayerList[_relayerIndex] != _expectedRelayerAddress) {
+            revert RelayerAddressMismatch(_relayerList[_relayerIndex], _expectedRelayerAddress);
+        }
+        _relayerList.m_remove(_relayerIndex);
     }
 
     function calculateMinimumTranasctionsForLiveness(

@@ -20,6 +20,7 @@ interface ITATransactionAllocationEventsErrors {
     error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
     error CannotProcessLivenessCheckForCurrentOrFutureEpoch();
     error RelayerIndexMappingMismatch(uint256 oldIndex, uint256 newIndex);
+    error RelayerAddressMismatch(RelayerAddress expectedAddress, RelayerAddress actualAddress);
 
     event PrepaymentReceived(uint256 indexed index, uint256 indexed amount, TokenAddress indexed tokenAddress);
     event GasFeeRefunded(
@@ -29,7 +30,9 @@ interface ITATransactionAllocationEventsErrors {
     event RelayerPenalized(
         RelayerAddress indexed relayerAddress, uint256 indexed newStake, uint256 indexed penaltyAmount
     );
+    event RelayerJailed(RelayerAddress indexed relayerAddress);
     event LivenessCheckAlreadyProcessed();
+    event LivenessCheckProcessed(uint256 indexed epochEndTimestamp);
     event NoTransactionsSubmittedInEpoch();
     event EpochEndTimestampUpdated(uint256 indexed epochEndTimestamp);
 }
