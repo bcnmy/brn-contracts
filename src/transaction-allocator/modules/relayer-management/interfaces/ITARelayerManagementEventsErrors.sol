@@ -15,6 +15,8 @@ interface ITARelayerManagementEventsErrors {
     error RelayerAlreadyRegistered();
     error RelayerNotActive();
     error RelayerNotExiting();
+    error RelayerNotJailed();
+    error RelayerJailNotExpired(uint256 jailedUntilTimestamp);
 
     event RelayerRegistered(
         RelayerAddress indexed relayer,
@@ -36,4 +38,5 @@ interface ITARelayerManagementEventsErrors {
     event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event RelayerProtocolRewardsClaimed(RelayerAddress indexed relayer, uint256 indexed amount);
+    event RelayerUnjailed(RelayerAddress indexed relayer);
 }

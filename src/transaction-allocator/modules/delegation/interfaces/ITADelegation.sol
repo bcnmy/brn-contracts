@@ -8,7 +8,7 @@ import "ta-common/TATypes.sol";
 interface ITADelegation is ITADelegationEventsErrors {
     function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external;
 
-    function unDelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
         external;
 
     function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)

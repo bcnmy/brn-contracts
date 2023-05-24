@@ -302,8 +302,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     function _jailRelayer(RelayerAddress _relayerAddress) internal {
-        getRMStorage().relayerInfo[_relayerAddress].status = RelayerStatus.Jailed;
-        emit RelayerJailed(_relayerAddress);
+        RMStorage storage rms = getRMStorage();
+        RelayerInfo storage relayerInfo = rms.relayerInfo[_relayerAddress];
+
+        uint256 jailedUntilTimestamp = block.timestamp + rms.jailTimeInSec;
+        relayerInfo.status = RelayerStatus.Jailed;
+        relayerInfo.jailedUntilTimestamp = jailedUntilTimestamp;
+        emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
     }
 
     function _penalizeRelayer(RelayerAddress _relayerAddress) internal returns (uint256, uint256) {

@@ -30,7 +30,7 @@ interface ITATransactionAllocationEventsErrors {
     event RelayerPenalized(
         RelayerAddress indexed relayerAddress, uint256 indexed newStake, uint256 indexed penaltyAmount
     );
-    event RelayerJailed(RelayerAddress indexed relayerAddress);
+    event RelayerJailed(RelayerAddress indexed relayerAddress, uint256 jailedUntilTimestamp);
     event LivenessCheckAlreadyProcessed();
     event LivenessCheckProcessed(uint256 indexed epochEndTimestamp);
     event NoTransactionsSubmittedInEpoch();

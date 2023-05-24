@@ -75,7 +75,7 @@ contract TARelayerManagement is
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
-    function unRegister(RelayerState calldata _latestState, uint256 _relayerIndex)
+    function unregister(RelayerState calldata _latestState, uint256 _relayerIndex)
         external
         override
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
@@ -129,6 +129,52 @@ contract TARelayerManagement is
         delete rms.relayerInfo[relayerAddress];
     }
 
+    function unjail(RelayerState calldata _latestState, uint256 _stake) external override {
+        RMStorage storage rms = getRMStorage();
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+
+        if (node.status != RelayerStatus.Jailed) {
+            revert RelayerNotJailed();
+        }
+        if (node.jailedUntilTimestamp > block.timestamp) {
+            revert RelayerJailNotExpired(node.jailedUntilTimestamp);
+        }
+        if (node.stake + _stake < rms.minimumStakeAmount) {
+            revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
+        }
+        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+
+        // Transfer stake amount
+        rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+
+        // Update RelayerInfo
+        delete node.jailedUntilTimestamp;
+        node.status = RelayerStatus.Active;
+        node.stake += _stake;
+
+        // Update Global Counters
+        rms.totalStake += _stake;
+        ++rms.relayerCount;
+
+        // Schedule CDF Update
+        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
+        _updateCdf_m(newActiveRelayers);
+
+        emit RelayerUnjailed(relayerAddress);
+    }
+
+    ////////////////////////// Relayer Configuration //////////////////////////
+    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
+        external
+        override
+        onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
+    {
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        _setRelayerAccountAddresses(relayerAddress, _accounts);
+        emit RelayerAccountsUpdated(relayerAddress, _accounts);
+    }
+
     function _setRelayerAccountAddresses(RelayerAddress _relayerAddress, RelayerAccountAddress[] memory _accounts)
         internal
     {
@@ -153,19 +199,6 @@ contract TARelayerManagement is
         }
         node.relayerAccountAddresses = _accounts;
     }
-
-    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
-        external
-        override
-        onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
-    {
-        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        _setRelayerAccountAddresses(relayerAddress, _accounts);
-        emit RelayerAccountsUpdated(relayerAddress, _accounts);
-    }
-
-    ////////////////////////// Relayer Configuration //////////////////////////
-    // TODO: Jailed relayers should not be able to update their configuration
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function claimProtocolReward() public override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {

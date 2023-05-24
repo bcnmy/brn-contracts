@@ -127,11 +127,11 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expTotalDelegation[r] += amount;
     }
 
-    function unDelegate(RelayerAddress r, DelegatorAddress d) internal {
+    function undelegate(RelayerAddress r, DelegatorAddress d) internal {
         uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
         uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d);
-        ta.unDelegate(stakeArray, delegationArray, activeRelayers, r, _findRelayerIndex(r));
+        ta.undelegate(stakeArray, delegationArray, activeRelayers, r, _findRelayerIndex(r));
 
         expTotalDelegation[r] -= expDelegation[r][d];
         expDelegation[r][d] = 0;
@@ -202,13 +202,13 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
         uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        unDelegate(r0, d0);
+        undelegate(r0, d0);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
 
         uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
         uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        unDelegate(r0, d1);
+        undelegate(r0, d1);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
@@ -235,13 +235,13 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
         uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        unDelegate(r0, d0);
+        undelegate(r0, d0);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
 
         uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
         uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        unDelegate(r0, d1);
+        undelegate(r0, d1);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }

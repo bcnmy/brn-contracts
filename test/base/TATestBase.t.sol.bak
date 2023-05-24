@@ -171,7 +171,7 @@ abstract contract TATestBase is Test {
 
         uint256 relayerIndex = _findRelayerIndex(_relayerAddress);
 
-        ta.unRegister(_stakeArray, _delegationArray, activeRelayers, relayerIndex);
+        ta.unregister(_stakeArray, _delegationArray, activeRelayers, relayerIndex);
         vm.stopPrank();
 
         // Update Active Relayers

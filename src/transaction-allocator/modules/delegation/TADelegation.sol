@@ -125,7 +125,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     // TODO: Non Reentrant
-    function unDelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
         external
         override
     {

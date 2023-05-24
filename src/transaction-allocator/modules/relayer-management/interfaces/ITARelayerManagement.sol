@@ -18,9 +18,11 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
         uint256 _delegatorPoolPremiumShare
     ) external;
 
-    function unRegister(RelayerState calldata _latestState, uint256 _relayerIndex) external;
+    function unregister(RelayerState calldata _latestState, uint256 _relayerIndex) external;
 
     function withdraw() external;
+
+    function unjail(RelayerState calldata _latestState, uint256 _stake) external;
 
     function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts) external;
 
