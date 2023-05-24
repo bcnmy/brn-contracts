@@ -45,8 +45,8 @@ contract TARelayerManagement is
         if (_accounts.length == 0) {
             revert NoAccountsProvided();
         }
-        if (_stake < MINIMUM_STAKE_AMOUNT) {
-            revert InsufficientStake(_stake, MINIMUM_STAKE_AMOUNT);
+        if (_stake < rms.minimumStakeAmount) {
+            revert InsufficientStake(_stake, rms.minimumStakeAmount);
         }
 
         if (node.status != RelayerStatus.Uninitialized) {
@@ -99,7 +99,7 @@ contract TARelayerManagement is
 
         // Set withdrawal Info
         node.status = RelayerStatus.Exiting;
-        node.minExitBlockNumber = block.number + RELAYER_WITHDRAW_DELAY_IN_BLOCKS;
+        node.minExitTimestamp = block.timestamp + rms.withdrawDelayInSec;
 
         // Set Global Counters
         // TODO: rms.totalShares = rms.totalShares - node.rewardShares;
@@ -119,8 +119,8 @@ contract TARelayerManagement is
             revert RelayerNotExiting();
         }
 
-        if (node.stake == 0 || node.minExitBlockNumber > block.number) {
-            revert InvalidWithdrawal(node.stake, block.number, node.minExitBlockNumber);
+        if (node.stake == 0 || node.minExitTimestamp > block.timestamp) {
+            revert InvalidWithdrawal(node.stake, block.timestamp, node.minExitTimestamp);
         }
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);
@@ -217,7 +217,8 @@ contract TARelayerManagement is
             delegatorPoolPremiumShare: node.delegatorPoolPremiumShare,
             relayerAccountAddresses: node.relayerAccountAddresses,
             status: node.status,
-            minExitBlockNumber: node.minExitBlockNumber,
+            minExitTimestamp: node.minExitTimestamp,
+            jailedUntilTimestamp: node.jailedUntilTimestamp,
             unpaidProtocolRewards: node.unpaidProtocolRewards,
             rewardShares: node.rewardShares
         });
@@ -258,5 +259,25 @@ contract TARelayerManagement is
         _verifyExternalStateForCdfUpdation(cdfArray.m_hash(), _latestActiveRelayers.cd_hash());
 
         return cdfArray;
+    }
+
+    function jailTimeInSec() external view override returns (uint256) {
+        return getRMStorage().jailTimeInSec;
+    }
+
+    function withdrawDelayInSec() external view override returns (uint256) {
+        return getRMStorage().withdrawDelayInSec;
+    }
+
+    function absencePenaltyPercentage() external view override returns (uint256) {
+        return getRMStorage().absencePenaltyPercentage;
+    }
+
+    function minimumStakeAmount() external view override returns (uint256) {
+        return getRMStorage().minimumStakeAmount;
+    }
+
+    function relayerStateUpdateDelayInWindows() external view override returns (uint256) {
+        return getRMStorage().relayerStateUpdateDelayInWindows;
     }
 }

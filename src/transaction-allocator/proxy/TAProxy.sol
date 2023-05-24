@@ -64,12 +64,18 @@ contract TAProxy is
 
         // Config
         rms.blocksPerWindow = _params.blocksPerWindow;
+        tas.epochLengthInSec = _params.epochLengthInSec;
         rms.relayersPerWindow = _params.relayersPerWindow;
+        rms.jailTimeInSec = _params.jailTimeInSec;
+        rms.withdrawDelayInSec = _params.withdrawDelayInSec;
+        rms.absencePenaltyPercentage = _params.absencePenaltyPercentage;
+        rms.minimumStakeAmount = _params.minimumStakeAmount;
+        tds.minimumDelegationAmount = _params.minimumDelegationAmount;
+        tds.baseRewardRatePerMinimumStakePerSec = _params.baseRewardRatePerMinimumStakePerSec;
+        rms.relayerStateUpdateDelayInWindows = _params.relayerStateUpdateDelayInWindows;
+        tas.livenessZParameter = FixedPointType.wrap(_params.livenessZParameter);
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
-        tas.epochLengthInSec = _params.epochLengthInSec;
-        tas.epochEndTimestamp = block.timestamp + _params.epochLengthInSec;
-
         uint256 length = _params.supportedTokens.length;
         for (uint256 i; i != length;) {
             rms.isGasTokenSupported[_params.supportedTokens[i]] = true;
@@ -79,6 +85,7 @@ contract TAProxy is
         }
 
         // Initial State
+        tas.epochEndTimestamp = block.timestamp + _params.epochLengthInSec;
         rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(new uint32[](0))));
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }

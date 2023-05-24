@@ -11,6 +11,8 @@ abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");
 
     struct TADStorage {
+        uint256 minimumDelegationAmount;
+        uint256 baseRewardRatePerMinimumStakePerSec;
         mapping(RelayerAddress => uint256) totalDelegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => FixedPointType))) shares;

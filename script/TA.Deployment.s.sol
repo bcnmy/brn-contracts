@@ -38,18 +38,19 @@ contract TADeploymentScript is Script {
             blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
             epochLengthInSec: vm.parseJsonUint(deploymentConfigStr, ".epochLengthInSec"),
             relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
+            jailTimeInSec: vm.parseJsonUint(deploymentConfigStr, ".jailTimeInSec"),
+            withdrawDelayInSec: vm.parseJsonUint(deploymentConfigStr, ".withdrawDelayInSec"),
+            absencePenaltyPercentage: vm.parseJsonUint(deploymentConfigStr, ".absencePenaltyPercentage"),
+            minimumStakeAmount: vm.parseJsonUint(deploymentConfigStr, ".minimumStakeAmount"),
+            minimumDelegationAmount: vm.parseJsonUint(deploymentConfigStr, ".minimumDelegationAmount"),
+            baseRewardRatePerMinimumStakePerSec: vm.parseJsonUint(
+                deploymentConfigStr, ".baseRewardRatePerMinimumStakePerSec"
+                ),
+            relayerStateUpdateDelayInWindows: vm.parseJsonUint(deploymentConfigStr, ".relayerStateUpdateDelayInWindows"),
+            livenessZParameter: vm.parseJsonUint(deploymentConfigStr, ".livenessZParameter"),
             bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
             supportedTokens: supportedTokens
         });
-        console2.log("Deployment Config: ");
-        console2.log("  blocksPerWindow: ", params.blocksPerWindow);
-        console2.log("  epochLengthInSec: ", params.epochLengthInSec);
-        console2.log("  relayersPerWindow: ", params.relayersPerWindow);
-        console2.log("  bondToken: ", TokenAddress.unwrap(params.bondTokenAddress));
-        console2.log("  supportedTokens: ");
-        for (uint256 i = 0; i < params.supportedTokens.length; i++) {
-            console2.log("    ", TokenAddress.unwrap(params.supportedTokens[i]));
-        }
 
         // Deploy
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");

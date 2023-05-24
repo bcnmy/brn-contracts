@@ -46,4 +46,8 @@ interface ITADelegation is ITADelegationEventsErrors {
         returns (uint256);
 
     function supportedPools() external view returns (TokenAddress[] memory);
+
+    function minimumDelegationAmount() external view returns (uint256);
+
+    function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 }

@@ -13,26 +13,34 @@ abstract contract TARelayerManagementStorage {
 
     // Relayer Information
     struct RelayerInfo {
+        // Info
         uint256 stake;
         string endpoint;
-        uint256 delegatorPoolPremiumShare; // *100
         RelayerAccountAddress[] relayerAccountAddresses;
         mapping(RelayerAccountAddress => bool) isAccount;
+        // Relayer Status
         RelayerStatus status;
-        uint256 minExitBlockNumber;
+        uint256 minExitTimestamp;
+        uint256 jailedUntilTimestamp;
         // TODO: Reward share related data should be moved to it's own mapping
+        // Delegation
+        uint256 delegatorPoolPremiumShare; // *100
         uint256 unpaidProtocolRewards;
         FixedPointType rewardShares;
     }
 
-    // TODO: Check packing
     struct RMStorage {
         // Config
         IERC20 bondToken;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
+        uint256 jailTimeInSec;
+        uint256 withdrawDelayInSec;
+        uint256 absencePenaltyPercentage;
+        uint256 minimumStakeAmount;
+        uint256 relayerStateUpdateDelayInWindows;
+        // Relayer State Management
         VersionManager.VersionManagerState relayerStateVersionManager;
         // Maps relayer address to pending withdrawals
         mapping(TokenAddress => bool isGasTokenSupported) isGasTokenSupported;
@@ -40,7 +48,7 @@ abstract contract TARelayerManagementStorage {
         uint256 unpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;
         FixedPointType totalShares;
-        // Latest State. TODO: Verify if using these are safe or not.
+        // Latest State.
         uint256 relayerCount;
         uint256 totalStake;
     }

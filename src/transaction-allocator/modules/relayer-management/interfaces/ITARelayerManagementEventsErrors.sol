@@ -7,7 +7,7 @@ import "ta-common/TATypes.sol";
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
-    error InvalidWithdrawal(uint256 amount, uint256 currentBlock, uint256 minValidBlock);
+    error InvalidWithdrawal(uint256 amount, uint256 currentTimestamp, uint256 minValidTimestamp);
     error AbsenteeWasPresent(uint256 absenteewindowIndex);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error GasTokenAlreadySupported(TokenAddress token);

@@ -19,7 +19,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     /// @notice allows relayer to execute a tx on behalf of a client
-    // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
     function execute(ExecuteParams calldata _params) public payable {
         uint256 length = _params.reqs.length;
         if (length != _params.forwardedNativeAmounts.length) {
@@ -182,9 +181,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Liveness ///////////////////////////////
-    // TODO: Split the penalty b/w DAO and relayer
-    // TODO: Jail the relayer, the relayer needs to topup or leave with their money
-
     struct ProcessLivenessCheckMemoryState {
         uint256 activeRelayersJailedCount;
         uint256 totalPenalty;
@@ -267,7 +263,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         (uint256 stakeAfterPenalization, uint256 penalty_) = _penalizeRelayer(relayerAddress);
         penalty = penalty_;
 
-        if (stakeAfterPenalization < MINIMUM_STAKE_AMOUNT) {
+        if (stakeAfterPenalization < getRMStorage().minimumStakeAmount) {
             _jailRelayer(relayerAddress);
             relayerWasJailed = true;
         }
@@ -375,7 +371,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 relayerStakeNormalized,
                 _activeState.cdf[_activeState.cdf.length - 1],
                 _totalTransactionsInEpoch,
-                LIVENESS_Z_PARAMETER
+                ts.livenessZParameter
             );
         }
 
@@ -385,8 +381,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return transactionsProcessedByRelayer.fp() >= minimumTransactions;
     }
 
-    function _calculatePenalty(uint256 _stake) internal pure returns (uint256) {
-        return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
+    function _calculatePenalty(uint256 _stake) internal view returns (uint256) {
+        return (_stake * getRMStorage().absencePenaltyPercentage) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
     ///////////////////////////////// Getters ///////////////////////////////
@@ -404,5 +400,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     function epochEndTimestamp() external view override returns (uint256) {
         return getTAStorage().epochEndTimestamp;
+    }
+
+    function livenessZParameter() external view override returns (FixedPointType) {
+        return getTAStorage().livenessZParameter;
     }
 }

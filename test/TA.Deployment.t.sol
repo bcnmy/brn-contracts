@@ -22,6 +22,14 @@ contract TADeploymentTest is Test {
             blocksPerWindow: 1,
             epochLengthInSec: 100,
             relayersPerWindow: 3,
+            jailTimeInSec: 100,
+            withdrawDelayInSec: 50,
+            absencePenaltyPercentage: 250,
+            minimumStakeAmount: 10000000000000000000000,
+            minimumDelegationAmount: 100000000000000000,
+            baseRewardRatePerMinimumStakePerSec: 1003000000000,
+            relayerStateUpdateDelayInWindows: 1,
+            livenessZParameter: 3300000000000000000000000,
             bondTokenAddress: TokenAddress.wrap(address(this)),
             supportedTokens: supportedTokens
         });

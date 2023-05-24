@@ -255,4 +255,12 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     function supportedPools() external view override returns (TokenAddress[] memory) {
         return getTADStorage().supportedPools;
     }
+
+    function minimumDelegationAmount() external view override returns (uint256) {
+        return getTADStorage().minimumDelegationAmount;
+    }
+
+    function baseRewardRatePerMinimumStakePerSec() external view override returns (uint256) {
+        return getTADStorage().baseRewardRatePerMinimumStakePerSec;
+    }
 }

@@ -78,7 +78,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     function _nextWindowForUpdate(uint256 _blockNumber) internal view returns (uint256) {
-        return _windowIndex(_blockNumber) + CDF_UPDATE_DELAY_IN_WINDOWS;
+        return _windowIndex(_blockNumber) + getRMStorage().relayerStateUpdateDelayInWindows;
     }
 
     function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
@@ -242,11 +242,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
-    // TODO: The relayer count and total stake should not come from storage
     function _protocolRewardRate() internal view returns (uint256) {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
         return (
-            BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.fp() * MINIMUM_STAKE_AMOUNT.fp()
-                * (getRMStorage().relayerCount.fp().sqrt())
+            ds.baseRewardRatePerMinimumStakePerSec.fp() * rs.minimumStakeAmount.fp() * (rs.relayerCount.fp().sqrt())
         ).u256();
     }
 

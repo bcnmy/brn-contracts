@@ -36,7 +36,8 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
         uint256 delegatorPoolPremiumShare;
         RelayerAccountAddress[] relayerAccountAddresses;
         RelayerStatus status;
-        uint256 minExitBlockNumber;
+        uint256 minExitTimestamp;
+        uint256 jailedUntilTimestamp;
         uint256 unpaidProtocolRewards;
         FixedPointType rewardShares;
     }
@@ -52,4 +53,14 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function blocksPerWindow() external view returns (uint256);
 
     function bondTokenAddress() external view returns (TokenAddress);
+
+    function jailTimeInSec() external view returns (uint256);
+
+    function withdrawDelayInSec() external view returns (uint256);
+
+    function absencePenaltyPercentage() external view returns (uint256);
+
+    function minimumStakeAmount() external view returns (uint256);
+
+    function relayerStateUpdateDelayInWindows() external view returns (uint256);
 }
