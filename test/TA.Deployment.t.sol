@@ -18,7 +18,7 @@ contract TADeploymentTest is Test {
 
     function testDeployment() external {
         supportedTokens.push(TokenAddress.wrap(address(this)));
-        InitalizerParams memory params = InitalizerParams({
+        ITAProxy.InitalizerParams memory params = ITAProxy.InitalizerParams({
             blocksPerWindow: 1,
             epochLengthInSec: 100,
             relayersPerWindow: 3,

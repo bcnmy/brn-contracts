@@ -11,10 +11,10 @@ interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAlloc
     struct ExecuteParams {
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;
-        RelayerState activeState;
-        RelayerState latestState;
         uint256 relayerIndex;
         uint256 relayerGenerationIterationBitmap;
+        RelayerState activeState;
+        RelayerState latestState;
     }
 
     function execute(ExecuteParams calldata _data) external payable;

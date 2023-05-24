@@ -85,15 +85,15 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return __windowIndex * getRMStorage().blocksPerWindow;
     }
 
-    function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
+    function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint16 _max)
         internal
         view
-        returns (uint256)
+        returns (uint16)
     {
         // The seed for jth iteration is a function of the base seed and j
         uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % _max);
+        return (seed % _max).toUint16();
     }
 
     function _verifyRelayerSelection(
@@ -111,7 +111,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         {
             // Verify Each Iteration against _cdfIndex in _cdf
-            uint256 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
+            uint16 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
 
             // TODO: Optimize iteration over set bits (potentially using x & -x flow)
@@ -122,7 +122,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
                     }
 
                     // Verify if correct stake prefix sum index has been provided
-                    uint256 randomRelayerStake =
+                    uint16 randomRelayerStake =
                         _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, maxCdfElement);
 
                     if (

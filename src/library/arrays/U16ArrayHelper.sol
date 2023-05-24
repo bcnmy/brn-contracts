@@ -52,6 +52,22 @@ library U16ArrayHelper {
         return keccak256(abi.encodePacked((_array)));
     }
 
+    function cd_lowerBound(uint16[] calldata _array, uint16 _target) internal pure returns (uint256) {
+        uint256 low = 0;
+        uint256 high = _array.length;
+        unchecked {
+            while (low < high) {
+                uint256 mid = (low + high) / 2;
+                if (_array[mid] < _target) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            }
+        }
+        return low;
+    }
+
     function m_hash(uint16[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }

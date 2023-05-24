@@ -21,7 +21,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     /// @notice allows relayer to execute a tx on behalf of a client
     // TODO: can we decrease calldata cost by using merkle proofs or square root decomposition?
-    // TODO: Non Reentrant?
     function execute(ExecuteParams calldata _params) public payable {
         uint256 length = _params.reqs.length;
         if (length != _params.forwardedNativeAmounts.length) {
@@ -54,9 +53,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _params.relayerGenerationIterationBitmap
         );
 
-        TAStorage storage ts = getTAStorage();
+        // Run liveness checks for last epoch, if neeeded
+        _processLivenessCheck(_params.activeState, _params.latestState);
 
         // Record Liveness Metrics
+        TAStorage storage ts = getTAStorage();
         unchecked {
             ++ts.transactionsSubmitted[ts.epochEndTimestamp][relayerAddress];
             ++ts.totalTransactionsSubmitted[ts.epochEndTimestamp];
@@ -126,22 +127,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /////////////////////////////// Allocation Helpers ///////////////////////////////
-    // TODO: Use oz
-    function _lowerBound(uint16[] calldata arr, uint256 target) internal pure returns (uint256) {
-        uint256 low = 0;
-        uint256 high = arr.length;
-        unchecked {
-            while (low < high) {
-                uint256 mid = (low + high) / 2;
-                if (arr[mid] < target) {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
-            }
-        }
-        return low;
-    }
 
     /// @notice Given a block number, the function generates a list of pseudo-random relayers
     ///         for the window of which the block in a part of. The generated list of relayers
@@ -177,8 +162,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 relayerCount = _activeState.relayers.length;
 
         for (uint256 i = 0; i != relayersPerWindow;) {
-            uint256 randomCdfNumber = _randomNumberForCdfSelection(block.number, i, _activeState.cdf[relayerCount - 1]);
-            cdfIndex[i] = _lowerBound(_activeState.cdf, randomCdfNumber);
+            uint16 randomCdfNumber = _randomNumberForCdfSelection(block.number, i, _activeState.cdf[relayerCount - 1]);
+            cdfIndex[i] = _activeState.cdf.cd_lowerBound(randomCdfNumber);
             selectedRelayers[i] = _activeState.relayers[cdfIndex[i]];
             unchecked {
                 ++i;
