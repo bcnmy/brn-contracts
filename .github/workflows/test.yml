@@ -37,8 +37,8 @@ jobs:
 
       - name: Run Forge build
         run: |
-          forge --version
-          forge build --sizes
+          FOUNDRY_PROFILE=test forge --version
+          FOUNDRY_PROFILE=test forge build --sizes
         id: build
 
       - name: Run Forge tests
