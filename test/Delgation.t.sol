@@ -9,7 +9,7 @@ import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
 
 // TODO: Testing mechanism needs to change
 // TODO: Add tests for delegation affecting CDF
-contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
+contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
 

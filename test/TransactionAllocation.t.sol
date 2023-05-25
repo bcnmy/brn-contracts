@@ -8,7 +8,7 @@ import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsError
 import "ta-common/interfaces/ITAHelpers.sol";
 import "./modules/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
 
-contract TATransactionAllocationTest is
+contract TransactionAllocationTest is
     TATestBase,
     ITATransactionAllocationEventsErrors,
     ITAHelpers,

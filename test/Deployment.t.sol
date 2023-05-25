@@ -8,7 +8,7 @@ import "forge-std/Test.sol";
 import "script/TA.Deployment.s.sol";
 import "src/library/FixedPointArithmetic.sol";
 
-contract TADeploymentTest is Test {
+contract DeploymentTest is Test {
     string constant mnemonic = "test test test test test test test test test test test junk";
 
     TADeploymentScript script;
