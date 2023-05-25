@@ -2,9 +2,9 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/ITAHelpers.sol";
 import "./TAConstants.sol";
@@ -27,6 +27,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
 
+    modifier measureGas(string memory _name) {
+        uint256 gasStart = gasleft();
+        _;
+        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
+    }
+
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlyActiveRelayer(RelayerAddress _relayer) {
         if (!_isActiveRelayer(_relayer)) {
@@ -43,7 +49,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return keccak256(abi.encodePacked(_cdfHash, _relayerArrayHash));
     }
 
-    function _verifyExternalStateForCdfUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash) internal view {
+    function _verifyExternalStateForRelayerStateUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash)
+        internal
+        view
+        measureGas("verifyExternalStateForRelayerStateUpdation")
+    {
         RMStorage storage rs = getRMStorage();
 
         if (
@@ -51,7 +61,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
                 _getRelayerStateHash(_cdfHash, _activeRelayersHash)
             )
         ) {
-            revert InvalidRelayersArrayHash();
+            revert InvalidLatestRelayerState();
         }
     }
 
@@ -59,7 +69,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         bytes32 _cdfHash,
         bytes32 _activeRelayersHash,
         uint256 _blockNumber
-    ) internal view {
+    ) internal view measureGas("verifyExternalStateForTransactionAllocation") {
         RMStorage storage rs = getRMStorage();
         uint256 windowIndex = _windowIndex(_blockNumber);
 
@@ -68,7 +78,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
                 _getRelayerStateHash(_cdfHash, _activeRelayersHash), windowIndex
             )
         ) {
-            revert InvalidCdfArrayHash();
+            revert InvalidActiveRelayerState();
         }
     }
 
@@ -102,7 +112,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    ) internal view returns (bool) {
+    ) internal view measureGas("_verifyRelayerSelection") returns (bool) {
         _verifyExternalStateForTransactionAllocation(
             _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), _blockNumber
         );
@@ -114,9 +124,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
             uint16 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
 
-            // TODO: Optimize iteration over set bits (potentially using x & -x flow)
+            // I wonder if an efficient implementation of __builtin_ctzl exists in solidity.
             while (_relayerGenerationIterationBitmap != 0) {
-                if (_relayerGenerationIterationBitmap % 2 == 1) {
+                if (_relayerGenerationIterationBitmap & 1 == 1) {
                     if (relayerGenerationIteration >= ds.relayersPerWindow) {
                         revert InvalidRelayerGenerationIteration();
                     }
@@ -154,7 +164,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
-    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers) internal view returns (uint16[] memory) {
+    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers)
+        internal
+        view
+        measureGas("_generateCdfArray_c")
+        returns (uint16[] memory)
+    {
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
@@ -184,7 +199,12 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers) internal view returns (uint16[] memory) {
+    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers)
+        internal
+        view
+        measureGas("_generateCdfArray_m")
+        returns (uint16[] memory)
+    {
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
@@ -214,7 +234,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal {
+    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal measureGas("_updateCdf_c") {
         // Update cdf hash
         bytes32 cdfHash = _generateCdfArray_c(_relayerAddresses).m_hash();
         bytes32 relayerArrayHash = _relayerAddresses.cd_hash();
@@ -224,7 +244,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         );
     }
 
-    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal {
+    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal measureGas("_updateCdf_m") {
         // Update cdf hash
         bytes32 cdfHash = _generateCdfArray_m(_relayerAddresses).m_hash();
         bytes32 relayerArrayHash = _relayerAddresses.m_hash();
@@ -334,14 +354,5 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
             token.safeTransfer(_to, _amount);
         }
-    }
-
-    // TODO: Measure gas and check if these are needed
-    function _scaleStake(uint256 _stake) internal pure returns (uint32) {
-        return (_stake / STAKE_SCALING_FACTOR).toUint32();
-    }
-
-    function _unscaleStake(uint32 _scaledStake) internal pure returns (uint256) {
-        return _scaledStake * STAKE_SCALING_FACTOR;
     }
 }

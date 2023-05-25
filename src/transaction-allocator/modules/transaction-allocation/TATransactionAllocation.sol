@@ -51,24 +51,29 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _params.relayerGenerationIterationBitmap
         );
 
-        // Run liveness checks for last epoch, if neeeded
-        _processLivenessCheck(_params.activeState, _params.latestState, _params.activeStateToPendingStateMap);
-
-        // Process any pending Updates
-        uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
-        getRMStorage().relayerStateVersionManager.setPendingStateForActivation(updateWindowIndex);
-
         TAStorage storage ts = getTAStorage();
+        uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
 
-        // Update the epoch end time
-        uint256 newEpochEndTimestamp = block.timestamp + ts.epochLengthInSec;
-        ts.epochEndTimestamp = newEpochEndTimestamp;
-        emit EpochEndTimestampUpdated(newEpochEndTimestamp);
+        if (block.timestamp >= epochEndTimestamp_) {
+            // Run liveness checks for last epoch
+            _processLivenessCheck(_params.activeState, _params.latestState, _params.activeStateToPendingStateMap);
+
+            // Process any pending Updates
+            uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
+            getRMStorage().relayerStateVersionManager.setPendingStateForActivation(updateWindowIndex);
+
+            // Update the epoch end time
+            epochEndTimestamp_ = block.timestamp + ts.epochLengthInSec;
+            ts.epochEndTimestamp = epochEndTimestamp_;
+            emit EpochEndTimestampUpdated(epochEndTimestamp_);
+        }
 
         // Record Liveness Metrics
-        unchecked {
-            ++ts.transactionsSubmitted[newEpochEndTimestamp][relayerAddress];
-            ++ts.totalTransactionsSubmitted[newEpochEndTimestamp];
+        if (_params.reqs.length != 0) {
+            unchecked {
+                ++ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress];
+                ++ts.totalTransactionsSubmitted[epochEndTimestamp_];
+            }
         }
 
         // TODO: Check how to update this logic
@@ -197,11 +202,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
 
-        if (epochEndTimestamp_ < block.timestamp) {
-            emit LivenessCheckAlreadyProcessed();
-            return;
-        }
-
         FixedPointType totalTransactionsInEpoch = ts.totalTransactionsSubmitted[epochEndTimestamp_].fp();
         delete ts.totalTransactionsSubmitted[epochEndTimestamp_];
 
@@ -287,7 +287,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Schedule CDF Update if Necessary
         if (_totalPenalty != 0 || _activeRelayersJailedCount != 0) {
-            _verifyExternalStateForCdfUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
+            _verifyExternalStateForRelayerStateUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
             if (_activeRelayersJailedCount == 0) {
                 _updateCdf_c(_pendingState.relayers);
             } else {

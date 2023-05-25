@@ -14,5 +14,10 @@
   "supportedTokens": [
     "0xf17e65822b568b3903685a7c9f496cf7656cc6c2",
     "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
-  ]
+  ],
+  "foundationRelayerAddress": "0xABC",
+  "foundationRelayerAccountAddresses": [],
+  "foundationRelayerStake": 10000000000000000000000,
+  "foundationRelayerEndpoint": "https://api.abc.com",
+  "foundationDelegatorPoolPremiumShare": 0
 }

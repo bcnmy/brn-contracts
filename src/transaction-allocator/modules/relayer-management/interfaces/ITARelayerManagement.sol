@@ -24,7 +24,7 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function unjail(RelayerState calldata _latestState, uint256 _stake) external;
 
-    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts) external;
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function claimProtocolReward() external;
@@ -32,11 +32,12 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     ////////////////////// Getters //////////////////////
     function relayerCount() external view returns (uint256);
 
+    function totalStake() external view returns (uint256);
+
     struct RelayerInfoView {
         uint256 stake;
         string endpoint;
         uint256 delegatorPoolPremiumShare;
-        RelayerAccountAddress[] relayerAccountAddresses;
         RelayerStatus status;
         uint256 minExitTimestamp;
         uint256 jailedUntilTimestamp;

@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/ITARelayerManagement.sol";
 import "./TARelayerManagementStorage.sol";
@@ -28,15 +28,14 @@ contract TARelayerManagement is
     using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////// Relayer Registration //////////////////////////
-
     function register(
         RelayerState calldata _latestState,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string calldata _endpoint,
         uint256 _delegatorPoolPremiumShare
-    ) external override {
-        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+    ) external override measureGas("register") {
+        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -48,7 +47,6 @@ contract TARelayerManagement is
         if (_stake < rms.minimumStakeAmount) {
             revert InsufficientStake(_stake, rms.minimumStakeAmount);
         }
-
         if (node.status != RelayerStatus.Uninitialized) {
             revert RelayerAlreadyRegistered();
         }
@@ -62,7 +60,7 @@ contract TARelayerManagement is
         node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
         //TODO: node.rewardShares = _mintProtocolRewardShares(_stake);
         node.status = RelayerStatus.Active;
-        _setRelayerAccountAddresses(relayerAddress, _accounts);
+        _setRelayerAccountStatus(relayerAddress, _accounts, true);
 
         // Update Global Counters
         ++rms.relayerCount;
@@ -78,9 +76,14 @@ contract TARelayerManagement is
     function unregister(RelayerState calldata _latestState, uint256 _relayerIndex)
         external
         override
+        measureGas("unregister")
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
-        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+
+        if (_latestState.cdf.length == 1) {
+            revert CannotUnregisterLastRelayer();
+        }
 
         // Verify relayer index
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -109,7 +112,8 @@ contract TARelayerManagement is
         emit RelayerUnRegistered(relayerAddress);
     }
 
-    function withdraw() external override {
+    // TODO: Allow relayers to provide a list of relayer account addresses to be deleted, which could result in potential gas refunds
+    function withdraw() external override measureGas("withdraw") {
         RMStorage storage rms = getRMStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -125,11 +129,10 @@ contract TARelayerManagement is
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);
 
-        _setRelayerAccountAddresses(relayerAddress, new RelayerAccountAddress[](0));
         delete rms.relayerInfo[relayerAddress];
     }
 
-    function unjail(RelayerState calldata _latestState, uint256 _stake) external override {
+    function unjail(RelayerState calldata _latestState, uint256 _stake) external override measureGas("unjail") {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
@@ -143,7 +146,7 @@ contract TARelayerManagement is
         if (node.stake + _stake < rms.minimumStakeAmount) {
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
         }
-        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
         // Transfer stake amount
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
@@ -165,39 +168,50 @@ contract TARelayerManagement is
     }
 
     ////////////////////////// Relayer Configuration //////////////////////////
-    function setRelayerAccounts(RelayerAccountAddress[] calldata _accounts)
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status)
         external
         override
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        _setRelayerAccountAddresses(relayerAddress, _accounts);
+        _setRelayerAccountStatus(relayerAddress, _accounts, _status);
         emit RelayerAccountsUpdated(relayerAddress, _accounts);
     }
 
-    function _setRelayerAccountAddresses(RelayerAddress _relayerAddress, RelayerAccountAddress[] memory _accounts)
-        internal
-    {
+    function _setRelayerAccountStatus(
+        RelayerAddress _relayerAddress,
+        RelayerAccountAddress[] memory _accounts,
+        bool[] calldata _status
+    ) internal measureGas("_setRelayerAccountStatus") {
         RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
 
-        // Delete old accounts
-        uint256 length = node.relayerAccountAddresses.length;
-        for (uint256 i; i != length;) {
-            node.isAccount[node.relayerAccountAddresses[i]] = false;
-            unchecked {
-                ++i;
-            }
+        if (_accounts.length != _status.length) {
+            revert ParameterLengthMismatch();
         }
 
         // Add new accounts
-        length = _accounts.length;
+        uint256 length = _accounts.length;
         for (uint256 i; i != length;) {
-            node.isAccount[_accounts[i]] = true;
+            node.isAccount[_accounts[i]] = _status[i];
             unchecked {
                 ++i;
             }
         }
-        node.relayerAccountAddresses = _accounts;
+    }
+
+    function _setRelayerAccountStatus(
+        RelayerAddress _relayerAddress,
+        RelayerAccountAddress[] memory _accounts,
+        bool _status
+    ) internal measureGas("_setRelayerAccountStatus") {
+        RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
+        uint256 length = _accounts.length;
+        for (uint256 i; i != length;) {
+            node.isAccount[_accounts[i]] = _status;
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
@@ -240,6 +254,10 @@ contract TARelayerManagement is
         return getRMStorage().relayerCount;
     }
 
+    function totalStake() external view override returns (uint256) {
+        return getRMStorage().totalStake;
+    }
+
     function relayerInfo(RelayerAddress _relayerAddress) external view override returns (RelayerInfoView memory) {
         RMStorage storage rms = getRMStorage();
         RelayerInfo storage node = rms.relayerInfo[_relayerAddress];
@@ -248,7 +266,6 @@ contract TARelayerManagement is
             stake: node.stake,
             endpoint: node.endpoint,
             delegatorPoolPremiumShare: node.delegatorPoolPremiumShare,
-            relayerAccountAddresses: node.relayerAccountAddresses,
             status: node.status,
             minExitTimestamp: node.minExitTimestamp,
             jailedUntilTimestamp: node.jailedUntilTimestamp,
@@ -289,7 +306,7 @@ contract TARelayerManagement is
         returns (uint16[] memory)
     {
         uint16[] memory cdfArray = _generateCdfArray_c(_latestActiveRelayers);
-        _verifyExternalStateForCdfUpdation(cdfArray.m_hash(), _latestActiveRelayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(cdfArray.m_hash(), _latestActiveRelayers.cd_hash());
 
         return cdfArray;
     }

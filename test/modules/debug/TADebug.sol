@@ -10,6 +10,7 @@ import "forge-std/console2.sol";
 
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using U16ArrayHelper for uint16[];
+    using RAArrayHelper for RelayerAddress[];
     using VersionManager for VersionManager.VersionManagerState;
 
     constructor() {
@@ -26,21 +27,23 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         ds.unclaimedRewards[_relayerAddress][_pool] += _amount;
     }
 
-    function debug_verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex)
+    function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
         external
         view
         override
         returns (bool)
     {
-        return getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(_array.cd_hash(), __windowIndex);
+        return getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(
+            _getRelayerStateHash(_relayerState.cdf.cd_hash(), _relayerState.relayers.cd_hash()), __windowIndex
+        );
     }
 
     function debug_currentWindowIndex() external view override returns (uint256) {
         return _windowIndex(block.number);
     }
 
-    function debug_cdfHash(uint16[] calldata _cdf) external pure override returns (bytes32) {
-        return _cdf.cd_hash();
+    function debug_relayerStateHash(RelayerState calldata _relayerState) external pure override returns (bytes32) {
+        return _getRelayerStateHash(_relayerState.cdf.cd_hash(), _relayerState.relayers.cd_hash());
     }
 
     function debug_setTransactionsProcessedByRelayer(RelayerAddress _relayerAddress, uint256 _transactionsProcessed)

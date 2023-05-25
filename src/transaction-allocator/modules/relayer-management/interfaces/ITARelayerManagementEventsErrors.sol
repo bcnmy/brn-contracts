@@ -17,6 +17,7 @@ interface ITARelayerManagementEventsErrors {
     error RelayerNotExiting();
     error RelayerNotJailed();
     error RelayerJailNotExpired(uint256 jailedUntilTimestamp);
+    error CannotUnregisterLastRelayer();
 
     event RelayerRegistered(
         RelayerAddress indexed relayer,

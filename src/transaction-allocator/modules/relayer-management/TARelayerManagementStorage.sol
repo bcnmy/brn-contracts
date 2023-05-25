@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 import "src/library/FixedPointArithmetic.sol";
 import "src/library/VersionManager.sol";
@@ -16,7 +16,6 @@ abstract contract TARelayerManagementStorage {
         // Info
         uint256 stake;
         string endpoint;
-        RelayerAccountAddress[] relayerAccountAddresses;
         mapping(RelayerAccountAddress => bool) isAccount;
         // Relayer Status
         RelayerStatus status;

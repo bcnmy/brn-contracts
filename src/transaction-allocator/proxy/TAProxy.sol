@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
@@ -10,7 +11,10 @@ import "ta-delegation/TADelegationStorage.sol";
 import "ta-relayer-management/TARelayerManagementStorage.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 import "ta-common/TATypes.sol";
+import "ta-common/TAConstants.sol";
 import "src/library/VersionManager.sol";
+import "src/library/arrays/U16ArrayHelper.sol";
+import "src/library/arrays/RAArrayHelper.sol";
 
 contract TAProxy is
     ITAProxy,
@@ -20,6 +24,9 @@ contract TAProxy is
     TATransactionAllocationStorage
 {
     using VersionManager for VersionManager.VersionManagerState;
+    using U16ArrayHelper for uint16[];
+    using RAArrayHelper for RelayerAddress[];
+    using SafeERC20 for IERC20;
 
     constructor(address[] memory modules, bytes4[][] memory selectors, InitalizerParams memory _params) {
         if (modules.length != selectors.length) {
@@ -86,8 +93,34 @@ contract TAProxy is
 
         // Initial State
         tas.epochEndTimestamp = block.timestamp + _params.epochLengthInSec;
-        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(new uint32[](0))));
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+
+        // Register Foundation Relayer
+        require(_params.foundationRelayerAddress != RelayerAddress.wrap(address(0)));
+        require(_params.foundationRelayerAccountAddresses.length > 0);
+        require(_params.foundationRelayerStake >= _params.minimumStakeAmount);
+        rms.bondToken.safeTransferFrom(
+            RelayerAddress.unwrap(_params.foundationRelayerAddress), address(this), _params.foundationRelayerStake
+        );
+        RelayerInfo storage foundationRelayer = rms.relayerInfo[_params.foundationRelayerAddress];
+        foundationRelayer.stake = _params.foundationRelayerStake;
+        foundationRelayer.endpoint = _params.foundationRelayerEndpoint;
+        foundationRelayer.delegatorPoolPremiumShare = _params.foundationDelegatorPoolPremiumShare;
+        foundationRelayer.status = RelayerStatus.Active;
+        length = _params.foundationRelayerAccountAddresses.length;
+        for (uint256 i; i != length;) {
+            foundationRelayer.isAccount[_params.foundationRelayerAccountAddresses[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+        rms.totalStake = _params.foundationRelayerStake;
+        rms.relayerCount = 1;
+        uint16[] memory cdf = new uint16[](1);
+        cdf[0] = CDF_PRECISION_MULTIPLIER;
+        RelayerAddress[] memory relayers = new RelayerAddress[](1);
+        relayers[0] = _params.foundationRelayerAddress;
+        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(cdf.m_hash(), relayers.m_hash())));
     }
 
     /// @notice Adds a new module

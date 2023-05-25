@@ -24,5 +24,11 @@ interface ITAProxy {
         uint256 livenessZParameter;
         TokenAddress bondTokenAddress;
         TokenAddress[] supportedTokens;
+        // Foundation Relayer Parameters
+        RelayerAddress foundationRelayerAddress;
+        RelayerAccountAddress[] foundationRelayerAccountAddresses;
+        uint256 foundationRelayerStake;
+        string foundationRelayerEndpoint;
+        uint256 foundationDelegatorPoolPremiumShare;
     }
 }

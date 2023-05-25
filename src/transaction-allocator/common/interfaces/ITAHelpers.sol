@@ -6,18 +6,15 @@ import "../TATypes.sol";
 import "src/library/FixedPointArithmetic.sol";
 
 interface ITAHelpers {
-    error InvalidStakeArrayHash();
-    error InvalidCdfArrayHash();
-    error InvalidRelayersArrayHash();
-    error InvalidDelegationArrayHash();
     error NativeTransferFailed(address to, uint256 amount);
     error InsufficientBalance(TokenAddress token, uint256 balance, uint256 amount);
     error InvalidRelayer(RelayerAddress relayer);
-    error InvalidRelayerUpdationLogIndex();
     error ParameterLengthMismatch();
     error InvalidRelayerGenerationIteration();
     error RelayerIndexDoesNotPointToSelectedCdfInterval();
     error RelayerAddressDoesNotMatchSelectedRelayer();
+    error InvalidLatestRelayerState();
+    error InvalidActiveRelayerState();
 
     event StakeArrayUpdated(bytes32 indexed stakeArrayHash);
     event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);

@@ -17,7 +17,7 @@ contract WormholeApplicationTest is
     uint256 constant initialApplicationFunds = 10 ether;
 
     uint256 private _postRegistrationSnapshotId;
-    uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
+    uint256 private constant _initialStakeAmount = deployParams.minimumStakeAmount;
     bytes[] private txns;
 
     bytes constant defaultVAA =
@@ -50,14 +50,13 @@ contract WormholeApplicationTest is
             uint256 delegatorPoolPremiumShare = 100;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            _startPrankRA(relayerAddress);
+            _prankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            vm.stopPrank();
 
-            _register(
-                relayerAddress,
-                ta.getStakeArray(activeRelayers),
-                ta.getDelegationArray(activeRelayers),
+
+             _prankRA(relayerAddress);
+            ta.register(
+                latestRelayerState,
                 stake,
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
@@ -81,7 +80,7 @@ contract WormholeApplicationTest is
             );
         }
 
-        _moveForwadToNextEpoch();
+        _moveForwardToNextEpoch();
         ta.processLivenessCheck(
             ITATransactionAllocation.ProcessLivenessCheckParams({
                 currentCdf: cdf,
@@ -92,7 +91,7 @@ contract WormholeApplicationTest is
                 latestDelegationArray: ta.getDelegationArray(activeRelayers)
             })
         );
-        _moveForwardByWindows(1);
+        _moveForwardByWindows(       params.relayerStateUpdateDelayInWindows);
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -129,7 +128,7 @@ contract WormholeApplicationTest is
         return (RelayerAddress.wrap(address(0)), 0, 0);
     }
 
-    function testWHTransactionExecution() external atSnapshot {
+    function testWHTransactionExecution() external  {
         // Setup Mocks
         vm.mockCall(
             address(wormholeMock), abi.encodePacked(wormholeMock.publishMessage.selector), abi.encode(uint64(1))
@@ -190,7 +189,7 @@ contract WormholeApplicationTest is
         vm.clearMockedCalls();
     }
 
-    function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
+    function testCannotExecuteTransactionWithInvalidCdf() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
         // Corrupt the CDF
@@ -228,7 +227,7 @@ contract WormholeApplicationTest is
         }
     }
 
-    function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
+    function testCannotExecuteTransactionFromUnselectedRelayer() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -264,7 +263,7 @@ contract WormholeApplicationTest is
     }
 
     // TODO: This test is suspicious
-    function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
+    function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, activeRelayers);
         bool testRun = false;

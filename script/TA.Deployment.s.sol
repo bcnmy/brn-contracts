@@ -30,8 +30,22 @@ contract TADeploymentScript is Script {
 
         address[] memory supportedTokenAddresses = vm.parseJsonAddressArray(deploymentConfigStr, ".supportedTokens");
         TokenAddress[] memory supportedTokens = new TokenAddress[](supportedTokenAddresses.length);
-        for (uint256 i = 0; i < supportedTokenAddresses.length; i++) {
+        for (uint256 i; i != supportedTokenAddresses.length;) {
             supportedTokens[i] = TokenAddress.wrap(supportedTokenAddresses[i]);
+            unchecked {
+                ++i;
+            }
+        }
+
+        address[] memory foundationRelayerAccountAddresses_ =
+            vm.parseJsonAddressArray(deploymentConfigStr, ".foundationRelayerAccountAddresses");
+        RelayerAccountAddress[] memory foundationRelayerAccountAddresses =
+            new RelayerAccountAddress[](foundationRelayerAccountAddresses_.length);
+        for (uint256 i; i != foundationRelayerAccountAddresses_.length;) {
+            foundationRelayerAccountAddresses[i] = RelayerAccountAddress.wrap(foundationRelayerAccountAddresses_[i]);
+            unchecked {
+                ++i;
+            }
         }
 
         ITAProxy.InitalizerParams memory params = ITAProxy.InitalizerParams({
@@ -49,12 +63,21 @@ contract TADeploymentScript is Script {
             relayerStateUpdateDelayInWindows: vm.parseJsonUint(deploymentConfigStr, ".relayerStateUpdateDelayInWindows"),
             livenessZParameter: vm.parseJsonUint(deploymentConfigStr, ".livenessZParameter"),
             bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
-            supportedTokens: supportedTokens
+            supportedTokens: supportedTokens,
+            foundationRelayerAddress: RelayerAddress.wrap(
+                vm.parseJsonAddress(deploymentConfigStr, ".foundationRelayerAddress")
+                ),
+            foundationRelayerAccountAddresses: foundationRelayerAccountAddresses,
+            foundationRelayerStake: vm.parseJsonUint(deploymentConfigStr, ".foundationRelayerStake"),
+            foundationRelayerEndpoint: vm.parseJsonString(deploymentConfigStr, ".foundationRelayerEndpoint"),
+            foundationDelegatorPoolPremiumShare: vm.parseJsonUint(
+                deploymentConfigStr, ".foundationDelegatorPoolPremiumShare"
+                )
         });
 
         // Deploy
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        ITransactionAllocator proxy = deploy(deployerPrivateKey, params, true);
+        ITransactionAllocator proxy = deploy(deployerPrivateKey, params);
         return proxy;
     }
 
@@ -63,32 +86,27 @@ contract TADeploymentScript is Script {
         uint256 _deployerPrivateKey,
         ITAProxy.InitalizerParams memory _params,
         address[] memory modules,
-        bytes4[][] memory selectors,
-        bool _debug
+        bytes4[][] memory selectors
     ) internal returns (TAProxy) {
         address deployerAddr = vm.addr(_deployerPrivateKey);
-        if (_debug) {
-            console2.log("Deploying Transaction Allocator contracts...");
-            console2.log("Chain ID: ", block.chainid);
-            console2.log("Deployer Address: ", deployerAddr);
-            console2.log("Deployer Funds: ", deployerAddr.balance);
-        }
+        console2.log("Deploying Transaction Allocator contracts...");
+        console2.log("Chain ID: ", block.chainid);
+        console2.log("Deployer Address: ", deployerAddr);
+        console2.log("Deployer Funds: ", deployerAddr.balance);
 
         vm.startBroadcast(_deployerPrivateKey);
 
         // Deploy Proxy
         TAProxy proxy = new TAProxy(modules, selectors, _params);
-        if (_debug) {
-            console2.log("Proxy address: ", address(proxy));
-            console2.log("Transaction Allocator contracts deployed successfully.");
-        }
+        console2.log("Proxy address: ", address(proxy));
+        console2.log("Transaction Allocator contracts deployed successfully.");
 
         vm.stopBroadcast();
 
         return proxy;
     }
 
-    function deploy(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params, bool _debug)
+    function deploy(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params)
         public
         returns (ITransactionAllocator)
     {
@@ -96,6 +114,8 @@ contract TADeploymentScript is Script {
         uint256 moduleCount = 3;
         address[] memory modules = new address[](moduleCount);
         bytes4[][] memory selectors = new bytes4[][](moduleCount);
+
+        vm.startBroadcast(_deployerPrivateKey);
 
         modules[0] = address(new TADelegation());
         selectors[0] = _generateSelectors("TADelegation");
@@ -106,12 +126,14 @@ contract TADeploymentScript is Script {
         modules[2] = address(new TATransactionAllocation());
         selectors[2] = _generateSelectors("TATransactionAllocation");
 
-        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors, _debug);
+        vm.stopBroadcast();
+
+        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
         return ITransactionAllocator(address(proxy));
     }
 
-    function deployTest(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params, bool _debug)
+    function deployTest(uint256 _deployerPrivateKey, ITAProxy.InitalizerParams memory _params)
         public
         returns (ITransactionAllocatorDebug)
     {
@@ -119,6 +141,8 @@ contract TADeploymentScript is Script {
         uint256 moduleCount = 6;
         address[] memory modules = new address[](moduleCount);
         bytes4[][] memory selectors = new bytes4[][](moduleCount);
+
+        vm.startBroadcast(_deployerPrivateKey);
 
         modules[0] = address(new TADelegation());
         selectors[0] = _generateSelectors("TADelegation");
@@ -138,7 +162,8 @@ contract TADeploymentScript is Script {
         modules[5] = address(new WormholeApplication());
         selectors[5] = _generateSelectors("WormholeApplication");
 
-        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors, _debug);
+        vm.stopBroadcast();
+        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
         return ITransactionAllocatorDebug(address(proxy));
     }

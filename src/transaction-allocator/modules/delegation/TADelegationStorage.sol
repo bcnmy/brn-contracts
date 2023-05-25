@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/utils/math/SafeMath.sol";
+import "openzeppelin-contracts/utils/math/SafeMath.sol";
 
 import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";

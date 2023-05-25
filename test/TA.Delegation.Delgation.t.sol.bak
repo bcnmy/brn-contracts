@@ -14,7 +14,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     using FixedPointTypeHelper for FixedPointType;
 
     uint256 private _postRegistrationSnapshotId;
-    uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
+    uint256 private constant _initialStakeAmount = deployParams.minimumStakeAmount;
     uint256 ERROR_TOLERANCE = 0.0001e18; // 0.001%
 
     function setUp() public override {
@@ -36,14 +36,13 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
             uint256 delegatorPoolPremiumShare = 100;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            _startPrankRA(relayerAddress);
+            _prankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            vm.stopPrank();
 
-            _register(
-                relayerAddress,
-                ta.getStakeArray(activeRelayers),
-                ta.getDelegationArray(activeRelayers),
+
+             _prankRA(relayerAddress);
+            ta.register(
+                latestRelayerState,
                 stake,
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
@@ -64,7 +63,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         t0 = supportedTokens[0];
         t1 = supportedTokens[1];
 
-        _moveForwadToNextEpoch();
+        _moveForwardToNextEpoch();
         ta.processLivenessCheck(
             ITATransactionAllocation.ProcessLivenessCheckParams({
                 currentCdf: cdf,
@@ -75,7 +74,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
                 latestDelegationArray: ta.getDelegationArray(activeRelayers)
             })
         );
-        _moveForwardByWindows(1);
+        _moveForwardByWindows(       params.relayerStateUpdateDelayInWindows);
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -118,8 +117,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function delegate(RelayerAddress r, DelegatorAddress d, uint256 amount) internal {
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
         _prankDa(d);
         ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r), amount);
 
@@ -128,8 +126,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function undelegate(RelayerAddress r, DelegatorAddress d) internal {
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
         _prankDa(d);
         ta.undelegate(stakeArray, delegationArray, activeRelayers, r, _findRelayerIndex(r));
 
@@ -151,7 +148,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         }
     }
 
-    function testDelegation() external atSnapshot {
+    function testDelegation() external  {
         delegate(r0, d0, 0.01 ether);
         check();
 
@@ -159,7 +156,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         check();
     }
 
-    function testAccrueDelegationRewards() external atSnapshot {
+    function testAccrueDelegationRewards() external  {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -182,7 +179,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     // TODO: Reach a level where abs equality is possible
-    function testClaimDelegationRewards() external atSnapshot {
+    function testClaimDelegationRewards() external  {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -213,7 +210,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
 
-    function testClaimDelegationRewardsAfterRelayerDeRegistration() external atSnapshot {
+    function testClaimDelegationRewardsAfterRelayerDeRegistration() external  {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -246,11 +243,10 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
 
-    function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
+    function testCannotDelegateToUnRegisteredRelayer() external  {
         _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
 
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
         _prankDa(d0);
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
         ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r0), 0.01 ether);

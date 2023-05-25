@@ -20,7 +20,7 @@ contract TATransactionAllocationTest is
     uint256 constant initialApplicationFunds = 10 ether;
 
     uint256 private _postRegistrationSnapshotId;
-    uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
+    uint256 private constant _initialStakeAmount = deployParams.minimumStakeAmount;
     bytes[] private txns;
 
     IMinimalApplication tam;
@@ -47,14 +47,13 @@ contract TATransactionAllocationTest is
             uint256 delegatorPoolPremiumShare = 100;
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
-            _startPrankRA(relayerAddress);
+            _prankRA(relayerAddress);
             bico.approve(address(ta), stake);
-            vm.stopPrank();
 
-            _register(
-                relayerAddress,
-                ta.getStakeArray(activeRelayers),
-                ta.getDelegationArray(activeRelayers),
+
+             _prankRA(relayerAddress);
+            ta.register(
+                latestRelayerState,
                 stake,
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
@@ -66,7 +65,7 @@ contract TATransactionAllocationTest is
             txns.push(abi.encodeCall(IMinimalApplication.executeMinimalApplication, (keccak256(abi.encodePacked(i)))));
         }
 
-        _moveForwadToNextEpoch();
+        _moveForwardToNextEpoch();
         ta.processLivenessCheck(
             ITATransactionAllocation.ProcessLivenessCheckParams({
                 currentCdf: cdf,
@@ -77,7 +76,7 @@ contract TATransactionAllocationTest is
                 latestDelegationArray: ta.getDelegationArray(activeRelayers)
             })
         );
-        _moveForwardByWindows(1);
+        _moveForwardByWindows(       params.relayerStateUpdateDelayInWindows);
 
         _postRegistrationSnapshotId = vm.snapshot();
     }
@@ -114,7 +113,7 @@ contract TATransactionAllocationTest is
         return (RelayerAddress.wrap(address(0)), 0, 0);
     }
 
-    function testTransactionExecution() external atSnapshot {
+    function testTransactionExecution() external  {
         uint256 executionCount = 0;
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -153,7 +152,7 @@ contract TATransactionAllocationTest is
         assertEq(tam.count(), executionCount);
     }
 
-    function testCannotExecuteTransactionWithInvalidCdf() external atSnapshot {
+    function testCannotExecuteTransactionWithInvalidCdf() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
         // Corrupt the CDF
@@ -191,7 +190,7 @@ contract TATransactionAllocationTest is
         }
     }
 
-    function testCannotExecuteTransactionFromUnselectedRelayer() external atSnapshot {
+    function testCannotExecuteTransactionFromUnselectedRelayer() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -229,7 +228,7 @@ contract TATransactionAllocationTest is
     }
 
     // TODO: This test is suspicious
-    function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external atSnapshot {
+    function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external  {
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, activeRelayers);
         bool testRun = false;
@@ -279,7 +278,7 @@ contract TATransactionAllocationTest is
         return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
-    function testMinimumTransactionForLivenessCalculation() external atSnapshot {
+    function testMinimumTransactionForLivenessCalculation() external  {
         FixedPointType minTransactions =
             ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
         assertEq(minTransactions.u256(), 24);
@@ -289,14 +288,13 @@ contract TATransactionAllocationTest is
         assertEq(minTransactions.u256(), 9);
     }
 
-    function testPenalizeRelayerIfInsufficientTransactionAreSubmitted() external atSnapshot {
+    function testPenalizeRelayerIfInsufficientTransactionAreSubmitted() external  {
         RelayerAddress activeRelayer = relayerMainAddress[0];
         ta.debug_setTotalTransactionsProcessed(100);
         ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 10);
 
         uint16[] memory cdf = ta.getCdfArray(activeRelayers);
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+
 
         for (uint256 i = 0; i < activeRelayers.length; ++i) {
             if (activeRelayers[i] == activeRelayer) {

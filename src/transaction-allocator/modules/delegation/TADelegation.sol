@@ -2,9 +2,9 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 import "src/library/FixedPointArithmetic.sol";
 
@@ -21,10 +21,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
-
-    function _scaleDelegation(uint256 _delegatedAmount) internal pure returns (uint32) {
-        return (_delegatedAmount / DELGATION_SCALING_FACTOR).toUint32();
-    }
 
     function _mintPoolShares(
         RelayerAddress _relayerAddress,
@@ -85,7 +81,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             revert InvalidRelayerIndex();
         }
 
-        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
         RelayerAddress relayerAddress = _latestState.relayers[_relayerIndex];
         // TODO: _updateRelayerProtocolRewards(relayerAddress);
@@ -131,7 +127,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     {
         bool shouldUpdateCdf = false;
 
-        _verifyExternalStateForCdfUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
         if (_relayerIndex < _latestState.relayers.length && _latestState.relayers[_relayerIndex] == _relayerAddress) {
             // Relayer is active in the pending state, therefore it's CDF should be updated
             shouldUpdateCdf = true;
