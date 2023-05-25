@@ -2,47 +2,39 @@
 
 pragma solidity 0.8.19;
 
-import "src/interfaces/IDebug_GasConsumption.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITATransactionAllocationEventsErrors.sol";
+import "ta-common/TATypes.sol";
+import "src/library/FixedPointArithmetic.sol";
 
-interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
-    function execute(
-        bytes[] calldata _reqs,
-        uint256[] calldata _forwardedNativeAmounts,
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _currentRelayerListLogIndex,
-        uint256 _relayerIndex,
-        uint256 _relayerGenerationIterationBitmap
-    ) external payable;
+interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
+    struct ExecuteParams {
+        bytes[] reqs;
+        uint256[] forwardedNativeAmounts;
+        uint256 relayerIndex;
+        uint256 relayerGenerationIterationBitmap;
+        RelayerState activeState;
+        RelayerState latestState;
+        uint256[] activeStateToPendingStateMap;
+    }
 
-    function allocateRelayers(
-        uint16[] calldata _cdf,
-        uint256 _currentCdfLogIndex,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerLogIndex
-    ) external view returns (RelayerAddress[] memory, uint256[] memory);
+    function execute(ExecuteParams calldata _data) external payable;
 
-    function processLivenessCheck(
-        TargetEpochData calldata _targetEpochData,
-        LatestActiveRelayersStakeAndDelegationState calldata _latestState,
-        uint256[] calldata _targetEpochRelayerIndexToLatestRelayerIndexMapping
-    ) external;
+    function allocateRelayers(RelayerState calldata _activeState)
+        external
+        view
+        returns (RelayerAddress[] memory, uint256[] memory);
 
     function calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
         FixedPointType _totalTransactions,
         FixedPointType _zScore
-    ) external pure returns (FixedPointType);
+    ) external view returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
-    function transactionsSubmittedInEpochByRelayer(uint256 _epoch, RelayerAddress _relayerAddress)
-        external
-        view
-        returns (uint256);
-    function totalTransactionsSubmittedInEpoch(uint256 _epoch) external view returns (uint256);
-    function livenessCheckProcessedForEpoch(uint256 _epoch) external view returns (bool);
+    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
+    function totalTransactionsSubmitted() external view returns (uint256);
+    function epochLengthInSec() external view returns (uint256);
+    function epochEndTimestamp() external view returns (uint256);
+    function livenessZParameter() external view returns (FixedPointType);
 }

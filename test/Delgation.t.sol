@@ -2,52 +2,31 @@
 
 pragma solidity 0.8.19;
 
-import "./base/TATestBase.t.sol";
-import "src/transaction-allocator/common/TAConstants.sol";
-import "src/transaction-allocator/common/interfaces/ITAHelpers.sol";
-import "src/transaction-allocator/modules/delegation/interfaces/ITADelegationEventsErrors.sol";
+import "./base/TATestBase.sol";
+import "ta-common/TAConstants.sol";
+import "ta-common/interfaces/ITAHelpers.sol";
+import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
 
-// TODO: Add tests related to delayed CDF Updation
 // TODO: Testing mechanism needs to change
-contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
+// TODO: Add tests for delegation affecting CDF
+contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
 
-    uint256 private _postRegistrationSnapshotId;
-    uint256 private constant _initialStakeAmount = MINIMUM_STAKE_AMOUNT;
     uint256 ERROR_TOLERANCE = 0.0001e18; // 0.001%
 
     function setUp() public override {
-        if (_postRegistrationSnapshotId != 0) {
-            return;
-        }
-
         super.setUp();
 
         supportedTokens.push(TokenAddress.wrap(address(bico)));
         supportedTokens.push(NATIVE_TOKEN);
 
         // Register all Relayers
-        for (uint256 i = 0; i < relayerCount; i++) {
-            uint256 stake = _initialStakeAmount;
-            string memory endpoint = "test";
-            uint256 delegatorPoolPremiumShare = 100;
-            RelayerAddress relayerAddress = relayerMainAddress[i];
-
-            _startPrankRA(relayerAddress);
-            bico.approve(address(ta), stake);
-            vm.stopPrank();
-
-            _register(
-                relayerAddress,
-                ta.getStakeArray(activeRelayers),
-                ta.getDelegationArray(activeRelayers),
-                stake,
-                relayerAccountAddresses[relayerAddress],
-                endpoint,
-                delegatorPoolPremiumShare
-            );
-        }
+        RelayerState memory currentState = latestRelayerState;
+        _registerAllNonFoundationRelayers();
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
 
         // Approval
         for (uint256 i = 0; i < delegatorAddresses.length; ++i) {
@@ -61,14 +40,6 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         d1 = delegatorAddresses[1];
         t0 = supportedTokens[0];
         t1 = supportedTokens[1];
-
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
-
-        _postRegistrationSnapshotId = vm.snapshot();
-    }
-
-    function _preTestSnapshotId() internal view virtual override returns (uint256) {
-        return _postRegistrationSnapshotId;
     }
 
     // Test State
@@ -105,20 +76,16 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     function delegate(RelayerAddress r, DelegatorAddress d, uint256 amount) internal {
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d);
-        ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r), amount);
+        ta.delegate(latestRelayerState, _findRelayerIndex(r), amount);
 
         expDelegation[r][d] += amount;
         expTotalDelegation[r] += amount;
     }
 
-    function unDelegate(RelayerAddress r, DelegatorAddress d) internal {
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
+    function undelegate(RelayerAddress r, DelegatorAddress d) internal {
         _prankDa(d);
-        ta.unDelegate(stakeArray, delegationArray, activeRelayers, r, _findRelayerIndex(r));
+        ta.undelegate(latestRelayerState, r, _findRelayerIndex(r));
 
         expTotalDelegation[r] -= expDelegation[r][d];
         expDelegation[r][d] = 0;
@@ -138,7 +105,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         }
     }
 
-    function testDelegation() external atSnapshot {
+    function testDelegation() external {
         delegate(r0, d0, 0.01 ether);
         check();
 
@@ -146,7 +113,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         check();
     }
 
-    function testAccrueDelegationRewards() external atSnapshot {
+    function testAccrueDelegationRewards() external {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -169,7 +136,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
     }
 
     // TODO: Reach a level where abs equality is possible
-    function testClaimDelegationRewards() external atSnapshot {
+    function testClaimDelegationRewards() external {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -189,18 +156,18 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
         uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        unDelegate(r0, d0);
+        undelegate(r0, d0);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
 
         uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
         uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        unDelegate(r0, d1);
+        undelegate(r0, d1);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
 
-    function testClaimDelegationRewardsAfterRelayerDeRegistration() external atSnapshot {
+    function testClaimDelegationRewardsAfterRelayerDeRegistration() external {
         delegate(r0, d0, 0.01 ether);
         delegate(r0, d1, 0.02 ether);
 
@@ -218,30 +185,30 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
         expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
 
-        _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
+        _prankRA(r0);
+        ta.unregister(latestRelayerState, _findRelayerIndex(r0));
+        _removeRelayerFromLatestState(r0);
 
         uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
         uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        unDelegate(r0, d0);
+        undelegate(r0, d0);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
 
         uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
         uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        unDelegate(r0, d1);
+        undelegate(r0, d1);
         assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
         assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
     }
 
-    function testCannotDelegateToUnRegisteredRelayer() external atSnapshot {
-        _unregister(r0, ta.getStakeArray(activeRelayers), ta.getDelegationArray(activeRelayers));
+    function testCannotDelegateToUnRegisteredRelayer() external {
+        _prankRA(r0);
+        ta.unregister(latestRelayerState, _findRelayerIndex(r0));
+        _removeRelayerFromLatestState(r0);
 
-        vm.roll(block.number + WINDOWS_PER_EPOCH * ta.blocksPerWindow());
-
-        uint32[] memory stakeArray = ta.getStakeArray(activeRelayers);
-        uint32[] memory delegationArray = ta.getDelegationArray(activeRelayers);
         _prankDa(d0);
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
-        ta.delegate(stakeArray, delegationArray, activeRelayers, _findRelayerIndex(r0), 0.01 ether);
+        ta.delegate(latestRelayerState, _findRelayerIndex(r0), 0.01 ether);
     }
 }

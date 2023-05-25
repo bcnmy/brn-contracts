@@ -2,37 +2,52 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 import "src/library/FixedPointArithmetic.sol";
-import "src/library/VersionHistoryManager.sol";
-import "src/transaction-allocator/common/TATypes.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
+import "src/library/VersionManager.sol";
+import "ta-common/TATypes.sol";
 
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
-    // TODO: Check packing
+    // Relayer Information
+    struct RelayerInfo {
+        // Info
+        uint256 stake;
+        string endpoint;
+        mapping(RelayerAccountAddress => bool) isAccount;
+        // Relayer Status
+        RelayerStatus status;
+        uint256 minExitTimestamp;
+        uint256 jailedUntilTimestamp;
+        // TODO: Reward share related data should be moved to it's own mapping
+        // Delegation
+        uint256 delegatorPoolPremiumShare; // *100
+        uint256 unpaidProtocolRewards;
+        FixedPointType rewardShares;
+    }
+
     struct RMStorage {
         // Config
         IERC20 bondToken;
-        uint256 penaltyDelayBlocks;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
-        // cdf array hash
-        VersionHistoryManager.Version[] cdfVersionHistoryManager;
-        VersionHistoryManager.Version[] activeRelayerListVersionHistoryManager;
-        bytes32 latestActiveRelayerStakeArrayHash;
+        uint256 jailTimeInSec;
+        uint256 withdrawDelayInSec;
+        uint256 absencePenaltyPercentage;
+        uint256 minimumStakeAmount;
+        uint256 relayerStateUpdateDelayInWindows;
+        // Relayer State Management
+        VersionManager.VersionManagerState relayerStateVersionManager;
         // Maps relayer address to pending withdrawals
-        mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
-        mapping(TokenAddress => bool) isGasTokenSupported;
+        mapping(TokenAddress => bool isGasTokenSupported) isGasTokenSupported;
         // Constant Rate Rewards
         uint256 unpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;
         FixedPointType totalShares;
-        // Latest State. TODO: Verify if using these are safe or not.
+        // Latest State.
         uint256 relayerCount;
         uint256 totalStake;
     }

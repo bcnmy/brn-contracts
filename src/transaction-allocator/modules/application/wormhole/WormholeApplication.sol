@@ -2,10 +2,10 @@
 
 pragma solidity 0.8.19;
 
-import "lib/solidity-bytes-utils/contracts/BytesLib.sol";
+import "solidity-bytes-utils/contracts/BytesLib.sol";
 import "./interfaces/IWormholeApplication.sol";
 import "./WormholeApplicationStorage.sol";
-import "../base-application/ApplicationBase.sol";
+import "ta-base-application/ApplicationBase.sol";
 
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;
@@ -49,13 +49,12 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         sequenceNumber = _encodedVAA.toUint64(index);
     }
 
-    function allocateWormholeDeliveryVAA(AllocateTransactionParams calldata _params)
-        external
-        view
-        override
-        returns (bytes[] memory, uint256, uint256)
-    {
-        return _allocateTransaction(_params);
+    function allocateWormholeDeliveryVAA(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external view override returns (bytes[] memory, uint256, uint256) {
+        return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
 
     /// Execution Logic
@@ -65,9 +64,6 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         override
         applicationHandler(msg.data)
     {
-        // TODO: Handle refunds
-        // TODO: Handle delegator payment????
-
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();
         whs.delivery.deliver{value: msg.value}(_targetParams);

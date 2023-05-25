@@ -2,9 +2,9 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/IApplicationBase.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
-import "src/transaction-allocator/modules/transaction-allocation/interfaces/ITATransactionAllocation.sol";
-import "src/transaction-allocator/modules/relayer-management/TARelayerManagementStorage.sol";
+
+import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
+import "ta-relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
     modifier applicationHandler(bytes calldata _dataToHash) {
@@ -56,30 +56,31 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         return (_relayerGenerationIterationBitmap >> _getAllotedRelayerIndex(_txCalldata, _relayersPerWindow)) & 1 == 1;
     }
 
-    function _allocateTransaction(AllocateTransactionParams calldata _data)
+    function _allocateTransaction(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    )
         internal
         view
-        returns (bytes[] memory, uint256, uint256)
+        returns (bytes[] memory txnAllocated, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex)
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
-        ITATransactionAllocation(address(this)).allocateRelayers(
-            _data.cdf, _data.currentCdfLogIndex, _data.activeRelayers, _data.relayerLogIndex
-        );
+            ITATransactionAllocation(address(this)).allocateRelayers(_currentState);
         if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
             revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
         }
 
         // Filter the transactions
-        uint256 selectedRelayerCdfIndex;
-        bytes[] memory txnAllocated = new bytes[](_data.requests.length);
-        uint256 relayerGenerationIterations;
+        uint256 length = _requests.length;
+        txnAllocated = new bytes[](length);
         uint256 j;
-        for (uint256 i = 0; i < _data.requests.length;) {
+        for (uint256 i; i != length;) {
             // If the transaction can be processed by this relayer, store it's info
-            uint256 relayerIndex = _getAllotedRelayerIndex(_data.requests[i], getRMStorage().relayersPerWindow);
-            if (relayersAllocated[relayerIndex] == _data.relayerAddress) {
+            uint256 relayerIndex = _getAllotedRelayerIndex(_requests[i], getRMStorage().relayersPerWindow);
+            if (relayersAllocated[relayerIndex] == _relayerAddress) {
                 relayerGenerationIterations |= 1 << relayerIndex;
-                txnAllocated[j] = _data.requests[i];
+                txnAllocated[j] = _requests[i];
                 selectedRelayerCdfIndex = relayerStakePrefixSumIndex[relayerIndex];
                 unchecked {
                     ++j;
@@ -92,11 +93,9 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         }
 
         // Reduce the array sizes if needed
-        uint256 extraLength = _data.requests.length - j;
+        uint256 extraLength = _requests.length - j;
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
         }
-
-        return (txnAllocated, relayerGenerationIterations, selectedRelayerCdfIndex);
     }
 }

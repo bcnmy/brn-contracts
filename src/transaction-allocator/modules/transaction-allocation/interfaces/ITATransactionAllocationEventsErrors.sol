@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TAStructs.sol";
+import "ta-common/TATypes.sol";
 
 interface ITATransactionAllocationEventsErrors {
     error NoRelayersRegistered();
@@ -19,13 +19,20 @@ interface ITATransactionAllocationEventsErrors {
     error TransactionExecutionFailed(uint256 index);
     error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
     error CannotProcessLivenessCheckForCurrentOrFutureEpoch();
-    error LivenessCheckAlreadyProcessed();
     error RelayerIndexMappingMismatch(uint256 oldIndex, uint256 newIndex);
+    error RelayerAddressMismatch(RelayerAddress expectedAddress, RelayerAddress actualAddress);
 
     event PrepaymentReceived(uint256 indexed index, uint256 indexed amount, TokenAddress indexed tokenAddress);
     event GasFeeRefunded(
         uint256 indexed index, uint256 indexed gas, uint256 indexed tokenAmount, TokenAddress tokenAddress
     );
     event TransactionStatus(uint256 indexed index, bool indexed success, bytes indexed returndata);
-    event RelayerPenalized(RelayerAddress indexed relayerAddress, uint256 indexed epoch, uint256 indexed penaltyAmount);
+    event RelayerPenalized(
+        RelayerAddress indexed relayerAddress, uint256 indexed newStake, uint256 indexed penaltyAmount
+    );
+    event RelayerJailed(RelayerAddress indexed relayerAddress, uint256 jailedUntilTimestamp);
+    event LivenessCheckAlreadyProcessed();
+    event LivenessCheckProcessed(uint256 indexed epochEndTimestamp);
+    event NoTransactionsSubmittedInEpoch();
+    event EpochEndTimestampUpdated(uint256 indexed epochEndTimestamp);
 }

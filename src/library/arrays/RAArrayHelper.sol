@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 
 library RAArrayHelper {
     function cd_append(RelayerAddress[] calldata _array, RelayerAddress _value)
@@ -15,7 +15,7 @@ library RAArrayHelper {
             length + 1
         );
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             newArray[i] = _array[i];
             unchecked {
                 ++i;
@@ -34,7 +34,7 @@ library RAArrayHelper {
         uint256 length = _array.length - 1;
         RelayerAddress[] memory newArray = new RelayerAddress[](length);
 
-        for (uint256 i = 0; i < length;) {
+        for (uint256 i; i != length;) {
             if (i != _index) {
                 newArray[i] = _array[i];
             } else {
@@ -77,5 +77,17 @@ library RAArrayHelper {
 
     function m_hash(RelayerAddress[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
+    }
+
+    function m_remove(RelayerAddress[] memory _array, uint256 _index) internal pure {
+        uint256 length = _array.length - 1;
+        if (_index != length) {
+            _array[_index] = _array[length];
+        }
+
+        // Reduce the array sizes
+        assembly {
+            mstore(_array, sub(mload(_array), 1))
+        }
     }
 }

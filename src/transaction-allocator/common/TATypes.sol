@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.19;
 
+//////////////////////////// UDVTS ////////////////////////////
+
 type RelayerAddress is address;
 
 function relayerEquality(RelayerAddress a, RelayerAddress b) pure returns (bool) {
@@ -49,3 +51,19 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 }
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
+
+//////////////////////////// Structs ////////////////////////////
+
+struct RelayerState {
+    uint16[] cdf;
+    RelayerAddress[] relayers;
+}
+
+//////////////////////////// Enums ////////////////////////////
+
+enum RelayerStatus {
+    Uninitialized,
+    Active,
+    Exiting,
+    Jailed
+}

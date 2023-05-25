@@ -2,21 +2,22 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TATypes.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
+import "ta-common/TATypes.sol";
 
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);
-    error InvalidWithdrawal(uint256 amount, uint256 currentBlock, uint256 minValidBlock);
-    error InvalidRelayerWindowForReporter();
-    error InvalidAbsenteeBlockNumber();
-    error InvalidAbsenteeCdfArrayHash();
-    error InvalidRelayerWindowForAbsentee();
+    error InvalidWithdrawal(uint256 amount, uint256 currentTimestamp, uint256 minValidTimestamp);
     error AbsenteeWasPresent(uint256 absenteewindowIndex);
     error ReporterTransferFailed(RelayerAccountAddress reporter, uint256 amount);
     error GasTokenAlreadySupported(TokenAddress token);
     error GasTokenNotSupported(TokenAddress token);
+    error RelayerAlreadyRegistered();
+    error RelayerNotActive();
+    error RelayerNotExiting();
+    error RelayerNotJailed();
+    error RelayerJailNotExpired(uint256 jailedUntilTimestamp);
+    error CannotUnregisterLastRelayer();
 
     event RelayerRegistered(
         RelayerAddress indexed relayer,
@@ -38,4 +39,5 @@ interface ITARelayerManagementEventsErrors {
     event GasTokensAdded(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event RelayerProtocolRewardsClaimed(RelayerAddress indexed relayer, uint256 indexed amount);
+    event RelayerUnjailed(RelayerAddress indexed relayer);
 }

@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import "lib/wormhole/ethereum/contracts/interfaces/relayer/IDelivery.sol";
-import "lib/wormhole/ethereum/contracts/interfaces/IWormhole.sol";
+import "wormhole-contracts/interfaces/relayer/IDelivery.sol";
+import "wormhole-contracts/interfaces/IWormhole.sol";
 
 abstract contract WormholeApplicationStorage {
     bytes32 internal constant WORMHOLE_APPLICATION_STORAGE_SLOT = keccak256("WormholeApplication.storage");

@@ -1,6 +1,16 @@
 ds-test/=lib/forge-std/lib/ds-test/src/
 forge-std/=lib/forge-std/src/
-openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
-openzeppelin-contracts/=lib/openzeppelin-contracts/
+openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
+solidity-bytes-utils/=lib/solidity-bytes-utils/
+wormhole-contracts/=lib/wormhole/ethereum/contracts
+
+ta/=src/transaction-allocator/
+ta-common/=src/transaction-allocator/common/
+ta-proxy/=src/transaction-allocator/proxy/
+ta-delegation/=src/transaction-allocator/modules/delegation/
+ta-relayer-management=src/transaction-allocator/modules/relayer-management/
+ta-transaction-allocation=src/transaction-allocator/modules/transaction-allocation/
+ta-base-application=src/transaction-allocator/modules/application/base-application/
+ta-wormhole-application=src/transaction-allocator/modules/application/wormhole/
 
 @openzeppelin/contracts=lib/openzeppelin-contracts/contracts

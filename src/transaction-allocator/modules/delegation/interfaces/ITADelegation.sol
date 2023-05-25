@@ -3,24 +3,13 @@
 pragma solidity 0.8.19;
 
 import "./ITADelegationEventsErrors.sol";
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 
 interface ITADelegation is ITADelegationEventsErrors {
-    function delegate(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _prevDelegationArray,
-        RelayerAddress[] calldata _activeRelayers,
-        uint256 _relayerIndex,
-        uint256 _amount
-    ) external;
+    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external;
 
-    function unDelegate(
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _prevDelegationArray,
-        RelayerAddress[] calldata _activeRelayers,
-        RelayerAddress _relayerAddress,
-        uint256 _relayerIndex
-    ) external;
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
+        external;
 
     function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
@@ -58,5 +47,7 @@ interface ITADelegation is ITADelegationEventsErrors {
 
     function supportedPools() external view returns (TokenAddress[] memory);
 
-    function getDelegationArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint32[] memory);
+    function minimumDelegationAmount() external view returns (uint256);
+
+    function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 }

@@ -3,7 +3,7 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/IMinimalApplication.sol";
-import "src/transaction-allocator/modules/application/base-application/ApplicationBase.sol";
+import "ta-base-application/ApplicationBase.sol";
 
 contract MinimalApplication is IMinimalApplication, ApplicationBase {
     uint256 public count = 0;
@@ -17,12 +17,13 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
         emit MessageEmitted(_data);
     }
 
-    function allocateMinimalApplicationTransaction(AllocateTransactionParams calldata _params)
-        external
-        view
-        override
-        returns (bytes[] memory, uint256, uint256)
-    {
-        return _allocateTransaction(_params);
+    function allocateMinimalApplicationTransaction(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external view override returns (bytes[] memory, uint256, uint256) {
+        return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
+
+    function test2() external {}
 }

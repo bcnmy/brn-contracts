@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
+import "ta-common/TATypes.sol";
+
 interface IApplicationBase {
     error ExternalCallsNotAllowed();
     error RelayerNotAssignedToTransaction();
