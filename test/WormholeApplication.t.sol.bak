@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "./base/TATestBase.t.sol";
+import "./base/TATestBase.sol";
 import "ta-common/TAConstants.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
@@ -41,7 +41,7 @@ contract WormholeApplicationTest is
         taw = IWormholeApplication(address(ta));
         taw.initialize(wormholeMock, deliveryMock);
 
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
 
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {
@@ -138,7 +138,7 @@ contract WormholeApplicationTest is
         vm.etch(address(deliveryMock), address(ta).code);
 
         uint256 executionCount = 0;
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
@@ -190,7 +190,7 @@ contract WormholeApplicationTest is
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external  {
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
         uint16[] memory cdf2 = ta.getCdfArray(activeRelayers);
         // Corrupt the CDF
         cdf2[0] += 1;
@@ -228,7 +228,7 @@ contract WormholeApplicationTest is
     }
 
     function testCannotExecuteTransactionFromUnselectedRelayer() external  {
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
@@ -264,7 +264,7 @@ contract WormholeApplicationTest is
 
     // TODO: This test is suspicious
     function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external  {
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(cdf, activeRelayers);
         bool testRun = false;
 

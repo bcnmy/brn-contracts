@@ -32,7 +32,7 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
     ) external view returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
-    function transactionsSubmittedRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
+    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
     function totalTransactionsSubmitted() external view returns (uint256);
     function epochLengthInSec() external view returns (uint256);
     function epochEndTimestamp() external view returns (uint256);

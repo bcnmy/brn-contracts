@@ -28,17 +28,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         _verifySufficientValueAttached(_params.forwardedNativeAmounts);
 
         // Verify Relayer Selection
-        if (
-            !_verifyRelayerSelection(
-                msg.sender,
-                _params.activeState,
-                _params.relayerIndex,
-                _params.relayerGenerationIterationBitmap,
-                block.number
-            )
-        ) {
-            revert InvalidRelayerWindow();
-        }
+        _verifyRelayerSelection(
+            msg.sender,
+            _params.activeState,
+            _params.relayerIndex,
+            _params.relayerGenerationIterationBitmap,
+            block.number
+        );
 
         RelayerAddress relayerAddress = _params.activeState.relayers[_params.relayerIndex];
 
@@ -417,7 +413,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Getters ///////////////////////////////
-    function transactionsSubmittedRelayer(RelayerAddress _relayerAddress) external view override returns (uint256) {
+    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view override returns (uint256) {
         return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
     }
 

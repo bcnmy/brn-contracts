@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "./base/TATestBase.t.sol";
+import "./base/TATestBase.sol";
 import "ta-common/TAConstants.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
@@ -27,7 +27,7 @@ contract TADelegationDelegationTest is TATestBase, ITAHelpers, ITADelegationEven
         supportedTokens.push(TokenAddress.wrap(address(bico)));
         supportedTokens.push(NATIVE_TOKEN);
 
-        uint16[] memory cdf = ta.getCdfArray(activeRelayers);
+
 
         // Register all Relayers
         for (uint256 i = 0; i < relayerCount; i++) {

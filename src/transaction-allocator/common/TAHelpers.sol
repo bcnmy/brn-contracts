@@ -112,7 +112,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    ) internal view measureGas("_verifyRelayerSelection") returns (bool) {
+    ) internal view measureGas("_verifyRelayerSelection") {
         _verifyExternalStateForTransactionAllocation(
             _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), _blockNumber
         );
@@ -159,8 +159,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
             revert RelayerAddressDoesNotMatchSelectedRelayer();
         }
-
-        return true;
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
