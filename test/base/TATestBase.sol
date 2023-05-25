@@ -14,7 +14,7 @@ abstract contract TATestBase is Test {
     using FixedPointTypeHelper for FixedPointType;
     using ECDSA for bytes32;
 
-    uint256 constant CDF_ERROR_MARGIN = 0.1 ether; // 0.1%
+    uint256 constant CDF_ERROR_MARGIN = 0.005 ether; // 0.005%
 
     string constant mnemonic = "test test test test test test test test test test test junk";
     uint256 constant relayerCount = 10;
@@ -29,9 +29,9 @@ abstract contract TATestBase is Test {
     TokenAddress[] internal supportedTokens;
     ITAProxy.InitalizerParams deployParams = ITAProxy.InitalizerParams({
         blocksPerWindow: 10,
-        epochLengthInSec: 1000,
+        epochLengthInSec: 100,
         relayersPerWindow: 10,
-        jailTimeInSec: 100,
+        jailTimeInSec: 10000,
         withdrawDelayInSec: 50,
         absencePenaltyPercentage: 250,
         minimumStakeAmount: 10000 ether,
@@ -59,7 +59,7 @@ abstract contract TATestBase is Test {
     DelegatorAddress[] internal delegatorAddresses;
     address[] userAddresses;
     mapping(address => uint256) internal userKeys;
-    mapping(RelayerAddress => uint256) internal relayerStake;
+    mapping(RelayerAddress => uint256) internal initialRelayerStake;
     ERC20 bico;
 
     // Test State
@@ -105,7 +105,7 @@ abstract contract TATestBase is Test {
                     string.concat("relayer", vm.toString(i), "account", vm.toString(j))
                 );
             }
-            relayerStake[relayerMainAddress[i]] = 10000 ether * (i + 1);
+            initialRelayerStake[relayerMainAddress[i]] = 10000 ether * (i + 1);
         }
 
         // Generate Delegator Addresses
@@ -179,13 +179,13 @@ abstract contract TATestBase is Test {
         // This is a test, idc about gas
         // wen in-memory mapping?
         for (uint256 i = 0; i < _activeState.relayers.length; i++) {
+            map[i] = latestRelayerState.relayers.length;
             for (uint256 j = 0; j < latestRelayerState.relayers.length; j++) {
                 if (_activeState.relayers[i] == latestRelayerState.relayers[j]) {
                     map[i] = j;
                     break;
                 }
             }
-            map[i] = latestRelayerState.relayers.length;
         }
     }
 
@@ -196,12 +196,12 @@ abstract contract TATestBase is Test {
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _prankRA(relayerAddress);
-            bico.approve(address(ta), relayerStake[relayerAddress]);
+            bico.approve(address(ta), initialRelayerStake[relayerAddress]);
 
             _prankRA(relayerAddress);
             ta.register(
                 latestRelayerState,
-                relayerStake[relayerAddress],
+                initialRelayerStake[relayerAddress],
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
                 delegatorPoolPremiumShare
@@ -209,6 +209,37 @@ abstract contract TATestBase is Test {
 
             _appendRelayerToLatestState(relayerAddress);
         }
+    }
+
+    function _getRelayerAssignedToTx(bytes memory _tx) internal returns (RelayerAddress, uint256, uint256) {
+        bytes[] memory txns_ = new bytes[](1);
+        txns_[0] = _tx;
+
+        for (uint256 i = 0; i < relayerMainAddress.length; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+                _allocateTransactions(relayerAddress, txns_, latestRelayerState);
+
+            if (allotedTransactions.length == 1) {
+                return (relayerAddress, relayerGenerationIterations, selectedRelayerCdfIndex);
+            }
+        }
+
+        fail("No relayer found");
+        return (RelayerAddress.wrap(address(0)), 0, 0);
+    }
+
+    function _allocateTransactions(RelayerAddress, bytes[] memory, RelayerState memory)
+        internal
+        virtual
+        returns (bytes[] memory, uint256, uint256)
+    {
+        fail("Allocate Transactions Not Implemented");
+        return (new bytes[](0), 0, 0);
+    }
+
+    function _calculatePenalty(uint256 _stake) internal view returns (uint256) {
+        return (_stake * ta.absencePenaltyPercentage()) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
     function _checkCdfInLatestState() internal {
@@ -220,7 +251,7 @@ abstract contract TATestBase is Test {
             uint256 relativeStake = latestRelayerState.cdf[i] - (i == 0 ? 0 : latestRelayerState.cdf[i - 1]);
             assertApproxEqRel(
                 relativeStake * totalStake,
-                (relayerStake[relayerAddress] + ta.totalDelegation(relayerAddress)) * cdf[cdf.length - 1],
+                (ta.relayerInfo(relayerAddress).stake + ta.totalDelegation(relayerAddress)) * cdf[cdf.length - 1],
                 CDF_ERROR_MARGIN,
                 string.concat("CDF Verification - Relayer ", vm.toString(i))
             );
@@ -228,9 +259,13 @@ abstract contract TATestBase is Test {
     }
 
     // Relayer State Utils
+    function _updateLatestStateCdf() internal {
+        latestRelayerState.cdf = ta.getLatestCdfArray(latestRelayerState.relayers);
+    }
+
     function _appendRelayerToLatestState(RelayerAddress _relayerAddress) internal {
         latestRelayerState.relayers.push(_relayerAddress);
-        latestRelayerState.cdf = ta.getLatestCdfArray(latestRelayerState.relayers);
+        _updateLatestStateCdf();
     }
 
     function _removeRelayerFromLatestState(RelayerAddress _relayerAddress) internal {
@@ -241,7 +276,7 @@ abstract contract TATestBase is Test {
 
         latestRelayerState.relayers[relayerIndex] = latestRelayerState.relayers[latestRelayerState.relayers.length - 1];
         latestRelayerState.relayers.pop();
-        latestRelayerState.cdf = ta.getLatestCdfArray(latestRelayerState.relayers);
+        _updateLatestStateCdf();
     }
 
     function _findRelayerIndex(RelayerAddress _relayer) internal view returns (uint256) {
@@ -287,4 +322,7 @@ abstract contract TATestBase is Test {
     function _moveForwardToNextEpoch() internal {
         vm.warp(ta.epochEndTimestamp());
     }
+
+    // Add this to be excluded from coverage
+    function test() external pure {}
 }

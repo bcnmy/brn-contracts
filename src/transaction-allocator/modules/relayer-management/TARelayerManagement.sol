@@ -157,7 +157,8 @@ contract TARelayerManagement is
         node.stake += _stake;
 
         // Update Global Counters
-        rms.totalStake += _stake;
+        // When jailing, the full stake is removed from the totalStake, so we need to add it back
+        rms.totalStake += node.stake;
         ++rms.relayerCount;
 
         // Schedule CDF Update

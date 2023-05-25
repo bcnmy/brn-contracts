@@ -56,4 +56,6 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     function debug_setTotalTransactionsProcessed(uint256 _transactionsProcessed) external override {
         getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp] = _transactionsProcessed;
     }
+
+    function test1() external {}
 }

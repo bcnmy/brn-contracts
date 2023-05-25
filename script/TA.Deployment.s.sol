@@ -177,4 +177,6 @@ contract TADeploymentScript is Script {
         bytes memory res = vm.ffi(cmd);
         selectors = abi.decode(res, (bytes4[]));
     }
+
+    function test() external {}
 }

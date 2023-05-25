@@ -29,7 +29,7 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
         uint256 _totalStake,
         FixedPointType _totalTransactions,
         FixedPointType _zScore
-    ) external pure returns (FixedPointType);
+    ) external view returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
     function transactionsSubmittedRelayer(RelayerAddress _relayerAddress) external view returns (uint256);

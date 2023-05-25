@@ -95,7 +95,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            ta.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns_,
@@ -119,7 +119,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            ta.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -149,7 +149,7 @@ contract TATransactionAllocationTest is
         }
 
         assertEq(executionCount, txns.length);
-        assertEq(tam.count(), executionCount);
+        assertEq(ta.count(), executionCount);
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external  {
@@ -161,7 +161,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            ta.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -196,7 +196,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            ta.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -236,7 +236,7 @@ contract TATransactionAllocationTest is
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
             (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
-            tam.allocateMinimalApplicationTransaction(
+            ta.allocateMinimalApplicationTransaction(
                 AllocateTransactionParams({
                     relayerAddress: relayerAddress,
                     requests: txns,
@@ -275,16 +275,16 @@ contract TATransactionAllocationTest is
 
     ////// Liveness Check Tests //////
     function _calculatePenalty(uint256 _stake) internal pure returns (uint256) {
-        return (_stake * ABSENCE_PENALTY) / (100 * PERCENTAGE_MULTIPLIER);
+        return (_stake * ta.absencePenalty()) / (100 * PERCENTAGE_MULTIPLIER);
     }
 
     function testMinimumTransactionForLivenessCalculation() external  {
         FixedPointType minTransactions =
-            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter());
         assertEq(minTransactions.u256(), 24);
 
         minTransactions =
-            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, uint256(50).fp(), LIVENESS_Z_PARAMETER);
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter());
         assertEq(minTransactions.u256(), 9);
     }
 

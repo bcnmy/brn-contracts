@@ -7,29 +7,29 @@ import "ta-common/TAConstants.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 
-contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
+contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
     function testRelayerRegistration() external {
         RelayerState memory currentState = latestRelayerState;
-        uint256 totalStake = relayerStake[relayerMainAddress[0]];
+        uint256 totalStake = initialRelayerStake[relayerMainAddress[0]];
 
         for (uint256 i = 1; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
 
             _prankRA(relayerAddress);
-            bico.approve(address(ta), relayerStake[relayerAddress]);
+            bico.approve(address(ta), initialRelayerStake[relayerAddress]);
 
             vm.expectEmit(true, true, true, true);
             emit RelayerRegistered(
                 relayerAddress,
                 endpoint,
                 relayerAccountAddresses[relayerAddress],
-                relayerStake[relayerAddress],
+                initialRelayerStake[relayerAddress],
                 delegatorPoolPremiumShare
             );
             _prankRA(relayerAddress);
             ta.register(
                 latestRelayerState,
-                relayerStake[relayerAddress],
+                initialRelayerStake[relayerAddress],
                 relayerAccountAddresses[relayerAddress],
                 endpoint,
                 delegatorPoolPremiumShare
@@ -37,7 +37,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             _appendRelayerToLatestState(relayerAddress);
 
             // Relayer State
-            assertEq(ta.relayerInfo(relayerAddress).stake, relayerStake[relayerAddress]);
+            assertEq(ta.relayerInfo(relayerAddress).stake, initialRelayerStake[relayerAddress]);
             assertEq(ta.relayerInfo(relayerAddress).endpoint, endpoint);
             assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Active, true);
             assertEq(ta.relayerInfo(relayerAddress).delegatorPoolPremiumShare == delegatorPoolPremiumShare, true);
@@ -47,7 +47,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             }
 
             // Global Counters
-            totalStake += relayerStake[relayerAddress];
+            totalStake += initialRelayerStake[relayerAddress];
             assertEq(ta.relayerCount(), i + 1);
             assertEq(ta.totalStake(), totalStake);
 
@@ -86,7 +86,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
         // Calculate total stake
         for (uint256 i = 0; i < relayerCount; i++) {
-            totalStake += relayerStake[relayerMainAddress[i]];
+            totalStake += initialRelayerStake[relayerMainAddress[i]];
         }
 
         // De-register relayers with odd index
@@ -107,7 +107,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             _removeRelayerFromLatestState(relayerAddress);
 
             // Relayer State
-            assertEq(ta.relayerInfo(relayerAddress).stake, relayerStake[relayerAddress]);
+            assertEq(ta.relayerInfo(relayerAddress).stake, initialRelayerStake[relayerAddress]);
             assertEq(ta.relayerInfo(relayerAddress).endpoint, endpoint);
             assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Exiting, true);
             assertEq(ta.relayerInfo(relayerAddress).delegatorPoolPremiumShare == delegatorPoolPremiumShare, true);
@@ -116,7 +116,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             }
 
             // Global Counters
-            totalStake -= relayerStake[relayerAddress];
+            totalStake -= initialRelayerStake[relayerAddress];
             assertEq(ta.relayerCount(), relayerCount - relayersUnregistered);
             assertEq(ta.totalStake(), totalStake);
 
@@ -171,7 +171,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
             _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
-            emit Withdraw(relayerAddress, relayerStake[relayerAddress]);
+            emit Withdraw(relayerAddress, initialRelayerStake[relayerAddress]);
             ta.withdraw();
             vm.stopPrank();
 
@@ -179,7 +179,8 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
             assertEq(ta.relayerInfo(relayerAddress).minExitTimestamp, 0);
             assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Uninitialized, true);
             assertEq(
-                bico.balanceOf(RelayerAddress.unwrap(relayerAddress)), balanceBefore + relayerStake[relayerAddress]
+                bico.balanceOf(RelayerAddress.unwrap(relayerAddress)),
+                balanceBefore + initialRelayerStake[relayerAddress]
             );
         }
     }
@@ -187,10 +188,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
     function testSetRelayerAccountStatus() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -216,10 +217,14 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         RelayerAccountAddress[] memory accounts;
 
         _startPrankRA(relayerMainAddress[1]);
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         vm.expectRevert(NoAccountsProvided.selector);
         ta.register(
-            latestRelayerState, relayerStake[relayerMainAddress[1]], accounts, endpoint, delegatorPoolPremiumShare
+            latestRelayerState,
+            initialRelayerStake[relayerMainAddress[1]],
+            accounts,
+            endpoint,
+            delegatorPoolPremiumShare
         );
         vm.stopPrank();
     }
@@ -251,10 +256,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register
         _startPrankRA(relayerMainAddress[1]);
         RelayerState memory currentState = latestRelayerState;
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -277,10 +282,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register
         _startPrankRA(relayerMainAddress[1]);
         RelayerState memory currentState = latestRelayerState;
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -296,7 +301,7 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         _prankRA(relayerMainAddress[1]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -307,10 +312,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register
         _startPrankRA(relayerMainAddress[1]);
         RelayerState memory currentState = latestRelayerState;
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -342,10 +347,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register
         _startPrankRA(relayerMainAddress[1]);
         RelayerState memory currentState = latestRelayerState;
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -366,10 +371,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
         // Register
         _startPrankRA(relayerMainAddress[1]);
         RelayerState memory currentState = latestRelayerState;
-        bico.approve(address(ta), relayerStake[relayerMainAddress[1]]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
-            relayerStake[relayerMainAddress[1]],
+            initialRelayerStake[relayerMainAddress[1]],
             relayerAccountAddresses[relayerMainAddress[1]],
             endpoint,
             delegatorPoolPremiumShare
@@ -392,7 +397,10 @@ contract TARelayerManagementRegistrationTest is TATestBase, ITARelayerManagement
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidWithdrawal.selector, relayerStake[relayerMainAddress[1]], block.timestamp, block.timestamp + 1
+                InvalidWithdrawal.selector,
+                initialRelayerStake[relayerMainAddress[1]],
+                block.timestamp,
+                block.timestamp + 1
             )
         );
         _prankRA(relayerMainAddress[1]);

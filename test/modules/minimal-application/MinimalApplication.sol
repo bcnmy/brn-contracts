@@ -24,4 +24,6 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
     ) external view override returns (bytes[] memory, uint256, uint256) {
         return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
+
+    function test2() external {}
 }
