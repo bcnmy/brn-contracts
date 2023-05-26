@@ -16,7 +16,7 @@ library VersionManager {
         _v.slot1 = _currentHash;
     }
 
-    function _activeStateHash(VersionManagerState storage _v, uint256 _currentTime) internal view returns (bytes32) {
+    function _activeStateHash(VersionManagerState storage _v, uint256 _currentTime) private view returns (bytes32) {
         if (_v.pendingHashActivationTime == 0) {
             return _v.slot1;
         }
@@ -28,7 +28,7 @@ library VersionManager {
         return _v.slot2;
     }
 
-    function _pendingStateHash(VersionManagerState storage _v) internal view returns (bytes32) {
+    function _pendingStateHash(VersionManagerState storage _v) private view returns (bytes32) {
         return _v.slot2 == bytes32(0) ? _v.slot1 : _v.slot2;
     }
 
