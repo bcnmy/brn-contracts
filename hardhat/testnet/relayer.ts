@@ -34,7 +34,7 @@ export class Relayer {
       await logTransaction(
         config.deployer.sendTransaction({
           to: this.wallet.address,
-          value: config.fundingAmount.sub(relayerBalance),
+          value: config.fundingAmount.mul(2),
         }),
         `Relayer ${this.wallet.address}: Funding Tx`
       );
@@ -152,18 +152,23 @@ export class Relayer {
       // Submit transactions
       console.log(`Relayer ${this.wallet.address}: Submitting transactions`);
       await logTransaction(
-        config.transactionAllocator.connect(this.wallet).execute({
-          reqs: txnAllocated,
-          forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
-          relayerIndex,
-          relayerGenerationIterationBitmap: relayerGenerationIterations,
-          activeState: currentState,
-          latestState: latestState,
-          activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
-            currentState,
-            latestState
-          ),
-        }),
+        config.transactionAllocator.connect(this.wallet).execute(
+          {
+            reqs: txnAllocated,
+            forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
+            relayerIndex,
+            relayerGenerationIterationBitmap: relayerGenerationIterations,
+            activeState: currentState,
+            latestState: latestState,
+            activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
+              currentState,
+              latestState
+            ),
+          },
+          {
+            gasLimit: 10000000,
+          }
+        ),
         `Relayer ${this.wallet.address}: Submitted transactions`
       );
     });

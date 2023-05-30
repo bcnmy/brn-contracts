@@ -43,7 +43,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         _executeTransactions(
             _params.reqs,
             _params.forwardedNativeAmounts,
-            _params.activeState.relayers.length,
+            getRMStorage().relayersPerWindow,
             relayerAddress,
             _params.relayerGenerationIterationBitmap
         );
@@ -221,7 +221,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         returns (RelayerAddress[] memory selectedRelayers, uint256[] memory cdfIndex)
     {
         _verifyExternalStateForTransactionAllocation(
-            _activeState.cdf.cd_hash(), _activeState.relayers.m_hash(), block.number
+            _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), block.number
         );
 
         if (_activeState.cdf.length == 0) {

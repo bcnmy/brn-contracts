@@ -10,9 +10,9 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
     modifier applicationHandler(bytes calldata _dataToHash) {
         if (msg.sender != address(this)) revert ExternalCallsNotAllowed();
 
-        (, uint256 relayerGenerationIterationBitmap, uint256 relayerCount) = _getCalldataParams();
+        (, uint256 relayerGenerationIterationBitmap, uint256 relayersPerWindow) = _getCalldataParams();
 
-        if (!_verifyTransactionAllocation(_dataToHash, relayerGenerationIterationBitmap, relayerCount)) {
+        if (!_verifyTransactionAllocation(_dataToHash, relayerGenerationIterationBitmap, relayersPerWindow)) {
             revert RelayerNotAssignedToTransaction();
         }
 
@@ -23,16 +23,16 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         internal
         pure
         virtual
-        returns (RelayerAddress relayerAddress, uint256 relayerGenerationIterationBitmap, uint256 relayerCount)
+        returns (RelayerAddress relayerAddress, uint256 relayerGenerationIterationBitmap, uint256 relayersPerWindow)
     {
         /*
          * Calldata Map
-         * |-------?? bytes--------|------32 bytes-------|---------32 bytes -------|---------20 bytes -------|
-         * |---Original Calldata---|------RGI Bitmap-----|------Relayer Count------|-----Relayer Address-----|
+         * |-------?? bytes--------|------32 bytes-------|---------32 bytes -------------|---------20 bytes -------|
+         * |---Original Calldata---|------RGI Bitmap-----|------Relayers Per Window------|-----Relayer Address-----|
          */
         assembly {
             relayerAddress := shr(96, calldataload(sub(calldatasize(), 20)))
-            relayerCount := calldataload(sub(calldatasize(), 52))
+            relayersPerWindow := calldataload(sub(calldatasize(), 52))
             relayerGenerationIterationBitmap := calldataload(sub(calldatasize(), 84))
         }
     }
@@ -45,7 +45,8 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         virtual
         returns (uint256)
     {
-        return uint256(_getTransactionHash(_txCalldata)) % _relayersPerWindow;
+        bytes32 txHash = _getTransactionHash(_txCalldata);
+        return uint256(txHash) % _relayersPerWindow;
     }
 
     function _verifyTransactionAllocation(
@@ -53,7 +54,8 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayersPerWindow
     ) internal pure virtual returns (bool) {
-        return (_relayerGenerationIterationBitmap >> _getAllotedRelayerIndex(_txCalldata, _relayersPerWindow)) & 1 == 1;
+        uint256 relayerIndex = _getAllotedRelayerIndex(_txCalldata, _relayersPerWindow);
+        return (_relayerGenerationIterationBitmap >> relayerIndex) & 1 == 1;
     }
 
     function _allocateTransaction(
@@ -77,9 +79,9 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         uint256 j;
         for (uint256 i; i != length;) {
             // If the transaction can be processed by this relayer, store it's info
-            uint256 relayerIndex = _getAllotedRelayerIndex(_requests[i], getRMStorage().relayersPerWindow);
+            uint256 relayerIndex = _getAllotedRelayerIndex(_requests[i], relayersAllocated.length);
             if (relayersAllocated[relayerIndex] == _relayerAddress) {
-                relayerGenerationIterations |= 1 << relayerIndex;
+                relayerGenerationIterations |= (1 << relayerIndex);
                 txnAllocated[j] = _requests[i];
                 selectedRelayerCdfIndex = relayerStakePrefixSumIndex[relayerIndex];
                 unchecked {

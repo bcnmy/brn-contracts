@@ -9,7 +9,8 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
     uint256 public count = 0;
 
     function _getTransactionHash(bytes calldata _tx) internal pure virtual override returns (bytes32) {
-        return keccak256(_tx[:20]);
+        bytes32 param = abi.decode(_tx[4:], (bytes32));
+        return keccak256(abi.encodePacked(param));
     }
 
     function executeMinimalApplication(bytes32 _data) external payable override applicationHandler(msg.data) {

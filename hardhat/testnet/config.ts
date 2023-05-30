@@ -22,7 +22,7 @@ const config = {
   bondToken: ERC20FreeMint__factory.connect(BOND_TOKEN_ADDRESS, httpWallet),
   transactionsGenerationIntervalMs: 3000,
   relayerCount: 6,
-  fundingAmount: parseEther('0.001'),
+  fundingAmount: parseEther('1'),
 };
 
 export { config };
