@@ -28,9 +28,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using RAArrayHelper for RelayerAddress[];
 
     modifier measureGas(string memory _name) {
-        uint256 gasStart = gasleft();
+        // uint256 gasStart = gasleft();
         _;
-        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
+        // console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
