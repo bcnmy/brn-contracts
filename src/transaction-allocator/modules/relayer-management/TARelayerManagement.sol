@@ -331,4 +331,10 @@ contract TARelayerManagement is
     function relayerStateUpdateDelayInWindows() external view override returns (uint256) {
         return getRMStorage().relayerStateUpdateDelayInWindows;
     }
+
+    function relayerStateHash() external view returns (bytes32 activeStateHash, bytes32 pendingStateHash) {
+        RMStorage storage rms = getRMStorage();
+        activeStateHash = rms.relayerStateVersionManager.activeStateHash(_windowIndex(block.number));
+        pendingStateHash = rms.relayerStateVersionManager.pendingStateHash();
+    }
 }

@@ -28,9 +28,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using RAArrayHelper for RelayerAddress[];
 
     modifier measureGas(string memory _name) {
-        // uint256 gasStart = gasleft();
+        uint256 gasStart = gasleft();
         _;
-        // console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
+        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
@@ -167,23 +167,21 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal measureGas("_updateCdf_c") {
-        // Update cdf hash
-        bytes32 cdfHash = _generateCdfArray_c(_relayerAddresses).m_hash();
-        bytes32 relayerArrayHash = _relayerAddresses.cd_hash();
+        uint16[] memory cdf = _generateCdfArray_c(_relayerAddresses);
+        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.cd_hash());
 
-        getRMStorage().relayerStateVersionManager.setPendingState(
-            _getRelayerStateHash(cdfHash, relayerArrayHash), _windowIndex(block.number)
-        );
+        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+
+        getRMStorage().relayerStateVersionManager.setPendingState(relayerStateHash, _windowIndex(block.number));
     }
 
     function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal measureGas("_updateCdf_m") {
-        // Update cdf hash
-        bytes32 cdfHash = _generateCdfArray_m(_relayerAddresses).m_hash();
-        bytes32 relayerArrayHash = _relayerAddresses.m_hash();
+        uint16[] memory cdf = _generateCdfArray_m(_relayerAddresses);
+        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.m_hash());
 
-        getRMStorage().relayerStateVersionManager.setPendingState(
-            _getRelayerStateHash(cdfHash, relayerArrayHash), _windowIndex(block.number)
-        );
+        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+
+        getRMStorage().relayerStateVersionManager.setPendingState(relayerStateHash, _windowIndex(block.number));
     }
 
     ////////////////////////////// Delegation ////////////////////////

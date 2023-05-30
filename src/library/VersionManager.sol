@@ -16,7 +16,7 @@ library VersionManager {
         _v.slot1 = _currentHash;
     }
 
-    function _activeStateHash(VersionManagerState storage _v, uint256 _currentTime) private view returns (bytes32) {
+    function activeStateHash(VersionManagerState storage _v, uint256 _currentTime) internal view returns (bytes32) {
         if (_v.pendingHashActivationTime == 0) {
             return _v.slot1;
         }
@@ -28,7 +28,7 @@ library VersionManager {
         return _v.slot2;
     }
 
-    function _pendingStateHash(VersionManagerState storage _v) private view returns (bytes32) {
+    function pendingStateHash(VersionManagerState storage _v) internal view returns (bytes32) {
         return _v.slot2 == bytes32(0) ? _v.slot1 : _v.slot2;
     }
 
@@ -37,11 +37,11 @@ library VersionManager {
         view
         returns (bool)
     {
-        return _hash == _activeStateHash(_v, _currentTime);
+        return _hash == activeStateHash(_v, _currentTime);
     }
 
     function verifyHashAgainstLatestState(VersionManagerState storage _v, bytes32 _hash) internal view returns (bool) {
-        return _hash == _pendingStateHash(_v);
+        return _hash == pendingStateHash(_v);
     }
 
     function setPendingState(VersionManagerState storage _v, bytes32 _hash, uint256 _currentTime) internal {
@@ -51,7 +51,7 @@ library VersionManager {
         _v.slot2 = _hash;
         delete _v.pendingHashActivationTime;
 
-        emit VersionManagerSnapshot(_activeStateHash(_v, _currentTime), _pendingStateHash(_v));
+        emit VersionManagerSnapshot(activeStateHash(_v, _currentTime), pendingStateHash(_v));
     }
 
     function setPendingStateForActivation(VersionManagerState storage _v, uint256 _activationTime) internal {
@@ -61,6 +61,6 @@ library VersionManager {
         }
 
         _v.pendingHashActivationTime = _activationTime;
-        emit VersionManagerPendingStateSetForActivation(_activationTime, _pendingStateHash(_v));
+        emit VersionManagerPendingStateSetForActivation(_activationTime, pendingStateHash(_v));
     }
 }

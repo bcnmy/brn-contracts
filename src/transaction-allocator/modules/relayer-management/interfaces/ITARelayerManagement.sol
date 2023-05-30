@@ -66,4 +66,6 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function minimumStakeAmount() external view returns (uint256);
 
     function relayerStateUpdateDelayInWindows() external view returns (uint256);
+
+    function relayerStateHash() external view returns (bytes32, bytes32);
 }
