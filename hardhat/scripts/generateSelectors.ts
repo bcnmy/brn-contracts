@@ -21,7 +21,7 @@ export const getSelectors = (_interface: Interface) => {
 
 const printSelectors = async (
   contractName: string,
-  artifactFolderPath = path.join(__dirname, '../out')
+  artifactFolderPath = path.join(__dirname, '../../out')
 ) => {
   const contractFilePath = path.join(
     artifactFolderPath,

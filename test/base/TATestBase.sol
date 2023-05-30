@@ -27,7 +27,7 @@ abstract contract TATestBase is Test {
     uint256 constant initialUserAccountFunds = 1 ether;
 
     TokenAddress[] internal supportedTokens;
-    ITAProxy.InitalizerParams deployParams = ITAProxy.InitalizerParams({
+    ITAProxy.InitializerParams deployParams = ITAProxy.InitializerParams({
         blocksPerWindow: 10,
         epochLengthInSec: 100,
         relayersPerWindow: 10,
@@ -143,7 +143,7 @@ abstract contract TATestBase is Test {
 
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
-        ta = script.deployTest(deployerPrivateKey, deployParams);
+        ta = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
 
         _appendRelayerToLatestState(relayerMainAddress[0]);
     }

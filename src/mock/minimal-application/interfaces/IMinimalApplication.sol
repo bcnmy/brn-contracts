@@ -12,5 +12,5 @@ interface IMinimalApplication is IMinimalApplicationEventsErrors, IApplicationBa
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
         RelayerState calldata _currentState
-    ) external returns (bytes[] memory, uint256, uint256);
+    ) external view returns (bytes[] memory, uint256, uint256);
 }

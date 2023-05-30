@@ -132,6 +132,7 @@ contract TARelayerManagement is
         delete rms.relayerInfo[relayerAddress];
     }
 
+    // TODO: Allow relayers to directly exit post jail expiry
     function unjail(RelayerState calldata _latestState, uint256 _stake) external override measureGas("unjail") {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);

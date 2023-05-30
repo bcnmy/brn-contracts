@@ -6,7 +6,7 @@ import "./base/TATestBase.sol";
 import "ta-common/TAConstants.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
-import "./modules/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
+import "mock/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
 
 contract TransactionAllocationTest is
     TATestBase,

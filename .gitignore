@@ -12,10 +12,8 @@ docs/
 
 # Dotenv file
 .env
-hardhat
-
 node_modules
-.env
+.env.sh
 coverage
 coverage.json
 typechain

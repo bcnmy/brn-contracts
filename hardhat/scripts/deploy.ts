@@ -9,10 +9,10 @@ import {
   MockERC20,
 } from '../typechain-types';
 import { ITransactionAllocator__factory } from '../typechain-types/factories/src/transaction-allocator/interfaces';
-import { InitalizerParamsStruct } from '../typechain-types/src/transaction-allocator/TAProxy';
+import { InitializerParamsStruct } from '../typechain-types/src/transaction-allocator/TAProxy';
 import { getSelectors } from './utils';
 
-export const deploy = async (params: InitalizerParamsStruct) => {
+export const deploy = async (params: InitializerParamsStruct) => {
   console.log('Deploying contract...');
   const [deployer] = await ethers.getSigners();
 

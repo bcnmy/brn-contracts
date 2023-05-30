@@ -28,7 +28,7 @@ contract TAProxy is
     using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
 
-    constructor(address[] memory modules, bytes4[][] memory selectors, InitalizerParams memory _params) {
+    constructor(address[] memory modules, bytes4[][] memory selectors, InitializerParams memory _params) {
         if (modules.length != selectors.length) {
             revert ParameterLengthMismatch();
         }
@@ -64,7 +64,7 @@ contract TAProxy is
     /* solhint-enable no-complex-fallback, payable-fallback, no-inline-assembly */
 
     // TODO: Move to custom calldata?
-    function _initialize(InitalizerParams memory _params) internal {
+    function _initialize(InitializerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
         TADStorage storage tds = getTADStorage();
         TAStorage storage tas = getTAStorage();

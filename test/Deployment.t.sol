@@ -38,7 +38,7 @@ contract DeploymentTest is Test {
 
     function testDeployment() external {
         supportedTokens.push(TokenAddress.wrap(address(this)));
-        ITAProxy.InitalizerParams memory params = ITAProxy.InitalizerParams({
+        ITAProxy.InitializerParams memory params = ITAProxy.InitializerParams({
             blocksPerWindow: 1,
             epochLengthInSec: 100,
             relayersPerWindow: 3,

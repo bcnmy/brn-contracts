@@ -7,7 +7,7 @@ import "ta-common/TAConstants.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
-import "./modules/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
+import "mock/minimal-application/interfaces/IMinimalApplicationEventsErrors.sol";
 
 contract RelayerLivenessAndJailingTest is
     TATestBase,

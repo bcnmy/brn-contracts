@@ -10,7 +10,7 @@ interface ITAProxy {
 
     event ModuleAdded(address indexed moduleAddr, bytes4[] selectors);
 
-    struct InitalizerParams {
+    struct InitializerParams {
         uint256 blocksPerWindow;
         uint256 epochLengthInSec;
         uint256 relayersPerWindow;

@@ -12,5 +12,6 @@ ta-relayer-management=src/transaction-allocator/modules/relayer-management/
 ta-transaction-allocation=src/transaction-allocator/modules/transaction-allocation/
 ta-base-application=src/transaction-allocator/modules/application/base-application/
 ta-wormhole-application=src/transaction-allocator/modules/application/wormhole/
+mock=src/mock/
 
 @openzeppelin/contracts=lib/openzeppelin-contracts/contracts
