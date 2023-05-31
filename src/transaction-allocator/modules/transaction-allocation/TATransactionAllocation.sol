@@ -436,7 +436,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         FixedPointType p = _relayerStake.fp() / _totalStake.fp();
-        FixedPointType s = ((p * (FP_ONE - p)) / _totalTransactions).sqrt();
+        FixedPointType s = ((p * (FP_ONE - p)) * _totalTransactions).sqrt();
         FixedPointType d = _zScore * s;
         FixedPointType e = p * _totalTransactions;
         if (e > d) {

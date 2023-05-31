@@ -20,9 +20,10 @@ const config = {
   transactionAllocator: ITransactionAllocator__factory.connect(TA_ADDRESS, httpWallet),
   transactionAllocatorWs: ITransactionAllocator__factory.connect(TA_ADDRESS, wsWallet),
   bondToken: ERC20FreeMint__factory.connect(BOND_TOKEN_ADDRESS, httpWallet),
-  transactionsGenerationIntervalMs: 500,
+  transactionsPerSecond: 100,
   relayerCount: 10,
   fundingAmount: parseEther('1'),
+  writeLogIntervalSec: 10,
 };
 
 export { config };

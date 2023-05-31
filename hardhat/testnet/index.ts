@@ -5,7 +5,7 @@ import { Wallet } from 'ethers';
 import { metrics } from './metrics';
 
 (async () => {
-  console.log('Starting tesnet demo..');
+  console.log('Starting simulation..');
 
   // Initialize the Mempool
   const mempool = new Mempool();

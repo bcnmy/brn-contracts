@@ -13,19 +13,24 @@ export class Mempool {
   public init() {
     // Generate Transactions
     setInterval(() => {
-      const currentTransactionInput = Math.floor(Math.random() * 10000000000);
-      console.log(
-        `Tx Generator: Generating new transaction with argument: ${currentTransactionInput}`
-      );
-      const calldata = IMinimalApplication__factory.createInterface().encodeFunctionData(
-        'executeMinimalApplication',
-        [solidityKeccak256(['uint256'], [currentTransactionInput])]
-      );
+      const txs: string[] = new Array(config.transactionsPerSecond).fill(0).map(() => {
+        const currentTransactionInput = Math.floor(Math.random() * 10000000000);
+        console.log(
+          `Tx Generator: Generating new transaction with argument: ${currentTransactionInput}`
+        );
+        return IMinimalApplication__factory.createInterface().encodeFunctionData(
+          'executeMinimalApplication',
+          [solidityKeccak256(['uint256'], [currentTransactionInput])]
+        );
+      });
+
       this.lock.acquire(this.lockName, async () => {
-        this.pool.add(calldata);
+        txs.forEach((t) => {
+          this.pool.add(t);
+        });
         await metrics.setTransactionsInMempool(this.pool.size);
       });
-    }, config.transactionsGenerationIntervalMs);
+    }, 1000);
   }
 
   public async getTransactions(): Promise<Set<string>> {

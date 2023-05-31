@@ -37,16 +37,23 @@ contract RelayerLivenessAndJailingTest is
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
     }
 
+    function testLivenessCalculationEx() external {
+        FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(
+            90000 * 10 ** 18, 460000 * 10 ** 18, uint256(2248).fp(), ta.livenessZParameter()
+        );
+        console.log("minTransactions: %s", FixedPointType.unwrap(minTransactions));
+    }
+
     function testMinimumTransactionForLivenessCalculation() external {
         FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(
             10 ** 18, 2 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter()
         );
-        assertEq(minTransactions.u256(), 24);
+        assertEq(minTransactions.u256(), 13);
 
         minTransactions = ta.calculateMinimumTranasctionsForLiveness(
             10 ** 18, 5 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter()
         );
-        assertEq(minTransactions.u256(), 9);
+        assertEq(minTransactions.u256(), 0);
     }
 
     function testPenalizeActiveRelayerIfInsufficientTransactionAreSubmitted() external {

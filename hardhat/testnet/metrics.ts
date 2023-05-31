@@ -3,6 +3,7 @@ import { table } from 'table';
 import AsyncLock from 'async-lock';
 import * as fs from 'fs';
 import { formatEther } from 'ethers/lib/utils';
+import { uuid } from 'uuidv4';
 import { BigNumber } from 'ethers';
 
 export class Metrics {
@@ -12,6 +13,12 @@ export class Metrics {
   private relayers: string[] = [];
   private blocksUntilNextWindow = 0;
   public originalStake: { [key: string]: BigNumber } = {};
+  private nextWriteTimeMs = 0;
+  private metricsId = uuid();
+
+  constructor() {
+    console.log(`Metrics ID: ${this.metricsId}`);
+  }
 
   public async setRelayers(relayers: string[], stake: BigNumber[]) {
     this.lock.acquire(this.lockName, () => {
@@ -93,6 +100,7 @@ export class Metrics {
             return [relayer, txns.toString(), `${perc.toString()}%`];
           })
         )),
+        ['Total', totalTransactions.toString(), '-'],
       ];
       result += `\n\nTransactions submitted by relayers:\n${table(
         transactionsSubmittedByRelayersTabularData as any
@@ -107,7 +115,15 @@ export class Metrics {
 
   public async writeMetricsToFile() {
     const metrics = await this.generateMetrics();
-    fs.writeFileSync('metrics.txt', metrics);
+    fs.mkdirSync(`metrics/${this.metricsId}`, { recursive: true });
+    fs.writeFileSync(`metrics/${this.metricsId}/metrics.txt`, metrics);
+
+    const now = Date.now();
+    if (now > this.nextWriteTimeMs) {
+      fs.mkdirSync(`metrics/${this.metricsId}`, { recursive: true });
+      fs.writeFileSync(`metrics/${this.metricsId}/metrics-${now}.txt`, metrics);
+      this.nextWriteTimeMs = now + config.writeLogIntervalSec * 1000;
+    }
   }
 }
 
