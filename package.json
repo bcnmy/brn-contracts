@@ -31,6 +31,7 @@
     "@nomiclabs/hardhat-ethers": "^2.2.2",
     "async-lock": "^1.4.0",
     "csv-writer": "^1.6.0",
-    "dotenv": "^16.1.0"
+    "dotenv": "^16.1.0",
+    "table": "^6.8.1"
   }
 }

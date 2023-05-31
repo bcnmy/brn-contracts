@@ -2,6 +2,7 @@ import { config } from './config';
 import { Mempool } from './mempool';
 import { Relayer } from './relayer';
 import { Wallet } from 'ethers';
+import { metrics } from './metrics';
 
 (async () => {
   console.log('Starting tesnet demo..');
@@ -41,8 +42,13 @@ import { Wallet } from 'ethers';
     relayers.push(relayer);
   }
 
+  await metrics.setRelayers(relayers.map((r) => r.wallet.address));
+
   // Start the relayers
   for (const relayer of relayers) {
     relayer.run();
   }
+
+  // Start the mempool
+  mempool.init();
 })();

@@ -1,21 +1,17 @@
 import { solidityKeccak256 } from 'ethers/lib/utils';
 import AsyncLock from 'async-lock';
 import { IMinimalApplication__factory } from '../../typechain-types';
+import { metrics } from './metrics';
 import { config } from './config';
-
-export interface ITransaction {
-  data: string;
-}
 
 export class Mempool {
   lock = new AsyncLock();
   lockName = 'MEMPOOL';
 
-  pool: Set<ITransaction> = new Set();
+  pool: Set<string> = new Set();
 
-  constructor() {
+  public init() {
     let currentTransactionInput: number = 0;
-
     // Generate Transactions
     setInterval(() => {
       console.log(
@@ -25,27 +21,26 @@ export class Mempool {
         'executeMinimalApplication',
         [solidityKeccak256(['uint256'], [currentTransactionInput++])]
       );
-      this.lock.acquire(this.lockName, () => {
-        this.pool.add({ data: calldata });
+      this.lock.acquire(this.lockName, async () => {
+        this.pool.add(calldata);
+        await metrics.setTransactionsInMempool(this.pool.size);
       });
     }, config.transactionsGenerationIntervalMs);
-
-    // Remove Processed Transactions
-    config.transactionAllocatorWs.on(
-      config.transactionAllocator.filters.TransactionStatus(null, null, null),
-
-      (data) => {
-        this.lock.acquire(this.lockName, () => {
-          console.log('Mempool: Received TransactionStatus event', data);
-        });
-      }
-    );
   }
 
-  public async getTransactions(): Promise<Set<ITransaction>> {
+  public async getTransactions(): Promise<Set<string>> {
     return this.lock.acquire(this.lockName, () => {
       const transactions = new Set(this.pool);
       return transactions;
+    });
+  }
+
+  public async removeTransactions(tx: string[]) {
+    return this.lock.acquire(this.lockName, async () => {
+      tx.forEach((t) => {
+        this.pool.delete(t);
+      });
+      await metrics.setTransactionsInMempool(this.pool.size);
     });
   }
 }

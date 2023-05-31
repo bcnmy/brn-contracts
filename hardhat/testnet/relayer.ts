@@ -5,6 +5,7 @@ import { Mempool } from './mempool';
 import { logTransaction } from './utils';
 import { IMinimalApplication, IMinimalApplication__factory } from '../../typechain-types';
 import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
+import { metrics } from './metrics';
 
 export class Relayer {
   wallet: Wallet;
@@ -99,6 +100,8 @@ export class Relayer {
 
   public async run() {
     config.wsProvider.on('block', async (blockNumber: number) => {
+      metrics.setBlocksUntilNextWindow(blockNumber, this.windowLength);
+
       console.log(`Relayer ${this.wallet.address}: New block ${blockNumber}`);
 
       if (blockNumber % this.windowLength != 0) {
@@ -107,9 +110,7 @@ export class Relayer {
       console.log(`Relayer ${this.wallet.address}: New window ${blockNumber}`);
 
       // Check if transactions can be submitted
-      const pendingTransactions = Array.from(await this.mempool.getTransactions()).map(
-        (tx) => tx.data
-      );
+      const pendingTransactions = Array.from(await this.mempool.getTransactions());
       if (pendingTransactions.length === 0) {
         console.log(`Relayer ${this.wallet.address}: No pending transactions`);
         return;
@@ -171,6 +172,10 @@ export class Relayer {
         ),
         `Relayer ${this.wallet.address}: Submitted transactions`
       );
+
+      // Delete transactions from mempool
+      console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
+      await this.mempool.removeTransactions(txnAllocated);
     });
   }
 }
