@@ -41,7 +41,7 @@ contract TransactionAllocationTest is
         RelayerAddress _relayerAddress,
         bytes[] memory _txns,
         RelayerState memory _relayerState
-    ) internal override returns (bytes[] memory, uint256, uint256) {
+    ) internal view override returns (bytes[] memory, uint256, uint256) {
         return ta.allocateMinimalApplicationTransaction(_relayerAddress, _txns, _relayerState);
     }
 

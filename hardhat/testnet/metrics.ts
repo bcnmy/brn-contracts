@@ -56,7 +56,7 @@ export class Metrics {
       const relayersData = await Promise.all(
         this.relayers.map(async (relayer) => {
           const data: Record<string, any> = await config.transactionAllocator.relayerInfo(relayer);
-          const stakePerc = data.stake.mul(100).div(totalStake);
+          const stakePerc = data.stake.mul(100000).div(totalStake).toNumber() / 1000;
           const status = {
             0: 'Inactive',
             1: 'Active',
@@ -86,9 +86,9 @@ export class Metrics {
         ...(await Promise.all(
           this.relayers.map(async (relayer) => {
             const txns = await config.transactionAllocator.transactionsSubmittedByRelayer(relayer);
-            let perc = BigNumber.from(0);
+            let perc = '';
             if (totalTransactions.gt(0)) {
-              perc = txns.mul(100).div(totalTransactions);
+              perc = ((txns.toNumber() * 100) / totalTransactions.toNumber()).toFixed(2);
             }
             return [relayer, txns.toString(), `${perc.toString()}%`];
           })

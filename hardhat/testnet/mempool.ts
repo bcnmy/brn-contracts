@@ -11,15 +11,15 @@ export class Mempool {
   pool: Set<string> = new Set();
 
   public init() {
-    let currentTransactionInput: number = 0;
     // Generate Transactions
     setInterval(() => {
+      const currentTransactionInput = Math.floor(Math.random() * 10000000000);
       console.log(
         `Tx Generator: Generating new transaction with argument: ${currentTransactionInput}`
       );
       const calldata = IMinimalApplication__factory.createInterface().encodeFunctionData(
         'executeMinimalApplication',
-        [solidityKeccak256(['uint256'], [currentTransactionInput++])]
+        [solidityKeccak256(['uint256'], [currentTransactionInput])]
       );
       this.lock.acquire(this.lockName, async () => {
         this.pool.add(calldata);

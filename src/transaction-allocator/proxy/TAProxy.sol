@@ -92,7 +92,7 @@ contract TAProxy is
         }
 
         // Initial State
-        tas.epochEndTimestamp = block.timestamp + _params.epochLengthInSec;
+        tas.epochEndTimestamp = block.timestamp;
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
 
         // Register Foundation Relayer
