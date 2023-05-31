@@ -42,7 +42,10 @@ import { metrics } from './metrics';
     relayers.push(relayer);
   }
 
-  await metrics.setRelayers(relayers.map((r) => r.wallet.address));
+  await metrics.setRelayers(
+    relayers.map((r) => r.getAdddress()),
+    relayers.map((r) => r.stake)
+  );
 
   // Start the relayers
   for (const relayer of relayers) {

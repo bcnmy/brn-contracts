@@ -11,10 +11,14 @@ export class Metrics {
   private transactionsInMempool = 0;
   private relayers: string[] = [];
   private blocksUntilNextWindow = 0;
+  public originalStake: { [key: string]: BigNumber } = {};
 
-  public async setRelayers(relayers: string[]) {
+  public async setRelayers(relayers: string[], stake: BigNumber[]) {
     this.lock.acquire(this.lockName, () => {
       this.relayers = relayers;
+      this.relayers.map((relayer, index) => {
+        this.originalStake[relayer] = stake[index];
+      });
     });
     await this.writeMetricsToFile();
   }
@@ -53,16 +57,20 @@ export class Metrics {
         this.relayers.map(async (relayer) => {
           const data: Record<string, any> = await config.transactionAllocator.relayerInfo(relayer);
           const stakePerc = data.stake.mul(100).div(totalStake);
+          const status = {
+            0: 'Inactive',
+            1: 'Active',
+            2: 'Exiting',
+            3: 'Jailed',
+          }[data.status as number];
+
           return {
             address: relayer,
-            stake: formatEther(data.stake),
-            stakePercentage: `${stakePerc.toString()}%`,
-            status: {
-              0: 'Inactive',
-              1: 'Active',
-              2: 'Exiting',
-              3: 'Jailed',
-            }[data.status as number],
+            originalStake: formatEther(this.originalStake[relayer] || 0),
+            currentStake: formatEther(data.stake),
+            delta: formatEther(data.stake.sub(this.originalStake[relayer])),
+            stakePercentage: status === 'Jailed' ? '-' : `${stakePerc.toString()}%`,
+            status,
             minExitTimestamp: data.minExitTimestamp.toString(),
             jailedUntilTimestamp: data.jailedUntilTimestamp.toString(),
           };

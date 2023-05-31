@@ -14,7 +14,7 @@ export class Relayer {
 
   constructor(
     privateKey: string,
-    private readonly stake: BigNumberish,
+    public readonly stake: BigNumber,
     private readonly mempool: Mempool
   ) {
     this.wallet = new Wallet(privateKey, config.httpProvider);
@@ -177,5 +177,9 @@ export class Relayer {
       console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
       await this.mempool.removeTransactions(txnAllocated);
     });
+  }
+
+  public getAdddress() {
+    return this.wallet.address;
   }
 }
