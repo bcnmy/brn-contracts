@@ -37,4 +37,5 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
     function epochLengthInSec() external view returns (uint256);
     function epochEndTimestamp() external view returns (uint256);
     function livenessZParameter() external view returns (FixedPointType);
+    function stakeThresholdForJailing() external view returns (uint256);
 }

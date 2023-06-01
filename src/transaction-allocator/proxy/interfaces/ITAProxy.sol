@@ -22,6 +22,7 @@ interface ITAProxy {
         uint256 baseRewardRatePerMinimumStakePerSec;
         uint256 relayerStateUpdateDelayInWindows;
         uint256 livenessZParameter;
+        uint256 stakeThresholdForJailing;
         TokenAddress bondTokenAddress;
         TokenAddress[] supportedTokens;
         // Foundation Relayer Parameters

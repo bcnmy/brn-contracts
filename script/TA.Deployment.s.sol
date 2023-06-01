@@ -65,6 +65,7 @@ contract TADeploymentScript is Script {
                 ),
             relayerStateUpdateDelayInWindows: vm.parseJsonUint(deploymentConfigStr, ".relayerStateUpdateDelayInWindows"),
             livenessZParameter: vm.parseJsonUint(deploymentConfigStr, ".livenessZParameter"),
+            stakeThresholdForJailing: vm.parseJsonUint(deploymentConfigStr, ".stakeThresholdForJailing"),
             bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
             supportedTokens: supportedTokens,
             foundationRelayerAddress: RelayerAddress.wrap(

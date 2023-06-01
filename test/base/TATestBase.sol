@@ -35,6 +35,7 @@ abstract contract TATestBase is Test {
         withdrawDelayInSec: 50,
         absencePenaltyPercentage: 250,
         minimumStakeAmount: 10000 ether,
+        stakeThresholdForJailing: 10000 ether,
         minimumDelegationAmount: 1 ether,
         baseRewardRatePerMinimumStakePerSec: 1003000000000,
         relayerStateUpdateDelayInWindows: 1,

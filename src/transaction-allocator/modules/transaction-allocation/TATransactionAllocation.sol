@@ -345,7 +345,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         (uint256 stakeAfterPenalization, uint256 penalty_) = _penalizeRelayer(relayerAddress);
         penalty = penalty_;
 
-        if (stakeAfterPenalization < getRMStorage().minimumStakeAmount) {
+        if (stakeAfterPenalization < getTAStorage().stakeThresholdForJailing) {
             _jailRelayer(relayerAddress);
             jailedStake = stakeAfterPenalization;
         }
@@ -498,5 +498,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     function livenessZParameter() external view override returns (FixedPointType) {
         return getTAStorage().livenessZParameter;
+    }
+
+    function stakeThresholdForJailing() external view override returns (uint256) {
+        return getTAStorage().stakeThresholdForJailing;
     }
 }

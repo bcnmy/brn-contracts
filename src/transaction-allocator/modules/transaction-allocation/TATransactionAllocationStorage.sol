@@ -13,6 +13,7 @@ abstract contract TATransactionAllocationStorage {
         uint256 epochLengthInSec;
         uint256 epochEndTimestamp;
         FixedPointType livenessZParameter;
+        uint256 stakeThresholdForJailing;
         // Liveness Stats
         mapping(uint256 epochEndTimestamp => mapping(RelayerAddress => uint256 transactionsSubmitted))
             transactionsSubmitted;
