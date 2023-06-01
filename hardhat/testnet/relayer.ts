@@ -12,6 +12,10 @@ export class Relayer {
   windowLength = 0;
   application: IMinimalApplication;
   windowsSelectedIn = new Set<number>();
+  windowsSelectedInButNoTransactions = new Set<number>();
+
+  static stateHashCache: Map<number, [string, string]> = new Map();
+  static allotedRelayersCache: Map<number, string[]> = new Map();
 
   constructor(
     privateKey: string,
@@ -99,6 +103,34 @@ export class Relayer {
     return state;
   }
 
+  private async getRelayerState(window: number): Promise<[string, string]> {
+    if (Relayer.stateHashCache.has(window)) {
+      return Relayer.stateHashCache.get(window)!;
+    }
+
+    const [currentStateHash, latestHash] = await config.transactionAllocator.relayerStateHash();
+    Relayer.stateHashCache.set(window, [currentStateHash, latestHash]);
+    return [currentStateHash, latestHash];
+  }
+
+  private async getAllotedRelayers(window: number): Promise<string[]> {
+    if (Relayer.allotedRelayersCache.has(window)) {
+      return Relayer.allotedRelayersCache.get(window)!;
+    }
+
+    const [currentStateHash] = await this.getRelayerState(window);
+    const currentState = hashToRelayerState[currentStateHash];
+    if (!currentState) {
+      throw new Error(
+        `Relayer ${this.wallet.address}: Current state not found for hash ${currentStateHash}`
+      );
+    }
+
+    const [allotedRelayers] = await config.transactionAllocator.allocateRelayers(currentState);
+    Relayer.allotedRelayersCache.set(window, allotedRelayers);
+    return allotedRelayers;
+  }
+
   public async run() {
     config.wsProvider.on('block', async (blockNumber: number) => {
       metrics.setBlocksUntilNextWindow(blockNumber, this.windowLength);
@@ -109,11 +141,20 @@ export class Relayer {
         return;
       }
       console.log(`Relayer ${this.wallet.address}: New window ${blockNumber}`);
+      const windowIndex = blockNumber / this.windowLength;
+
+      // Check if relayer is selected
+      const allotedRelayers = await this.getAllotedRelayers(windowIndex);
+      if (!allotedRelayers.includes(this.wallet.address)) {
+        return;
+      }
+      this.windowsSelectedIn.add(windowIndex);
 
       // Check if transactions can be submitted
       const pendingTransactions = Array.from(await this.mempool.getTransactions());
       if (pendingTransactions.length === 0) {
         console.log(`Relayer ${this.wallet.address}: No pending transactions`);
+        this.windowsSelectedInButNoTransactions.add(windowIndex);
         return;
       }
 

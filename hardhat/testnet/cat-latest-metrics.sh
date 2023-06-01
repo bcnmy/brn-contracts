@@ -1,0 +1,1 @@
+cat metrics/$(cat metrics/metrics-id.txt)/metrics.txt

@@ -4,12 +4,19 @@ import * as fs from 'fs';
 import { formatEther } from 'ethers/lib/utils';
 import { uuid } from 'uuidv4';
 import { BigNumber } from 'ethers';
+import { Relayer } from './relayer';
+
+const statusCodeToString: Record<number, string> = {
+  0: 'Inactive',
+  1: 'Active',
+  2: 'Exiting',
+  3: 'Jailed',
+};
 
 export class Metrics {
   private transactionsInMempool = 0;
-  private relayers: string[] = [];
+  private relayers: Relayer[] = [];
   private blocksUntilNextWindow = 0;
-  public originalStake: { [key: string]: BigNumber } = {};
   private nextWriteTimeMs = 0;
   private metricsId = uuid();
 
@@ -25,11 +32,8 @@ export class Metrics {
     }, config.metricsUpdateIntervalSec * 1000);
   }
 
-  public setRelayers(relayers: string[], stake: BigNumber[]) {
+  public setRelayers(relayers: Relayer[]) {
     this.relayers = relayers;
-    this.relayers.map((relayer, index) => {
-      this.originalStake[relayer] = stake[index];
-    });
   }
 
   public setTransactionsInMempool(count: number) {
@@ -58,20 +62,18 @@ export class Metrics {
       const totalStake = await config.transactionAllocator.totalStake();
       const relayersData = await Promise.all(
         this.relayers.map(async (relayer) => {
-          const data: Record<string, any> = await config.transactionAllocator.relayerInfo(relayer);
+          const relayerAddress = relayer.wallet.address;
+          const data: Record<string, any> = await config.transactionAllocator.relayerInfo(
+            relayerAddress
+          );
           const stakePerc = data.stake.mul(100000).div(totalStake).toNumber() / 1000;
-          const status = {
-            0: 'Inactive',
-            1: 'Active',
-            2: 'Exiting',
-            3: 'Jailed',
-          }[data.status as number];
+          const status = statusCodeToString[data.status as number];
 
           return {
-            address: relayer,
-            originalStake: formatEther(this.originalStake[relayer] || 0),
+            address: relayerAddress,
+            originalStake: formatEther(relayer.stake || 0),
             currentStake: formatEther(data.stake),
-            delta: formatEther(data.stake.sub(this.originalStake[relayer])),
+            delta: formatEther(data.stake.sub(relayer.stake)),
             stakePercentage: status === 'Jailed' ? '-' : `${stakePerc.toString()}%`,
             status,
             minExitTimestamp: data.minExitTimestamp.toString(),
@@ -86,15 +88,26 @@ export class Metrics {
       const totalTransactions = await config.transactionAllocator.totalTransactionsSubmitted();
       const z = await config.transactionAllocator.livenessZParameter();
       const transactionsSubmittedByRelayersTabularData = [
-        ['Relayer', 'Tx Count', 'Percentage', 'Min Expected Tx'],
+        [
+          'Relayer',
+          'Tx Count',
+          'Percentage',
+          'Min Expected Tx',
+          'Windows Selected In',
+          'Windows Selected In But No Transactions',
+        ],
         ...(await Promise.all(
           this.relayers.map(async (relayer) => {
-            const txns = await config.transactionAllocator.transactionsSubmittedByRelayer(relayer);
+            const relayerAddress = relayer.wallet.address;
+            const txns = await config.transactionAllocator.transactionsSubmittedByRelayer(
+              relayerAddress
+            );
             let perc = '';
             if (totalTransactions.gt(0)) {
               perc = ((txns.toNumber() * 100) / totalTransactions.toNumber()).toFixed(2);
             }
-            const relayerStake = (await config.transactionAllocator.relayerInfo(relayer)).stake;
+            const relayerStake = (await config.transactionAllocator.relayerInfo(relayerAddress))
+              .stake;
             const minExpectedTxns = (
               await config.transactionAllocator.calculateMinimumTranasctionsForLiveness(
                 relayerStake,
@@ -103,10 +116,17 @@ export class Metrics {
                 z
               )
             ).div(BigNumber.from(10).pow(24));
-            return [relayer, txns.toString(), `${perc.toString()}%`, minExpectedTxns.toString()];
+            return [
+              relayerAddress,
+              txns.toString(),
+              `${perc.toString()}%`,
+              minExpectedTxns.toString(),
+              relayer.windowsSelectedIn.size.toString(),
+              relayer.windowsSelectedInButNoTransactions.size.toString(),
+            ];
           })
         )),
-        ['Total', totalTransactions.toString(), '-', '-'],
+        ['Total', totalTransactions.toString(), '-', '-', '-', '-'],
       ];
       result += `\n\nTransactions submitted by relayers:\n${table(
         transactionsSubmittedByRelayersTabularData as any
