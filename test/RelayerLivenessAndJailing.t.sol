@@ -37,13 +37,6 @@ contract RelayerLivenessAndJailingTest is
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
     }
 
-    function testLivenessCalculationEx() external {
-        FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(
-            90000 * 10 ** 18, 460000 * 10 ** 18, uint256(2248).fp(), ta.livenessZParameter()
-        );
-        console.log("minTransactions: %s", FixedPointType.unwrap(minTransactions));
-    }
-
     function testMinimumTransactionForLivenessCalculation() external {
         FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(
             10 ** 18, 2 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter()
@@ -58,8 +51,8 @@ contract RelayerLivenessAndJailingTest is
 
     function testPenalizeActiveRelayerIfInsufficientTransactionAreSubmitted() external {
         RelayerAddress activeRelayer = relayerMainAddress[0];
-        ta.debug_setTotalTransactionsProcessed(100);
-        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 10);
+        ta.debug_setTotalTransactionsProcessed(1000);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 100);
         uint256 totalStake = ta.totalStake();
         uint256 totalPenaly = 0;
 
@@ -156,9 +149,9 @@ contract RelayerLivenessAndJailingTest is
         RelayerAddress inactiveRelayer = relayerMainAddress[0];
         uint256 totalStake = ta.totalStake();
 
-        ta.debug_setTotalTransactionsProcessed(540);
+        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
 
         RelayerState memory currentState = latestRelayerState;
@@ -203,9 +196,9 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
 
-        ta.debug_setTotalTransactionsProcessed(540);
+        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
 
         RelayerState memory currentState = latestRelayerState;
@@ -258,9 +251,9 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(540);
+        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
         RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
@@ -308,9 +301,9 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(540);
+        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
         RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
@@ -337,9 +330,9 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(540);
+        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
         RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
