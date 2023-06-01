@@ -1,14 +1,11 @@
 import { config } from './config';
 import { table } from 'table';
-import AsyncLock from 'async-lock';
 import * as fs from 'fs';
 import { formatEther } from 'ethers/lib/utils';
 import { uuid } from 'uuidv4';
 import { BigNumber } from 'ethers';
 
 export class Metrics {
-  private lock = new AsyncLock();
-  private lockName = 'METRICS';
   private transactionsInMempool = 0;
   private relayers: string[] = [];
   private blocksUntilNextWindow = 0;
@@ -18,30 +15,29 @@ export class Metrics {
 
   constructor() {
     console.log(`Metrics ID: ${this.metricsId}`);
+    fs.mkdirSync(`metrics`, { recursive: true });
+    fs.writeFileSync('metrics/metrics-id.txt', this.metricsId);
   }
 
-  public async setRelayers(relayers: string[], stake: BigNumber[]) {
-    this.lock.acquire(this.lockName, () => {
-      this.relayers = relayers;
-      this.relayers.map((relayer, index) => {
-        this.originalStake[relayer] = stake[index];
-      });
-    });
-    await this.writeMetricsToFile();
+  public init() {
+    setInterval(() => {
+      this.writeMetricsToFile();
+    }, config.metricsUpdateIntervalSec * 1000);
   }
 
-  public async setTransactionsInMempool(count: number) {
-    this.lock.acquire(this.lockName, () => {
-      this.transactionsInMempool = count;
+  public setRelayers(relayers: string[], stake: BigNumber[]) {
+    this.relayers = relayers;
+    this.relayers.map((relayer, index) => {
+      this.originalStake[relayer] = stake[index];
     });
-    await this.writeMetricsToFile();
   }
 
-  public async setBlocksUntilNextWindow(currentBlock: number, windowLength: number) {
-    this.lock.acquire(this.lockName, () => {
-      this.blocksUntilNextWindow = windowLength - (currentBlock % windowLength);
-    });
-    await this.writeMetricsToFile();
+  public setTransactionsInMempool(count: number) {
+    this.transactionsInMempool = count;
+  }
+
+  public setBlocksUntilNextWindow(currentBlock: number, windowLength: number) {
+    this.blocksUntilNextWindow = windowLength - (currentBlock % windowLength);
   }
 
   public async generateMetrics(): Promise<string> {
@@ -88,8 +84,9 @@ export class Metrics {
       result += `\n\nRelayers:\n${table(relayersTabularData as any)}\n`;
 
       const totalTransactions = await config.transactionAllocator.totalTransactionsSubmitted();
+      const z = await config.transactionAllocator.livenessZParameter();
       const transactionsSubmittedByRelayersTabularData = [
-        ['Relayer', 'Total', 'Percentage'],
+        ['Relayer', 'Tx Count', 'Percentage', 'Min Expected Tx'],
         ...(await Promise.all(
           this.relayers.map(async (relayer) => {
             const txns = await config.transactionAllocator.transactionsSubmittedByRelayer(relayer);
@@ -97,10 +94,19 @@ export class Metrics {
             if (totalTransactions.gt(0)) {
               perc = ((txns.toNumber() * 100) / totalTransactions.toNumber()).toFixed(2);
             }
-            return [relayer, txns.toString(), `${perc.toString()}%`];
+            const relayerStake = (await config.transactionAllocator.relayerInfo(relayer)).stake;
+            const minExpectedTxns = (
+              await config.transactionAllocator.calculateMinimumTranasctionsForLiveness(
+                relayerStake,
+                totalStake,
+                totalTransactions.mul(BigNumber.from(10).pow(24)),
+                z
+              )
+            ).div(BigNumber.from(10).pow(24));
+            return [relayer, txns.toString(), `${perc.toString()}%`, minExpectedTxns.toString()];
           })
         )),
-        ['Total', totalTransactions.toString(), '-'],
+        ['Total', totalTransactions.toString(), '-', '-'],
       ];
       result += `\n\nTransactions submitted by relayers:\n${table(
         transactionsSubmittedByRelayersTabularData as any

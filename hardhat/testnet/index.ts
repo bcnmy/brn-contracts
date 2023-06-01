@@ -54,4 +54,7 @@ import { metrics } from './metrics';
 
   // Start the mempool
   mempool.init();
+
+  // Start the metrics
+  metrics.init();
 })();

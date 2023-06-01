@@ -1,4 +1,4 @@
-import { BigNumber, BigNumberish, Wallet } from 'ethers';
+import { BigNumber, Wallet } from 'ethers';
 import { config } from './config';
 import { hashToRelayerState } from './state-tracker';
 import { Mempool } from './mempool';
@@ -11,6 +11,7 @@ export class Relayer {
   wallet: Wallet;
   windowLength = 0;
   application: IMinimalApplication;
+  windowsSelectedIn = new Set<number>();
 
   constructor(
     privateKey: string,
@@ -151,30 +152,36 @@ export class Relayer {
       }
 
       // Submit transactions
-      console.log(`Relayer ${this.wallet.address}: Submitting transactions`);
-      await logTransaction(
-        config.transactionAllocator.connect(this.wallet).execute(
-          {
-            reqs: txnAllocated,
-            forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
-            relayerIndex,
-            relayerGenerationIterationBitmap: relayerGenerationIterations,
-            activeState: currentState,
-            latestState: latestState,
-            activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
-              currentState,
-              latestState
-            ),
-          },
-          {
-            gasLimit: 10000000,
-          }
-        ),
-        `Relayer ${this.wallet.address}: Submitted transactions`
+      console.log(
+        `Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`
       );
+      try {
+        await logTransaction(
+          config.transactionAllocator.connect(this.wallet).execute(
+            {
+              reqs: txnAllocated,
+              forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
+              relayerIndex,
+              relayerGenerationIterationBitmap: relayerGenerationIterations,
+              activeState: currentState,
+              latestState: latestState,
+              activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
+                currentState,
+                latestState
+              ),
+            },
+            {
+              gasLimit: 10000000,
+            }
+          ),
+          `Relayer ${this.wallet.address}: Submitted transaction at ${blockNumber}`
+        );
+        // Delete transactions from mempool
+        console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
+      } catch (e) {
+        process.exit(1);
+      }
 
-      // Delete transactions from mempool
-      console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
       await this.mempool.removeTransactions(txnAllocated);
     });
   }
