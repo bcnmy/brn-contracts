@@ -14,6 +14,6 @@ export const logTransaction = async (
     }
   } catch (e) {
     console.log(`Error in ${log}:  ${JSON.stringify(e)}`);
-    throw e;
+    // throw e;
   }
 };

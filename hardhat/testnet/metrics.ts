@@ -44,10 +44,10 @@ export class Metrics {
     this.blocksUntilNextWindow = windowLength - (currentBlock % windowLength);
   }
 
-  public async generateMetrics(): Promise<string> {
+  public async generateMetrics(): Promise<[string, number[]]> {
     try {
       if (this.relayers.length === 0) {
-        return '';
+        return ['', []];
       }
 
       let result: string = '';
@@ -132,17 +132,28 @@ export class Metrics {
         transactionsSubmittedByRelayersTabularData as any
       )}\n`;
 
-      return result;
+      const txnsDistribution = await Promise.all(
+        this.relayers.map(async (relayer) =>
+          (
+            await config.transactionAllocator.transactionsSubmittedByRelayer(relayer.wallet.address)
+          ).toNumber()
+        )
+      );
+
+      return [result, txnsDistribution];
     } catch (e) {
       console.log(e);
-      return '';
+      return ['', []];
     }
   }
 
   public async writeMetricsToFile() {
-    const metrics = await this.generateMetrics();
+    const [metrics, txns] = await this.generateMetrics();
     fs.mkdirSync(`metrics/${this.metricsId}`, { recursive: true });
     fs.writeFileSync(`metrics/${this.metricsId}/metrics.txt`, metrics);
+    if (txns.length > 0) {
+      fs.appendFile(`metrics/${this.metricsId}/txns.txt`, `${txns.join(',')}\n`, () => {});
+    }
 
     const now = Date.now();
     if (now > this.nextWriteTimeMs) {

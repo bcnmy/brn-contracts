@@ -1,6 +1,6 @@
 {
   "blocksPerWindow": 3,
-  "epochLengthInSec": 3600,
+  "epochLengthInSec": 36000,
   "relayersPerWindow": 4,
   "jailTimeInSec": 100,
   "withdrawDelayInSec": 50,
@@ -10,7 +10,7 @@
   "minimumDelegationAmount": 100000000000000000,
   "baseRewardRatePerMinimumStakePerSec": 1003000000000,
   "relayerStateUpdateDelayInWindows": 1,
-  "livenessZParameter": 3300000000000000000000000,
+  "livenessZParameter": 4000000000000000000000000,
   "bondToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   "supportedTokens": ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"],
   "foundationRelayerAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
