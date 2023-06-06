@@ -48,6 +48,7 @@ contract TransactionAllocationTest is
     function testTransactionExecution() external {
         uint256 executionCount = 0;
         uint256 relayersSelected = 0;
+        uint256 submissionCount = 0;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
@@ -75,12 +76,13 @@ contract TransactionAllocationTest is
             vm.stopPrank();
 
             executionCount += allotedTransactions.length;
-            assertEq(ta.transactionsSubmittedByRelayer(relayerAddress), 1);
+            submissionCount += _countSetBits(relayerGenerationIterations);
+            assertEq(ta.transactionsSubmittedByRelayer(relayerAddress), _countSetBits(relayerGenerationIterations));
         }
 
         assertEq(executionCount, txns.length);
         assertEq(ta.count(), executionCount);
-        assertEq(ta.totalTransactionsSubmitted(), relayersSelected);
+        assertEq(ta.totalTransactionsSubmitted(), submissionCount);
     }
 
     function testCannotExecuteTransactionWithInvalidCdf() external {

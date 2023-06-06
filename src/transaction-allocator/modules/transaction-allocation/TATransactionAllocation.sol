@@ -29,7 +29,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         _verifySufficientValueAttached(_params.forwardedNativeAmounts);
 
         // Verify Relayer Selection
-        _verifyRelayerSelection(
+        uint256 selectionCount = _verifyRelayerSelection(
             msg.sender,
             _params.activeState,
             _params.relayerIndex,
@@ -68,8 +68,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Record Liveness Metrics
         if (_params.reqs.length != 0) {
             unchecked {
-                ++ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress];
-                ++ts.totalTransactionsSubmitted[epochEndTimestamp_];
+                ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress] += selectionCount;
+                ts.totalTransactionsSubmitted[epochEndTimestamp_] += selectionCount;
             }
         }
 
@@ -88,7 +88,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    ) internal view measureGas("_verifyRelayerSelection") {
+    ) internal view measureGas("_verifyRelayerSelection") returns (uint256 selectionCount) {
         _verifyExternalStateForTransactionAllocation(
             _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), _blockNumber
         );
@@ -120,6 +120,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                         // The supplied index does not point to the correct interval
                         revert RelayerIndexDoesNotPointToSelectedCdfInterval();
                     }
+
+                    selectionCount++;
                 }
 
                 unchecked {
@@ -145,7 +147,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // The seed for jth iteration is a function of the base seed and j
         uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
         uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % _max).toUint16();
+        return (seed % _max + 1).toUint16();
     }
 
     function _executeTransactions(

@@ -324,6 +324,15 @@ abstract contract TATestBase is Test {
         vm.warp(ta.epochEndTimestamp());
     }
 
+    function _countSetBits(uint256 _num) internal pure returns (uint256) {
+        uint256 count = 0;
+        while (_num > 0) {
+            count += _num & 1;
+            _num >>= 1;
+        }
+        return count;
+    }
+
     // Add this to be excluded from coverage
     function test() external pure {}
 }
