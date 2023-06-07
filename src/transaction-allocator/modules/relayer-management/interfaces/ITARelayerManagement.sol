@@ -22,7 +22,9 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function withdraw() external;
 
-    function unjail(RelayerState calldata _latestState, uint256 _stake) external;
+    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;
+
+    function unjailAndExit() external;
 
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
 

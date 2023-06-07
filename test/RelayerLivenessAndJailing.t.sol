@@ -244,7 +244,7 @@ contract RelayerLivenessAndJailingTest is
         assertEq(postRemovalState.relayers.length, relayerCount - 1);
     }
 
-    function testJailedRelayerShouldBeAbleToUnjailByAddingMoreStakeAfterCooldown() external {
+    function testJailedRelayerShouldBeAbleToUnjailAndReenterByAddingMoreStakeAfterCooldown() external {
         RelayerAddress inactiveRelayer = relayerMainAddress[0];
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
@@ -272,8 +272,8 @@ contract RelayerLivenessAndJailingTest is
         _startPrankRA(inactiveRelayer);
         bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
         vm.expectEmit(true, true, true, true);
-        emit RelayerUnjailed(inactiveRelayer);
-        ta.unjail(latestRelayerState, initialRelayerStake[inactiveRelayer]);
+        emit RelayerUnjailedAndReentered(inactiveRelayer);
+        ta.unjailAndReenter(latestRelayerState, initialRelayerStake[inactiveRelayer]);
         vm.stopPrank();
 
         _moveForwardToNextEpoch();
@@ -296,7 +296,59 @@ contract RelayerLivenessAndJailingTest is
         assertEq(ta.relayerCount(), relayerCount + 1);
     }
 
-    function testCannotExitJailBeforeJailExpiry() external {
+    function testJailedRelayerShouldBeAbleToUnjailAndExitAfterCooldown() external {
+        RelayerAddress inactiveRelayer = relayerMainAddress[0];
+        uint256 totalStake = ta.totalStake();
+        uint256 relayerCount = ta.relayerCount();
+
+        // Jail the relayer
+        ta.debug_setTotalTransactionsProcessed(5400);
+        for (uint256 i = 1; i < relayerCount; ++i) {
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
+        }
+        RelayerState memory currentState = latestRelayerState;
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+        _removeRelayerFromLatestState(inactiveRelayer);
+        uint256 jailedUntilTimestamp = block.timestamp + ta.jailTimeInSec();
+
+        currentState = latestRelayerState;
+        assertTrue(ta.relayerInfo(inactiveRelayer).status == RelayerStatus.Jailed);
+        totalStake -= initialRelayerStake[inactiveRelayer];
+        relayerCount -= 1;
+
+        vm.warp(jailedUntilTimestamp);
+
+        _startPrankRA(inactiveRelayer);
+        uint256 balance = bico.balanceOf(RelayerAddress.unwrap(inactiveRelayer));
+        uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
+        vm.expectEmit(true, true, true, true);
+        emit RelayerUnjailedAndExited(inactiveRelayer);
+        ta.unjailAndExit();
+        vm.stopPrank();
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        // Verify that stake has been returned
+        assertEq(bico.balanceOf(RelayerAddress.unwrap(inactiveRelayer)), balance + stake);
+
+        // Verify relayer state
+        assertTrue(ta.relayerInfo(inactiveRelayer).status == RelayerStatus.Uninitialized);
+
+        // Verify that the CDF has not changed
+        assertTrue(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()));
+        assertEq(currentState.cdf.length, relayerCount);
+        assertEq(currentState.relayers.length, relayerCount);
+
+        // Verify global counters
+        assertEq(ta.totalStake(), totalStake);
+        assertEq(ta.relayerCount(), relayerCount);
+    }
+
+    function testCannotUnjailAndReenterBeforeJailExpiry() external {
         RelayerAddress inactiveRelayer = relayerMainAddress[0];
         uint256 relayerCount = ta.relayerCount();
 
@@ -320,7 +372,35 @@ contract RelayerLivenessAndJailingTest is
         _startPrankRA(inactiveRelayer);
         bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
         vm.expectRevert(abi.encodeWithSelector(RelayerJailNotExpired.selector, jailedUntilTimestamp));
-        ta.unjail(latestRelayerState, initialRelayerStake[inactiveRelayer]);
+        ta.unjailAndReenter(latestRelayerState, initialRelayerStake[inactiveRelayer]);
+        vm.stopPrank();
+    }
+
+    function testCannotUnjailAndExitJailBeforeJailExpiry() external {
+        RelayerAddress inactiveRelayer = relayerMainAddress[0];
+        uint256 relayerCount = ta.relayerCount();
+
+        // Jail the relayer
+        ta.debug_setTotalTransactionsProcessed(5400);
+        for (uint256 i = 1; i < relayerCount; ++i) {
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
+        }
+        RelayerState memory currentState = latestRelayerState;
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+        _removeRelayerFromLatestState(inactiveRelayer);
+        uint256 jailedUntilTimestamp = block.timestamp + ta.jailTimeInSec();
+
+        currentState = latestRelayerState;
+        assertTrue(ta.relayerInfo(inactiveRelayer).status == RelayerStatus.Jailed);
+
+        vm.warp(jailedUntilTimestamp - 1);
+
+        _startPrankRA(inactiveRelayer);
+        bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
+        vm.expectRevert(abi.encodeWithSelector(RelayerJailNotExpired.selector, jailedUntilTimestamp));
+        ta.unjailAndExit();
         vm.stopPrank();
     }
 
@@ -353,7 +433,7 @@ contract RelayerLivenessAndJailingTest is
                 InsufficientStake.selector, initialRelayerStake[inactiveRelayer] - 1, ta.minimumStakeAmount()
             )
         );
-        ta.unjail(latestRelayerState, expectedPenalty - 1);
+        ta.unjailAndReenter(latestRelayerState, expectedPenalty - 1);
         vm.stopPrank();
     }
 
@@ -363,7 +443,7 @@ contract RelayerLivenessAndJailingTest is
         _startPrankRA(inactiveRelayer);
         bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
         vm.expectRevert(abi.encodeWithSelector(RelayerNotJailed.selector));
-        ta.unjail(latestRelayerState, initialRelayerStake[inactiveRelayer]);
+        ta.unjailAndReenter(latestRelayerState, initialRelayerStake[inactiveRelayer]);
         vm.stopPrank();
     }
 }

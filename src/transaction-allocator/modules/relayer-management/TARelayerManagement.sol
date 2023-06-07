@@ -132,8 +132,11 @@ contract TARelayerManagement is
         delete rms.relayerInfo[relayerAddress];
     }
 
-    // TODO: Allow relayers to directly exit post jail expiry
-    function unjail(RelayerState calldata _latestState, uint256 _stake) external override measureGas("unjail") {
+    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake)
+        external
+        override
+        measureGas("unjailAndReenter")
+    {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
@@ -166,7 +169,26 @@ contract TARelayerManagement is
         RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
         _updateCdf_m(newActiveRelayers);
 
-        emit RelayerUnjailed(relayerAddress);
+        emit RelayerUnjailedAndReentered(relayerAddress);
+    }
+
+    function unjailAndExit() external override measureGas("unjailAndExit") {
+        RMStorage storage rms = getRMStorage();
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+
+        if (node.status != RelayerStatus.Jailed) {
+            revert RelayerNotJailed();
+        }
+        if (node.jailedUntilTimestamp > block.timestamp) {
+            revert RelayerJailNotExpired(node.jailedUntilTimestamp);
+        }
+
+        _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
+
+        emit RelayerUnjailedAndExited(relayerAddress);
+
+        delete rms.relayerInfo[relayerAddress];
     }
 
     ////////////////////////// Relayer Configuration //////////////////////////
