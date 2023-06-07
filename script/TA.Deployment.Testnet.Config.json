@@ -1,5 +1,5 @@
 {
-  "blocksPerWindow": 3,
+  "blocksPerWindow": 2,
   "epochLengthInSec": 3600000,
   "relayersPerWindow": 4,
   "jailTimeInSec": 100,

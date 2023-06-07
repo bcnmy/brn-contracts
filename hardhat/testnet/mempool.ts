@@ -12,7 +12,7 @@ export class Mempool {
   public init() {
     // Generate Transactions
     setInterval(() => {
-      const txs: string[] = new Array(config.transactionsPerSecond).fill(0).map(() => {
+      const txs: string[] = new Array(config.transactionsPerGenerationInterval).fill(0).map(() => {
         const currentTransactionInput = Math.floor(Math.random() * 10000000000);
         console.log(
           `Tx Generator: Generating new transaction with argument: ${currentTransactionInput}`
@@ -29,7 +29,7 @@ export class Mempool {
       });
       metrics.setTransactionsInMempool(this.pool.size);
       // });
-    }, 1000);
+    }, config.generationIntervalSec * 1000);
   }
 
   public async getTransactions(): Promise<Set<string>> {

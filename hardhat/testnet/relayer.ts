@@ -153,7 +153,6 @@ export class Relayer {
       // Check if transactions can be submitted
       const pendingTransactions = Array.from(await this.mempool.getTransactions());
       if (pendingTransactions.length === 0) {
-        console.log(`Relayer ${this.wallet.address}: No pending transactions`);
         this.windowsSelectedInButNoTransactions.add(windowIndex);
         return;
       }
@@ -185,6 +184,7 @@ export class Relayer {
 
       if (txnAllocated.length === 0) {
         console.log(`Relayer ${this.wallet.address}: No transactions allocated`);
+        this.windowsSelectedInButNoTransactions.add(windowIndex);
         return;
       } else {
         console.log(
