@@ -147,6 +147,9 @@ abstract contract TATestBase is Test {
         ta = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
 
         _appendRelayerToLatestState(relayerMainAddress[0]);
+
+        // Make sure windows start with 1
+        _moveForwardByWindows(1);
     }
 
     // Used for triggering livness check, penalization, jailing and state updates

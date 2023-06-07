@@ -21,6 +21,7 @@ interface ITATransactionAllocationEventsErrors {
     error CannotProcessLivenessCheckForCurrentOrFutureEpoch();
     error RelayerIndexMappingMismatch(uint256 oldIndex, uint256 newIndex);
     error RelayerAddressMismatch(RelayerAddress expectedAddress, RelayerAddress actualAddress);
+    error RelayerAlreadySubmittedTransaction(RelayerAddress relayerAddress, uint256 windowId);
 
     event PrepaymentReceived(uint256 indexed index, uint256 indexed amount, TokenAddress indexed tokenAddress);
     event GasFeeRefunded(

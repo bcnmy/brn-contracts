@@ -118,6 +118,50 @@ contract TransactionAllocationTest is
         }
     }
 
+    function testCannotCallExecuteMultipleTimesInTheSameWindow() external {
+        for (uint256 i = 0; i < relayerMainAddress.length; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+                _allocateTransactions(relayerAddress, txns, latestRelayerState);
+
+            if (allotedTransactions.length == 0) {
+                continue;
+            }
+
+            uint256[] memory map = _generateActiveStateToPendingStateMap(latestRelayerState);
+
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
+            ta.execute(
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    relayerIndex: selectedRelayerCdfIndex,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations,
+                    activeState: latestRelayerState,
+                    latestState: latestRelayerState,
+                    activeStateToPendingStateMap: map
+                })
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    RelayerAlreadySubmittedTransaction.selector, relayerAddress, ta.debug_currentWindowIndex()
+                )
+            );
+            ta.execute(
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length),
+                    relayerIndex: selectedRelayerCdfIndex,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations,
+                    activeState: latestRelayerState,
+                    latestState: latestRelayerState,
+                    activeStateToPendingStateMap: map
+                })
+            );
+            vm.stopPrank();
+        }
+    }
+
     function testCannotExecuteTransactionFromUnselectedRelayer() external {
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];

@@ -37,7 +37,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             block.number
         );
 
+        TAStorage storage ts = getTAStorage();
         RelayerAddress relayerAddress = _params.activeState.relayers[_params.relayerIndex];
+
+        // Ensure the relayer can call execute() once per window
+        {
+            uint256 windowId = _windowIndex(block.number);
+            if (ts.lastTransactionSubmissionWindow[relayerAddress] == windowId) {
+                revert RelayerAlreadySubmittedTransaction(relayerAddress, windowId);
+            }
+            ts.lastTransactionSubmissionWindow[relayerAddress] = windowId;
+        }
 
         // Execute Transactions
         _executeTransactions(
@@ -48,7 +58,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _params.relayerGenerationIterationBitmap
         );
 
-        TAStorage storage ts = getTAStorage();
         uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
 
         if (block.timestamp >= epochEndTimestamp_) {

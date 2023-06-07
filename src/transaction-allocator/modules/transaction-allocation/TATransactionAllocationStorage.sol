@@ -18,6 +18,7 @@ abstract contract TATransactionAllocationStorage {
         mapping(uint256 epochEndTimestamp => mapping(RelayerAddress => uint256 transactionsSubmitted))
             transactionsSubmitted;
         mapping(uint256 epochEndTimestamp => uint256) totalTransactionsSubmitted;
+        mapping(RelayerAddress => uint256 lastTransactionSubmissionWindow) lastTransactionSubmissionWindow;
     }
 
     /* solhint-disable no-inline-assembly */
