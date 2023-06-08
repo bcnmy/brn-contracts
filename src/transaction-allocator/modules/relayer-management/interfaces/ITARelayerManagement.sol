@@ -24,8 +24,6 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;
 
-    function unjailAndExit() external;
-
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
@@ -42,7 +40,6 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
         uint256 delegatorPoolPremiumShare;
         RelayerStatus status;
         uint256 minExitTimestamp;
-        uint256 jailedUntilTimestamp;
         uint256 unpaidProtocolRewards;
         FixedPointType rewardShares;
     }

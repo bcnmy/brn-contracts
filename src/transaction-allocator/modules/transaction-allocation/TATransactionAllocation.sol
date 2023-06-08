@@ -402,7 +402,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         uint256 jailedUntilTimestamp = block.timestamp + rms.jailTimeInSec;
         relayerInfo.status = RelayerStatus.Jailed;
-        relayerInfo.jailedUntilTimestamp = jailedUntilTimestamp;
+        relayerInfo.minExitTimestamp = jailedUntilTimestamp;
         emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
     }
 

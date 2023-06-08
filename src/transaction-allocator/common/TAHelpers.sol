@@ -8,7 +8,6 @@ import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/ITAHelpers.sol";
 import "./TAConstants.sol";
-import "./TATypes.sol";
 import "ta-relayer-management/TARelayerManagementStorage.sol";
 import "ta-delegation/TADelegationStorage.sol";
 import "src/library/arrays/U32ArrayHelper.sol";
@@ -28,9 +27,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using RAArrayHelper for RelayerAddress[];
 
     modifier measureGas(string memory _name) {
-        uint256 gasStart = gasleft();
+        // uint256 gasStart = gasleft();
         _;
-        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
+        // console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////

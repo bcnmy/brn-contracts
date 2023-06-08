@@ -40,5 +40,4 @@ interface ITARelayerManagementEventsErrors {
     event GasTokensRemoved(RelayerAddress indexed relayer, TokenAddress[] indexed tokens);
     event RelayerProtocolRewardsClaimed(RelayerAddress indexed relayer, uint256 indexed amount);
     event RelayerUnjailedAndReentered(RelayerAddress indexed relayer);
-    event RelayerUnjailedAndExited(RelayerAddress indexed relayer);
 }

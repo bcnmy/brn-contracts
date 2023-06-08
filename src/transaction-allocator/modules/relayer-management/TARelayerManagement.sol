@@ -58,7 +58,7 @@ contract TARelayerManagement is
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-        //TODO: node.rewardShares = _mintProtocolRewardShares(_stake);
+        node.rewardShares = _mintProtocolRewardShares(_stake);
         node.status = RelayerStatus.Active;
         _setRelayerAccountStatus(relayerAddress, _accounts, true);
 
@@ -91,7 +91,7 @@ contract TARelayerManagement is
             revert InvalidRelayer(relayerAddress);
         }
 
-        // TODO: claimProtocolReward();
+        claimProtocolReward();
 
         RMStorage storage rms = getRMStorage();
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
@@ -105,7 +105,7 @@ contract TARelayerManagement is
         node.minExitTimestamp = block.timestamp + rms.withdrawDelayInSec;
 
         // Set Global Counters
-        // TODO: rms.totalShares = rms.totalShares - node.rewardShares;
+        rms.totalShares = rms.totalShares - node.rewardShares;
         --rms.relayerCount;
         rms.totalStake -= node.stake;
 
@@ -119,13 +119,20 @@ contract TARelayerManagement is
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
 
-        if (node.status != RelayerStatus.Exiting) {
+        if (node.status == RelayerStatus.Active || node.status == RelayerStatus.Uninitialized) {
             revert RelayerNotExiting();
         }
 
-        if (node.stake == 0 || node.minExitTimestamp > block.timestamp) {
+        // Normal Exit
+        if (node.status == RelayerStatus.Exiting && (node.minExitTimestamp > block.timestamp)) {
             revert InvalidWithdrawal(node.stake, block.timestamp, node.minExitTimestamp);
         }
+
+        // Exit After Jail
+        if (node.status == RelayerStatus.Jailed && (node.minExitTimestamp > block.timestamp)) {
+            revert RelayerJailNotExpired(node.minExitTimestamp);
+        }
+
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);
 
@@ -144,8 +151,8 @@ contract TARelayerManagement is
         if (node.status != RelayerStatus.Jailed) {
             revert RelayerNotJailed();
         }
-        if (node.jailedUntilTimestamp > block.timestamp) {
-            revert RelayerJailNotExpired(node.jailedUntilTimestamp);
+        if (node.minExitTimestamp > block.timestamp) {
+            revert RelayerJailNotExpired(node.minExitTimestamp);
         }
         if (node.stake + _stake < rms.minimumStakeAmount) {
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
@@ -156,7 +163,7 @@ contract TARelayerManagement is
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
 
         // Update RelayerInfo
-        delete node.jailedUntilTimestamp;
+        delete node.minExitTimestamp;
         node.status = RelayerStatus.Active;
         node.stake += _stake;
 
@@ -170,25 +177,6 @@ contract TARelayerManagement is
         _updateCdf_m(newActiveRelayers);
 
         emit RelayerUnjailedAndReentered(relayerAddress);
-    }
-
-    function unjailAndExit() external override measureGas("unjailAndExit") {
-        RMStorage storage rms = getRMStorage();
-        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
-
-        if (node.status != RelayerStatus.Jailed) {
-            revert RelayerNotJailed();
-        }
-        if (node.jailedUntilTimestamp > block.timestamp) {
-            revert RelayerJailNotExpired(node.jailedUntilTimestamp);
-        }
-
-        _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
-
-        emit RelayerUnjailedAndExited(relayerAddress);
-
-        delete rms.relayerInfo[relayerAddress];
     }
 
     ////////////////////////// Relayer Configuration //////////////////////////
@@ -292,7 +280,6 @@ contract TARelayerManagement is
             delegatorPoolPremiumShare: node.delegatorPoolPremiumShare,
             status: node.status,
             minExitTimestamp: node.minExitTimestamp,
-            jailedUntilTimestamp: node.jailedUntilTimestamp,
             unpaidProtocolRewards: node.unpaidProtocolRewards,
             rewardShares: node.rewardShares
         });

@@ -20,7 +20,6 @@ abstract contract TARelayerManagementStorage {
         // Relayer Status
         RelayerStatus status;
         uint256 minExitTimestamp;
-        uint256 jailedUntilTimestamp;
         // TODO: Reward share related data should be moved to it's own mapping
         // Delegation
         uint256 delegatorPoolPremiumShare; // *100

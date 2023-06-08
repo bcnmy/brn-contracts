@@ -77,7 +77,6 @@ export class Metrics {
             stakePercentage: status === 'Jailed' ? '-' : `${stakePerc.toString()}%`,
             status,
             minExitTimestamp: data.minExitTimestamp.toString(),
-            jailedUntilTimestamp: data.jailedUntilTimestamp.toString(),
           };
         })
       );

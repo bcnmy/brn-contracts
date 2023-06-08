@@ -324,8 +324,8 @@ contract RelayerLivenessAndJailingTest is
         uint256 balance = bico.balanceOf(RelayerAddress.unwrap(inactiveRelayer));
         uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
         vm.expectEmit(true, true, true, true);
-        emit RelayerUnjailedAndExited(inactiveRelayer);
-        ta.unjailAndExit();
+        emit Withdraw(inactiveRelayer, stake);
+        ta.withdraw();
         vm.stopPrank();
 
         _moveForwardToNextEpoch();
@@ -400,7 +400,7 @@ contract RelayerLivenessAndJailingTest is
         _startPrankRA(inactiveRelayer);
         bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
         vm.expectRevert(abi.encodeWithSelector(RelayerJailNotExpired.selector, jailedUntilTimestamp));
-        ta.unjailAndExit();
+        ta.withdraw();
         vm.stopPrank();
     }
 
