@@ -20,6 +20,14 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function unregister(RelayerState calldata _latestState, uint256 _relayerIndex) external;
 
+    function registerFoundationRelayer(
+        RelayerAddress _foundationRelayerAddress,
+        uint256 _stake,
+        RelayerAccountAddress[] calldata _accounts,
+        string calldata _endpoint,
+        uint256 _delegatorPoolPremiumShare
+    ) external;
+
     function withdraw() external;
 
     function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;

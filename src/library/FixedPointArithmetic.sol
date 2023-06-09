@@ -42,11 +42,11 @@ function fixedPointSubtract(FixedPointType _a, FixedPointType _b) pure returns (
 }
 
 function fixedPointMultiply(FixedPointType _a, FixedPointType _b) pure returns (FixedPointType) {
-    return FixedPointType.wrap((FixedPointType.unwrap(_a) * FixedPointType.unwrap(_b)) / MULTIPLIER);
+    return FixedPointType.wrap(Math.mulDiv(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b), MULTIPLIER));
 }
 
 function fixedPointDivide(FixedPointType _a, FixedPointType _b) pure returns (FixedPointType) {
-    return FixedPointType.wrap((FixedPointType.unwrap(_a) * MULTIPLIER) / FixedPointType.unwrap(_b));
+    return FixedPointType.wrap(Math.mulDiv(FixedPointType.unwrap(_a), MULTIPLIER, FixedPointType.unwrap(_b)));
 }
 
 function fixedPointEquality(FixedPointType _a, FixedPointType _b) pure returns (bool) {

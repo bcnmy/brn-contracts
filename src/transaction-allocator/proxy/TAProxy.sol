@@ -9,6 +9,7 @@ import "./interfaces/ITAProxy.sol";
 import "./TAProxyStorage.sol";
 import "ta-delegation/TADelegationStorage.sol";
 import "ta-relayer-management/TARelayerManagementStorage.sol";
+import "ta-relayer-management/interfaces/ITARelayerManagement.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 import "ta-common/TATypes.sol";
 import "ta-common/TAConstants.sol";
@@ -97,31 +98,21 @@ contract TAProxy is
         rms.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
 
         // Register Foundation Relayer
-        require(_params.foundationRelayerAddress != RelayerAddress.wrap(address(0)));
-        require(_params.foundationRelayerAccountAddresses.length > 0);
-        require(_params.foundationRelayerStake >= _params.minimumStakeAmount);
-        rms.bondToken.safeTransferFrom(
-            RelayerAddress.unwrap(_params.foundationRelayerAddress), address(this), _params.foundationRelayerStake
+        address relayerManagementModule =
+            getProxyStorage().implementations[ITARelayerManagement.registerFoundationRelayer.selector];
+        (bool success,) = relayerManagementModule.delegatecall(
+            abi.encodeCall(
+                ITARelayerManagement.registerFoundationRelayer,
+                (
+                    _params.foundationRelayerAddress,
+                    _params.foundationRelayerStake,
+                    _params.foundationRelayerAccountAddresses,
+                    _params.foundationRelayerEndpoint,
+                    _params.foundationDelegatorPoolPremiumShare
+                )
+            )
         );
-        RelayerInfo storage foundationRelayer = rms.relayerInfo[_params.foundationRelayerAddress];
-        foundationRelayer.stake = _params.foundationRelayerStake;
-        foundationRelayer.endpoint = _params.foundationRelayerEndpoint;
-        foundationRelayer.delegatorPoolPremiumShare = _params.foundationDelegatorPoolPremiumShare;
-        foundationRelayer.status = RelayerStatus.Active;
-        length = _params.foundationRelayerAccountAddresses.length;
-        for (uint256 i; i != length;) {
-            foundationRelayer.isAccount[_params.foundationRelayerAccountAddresses[i]] = true;
-            unchecked {
-                ++i;
-            }
-        }
-        rms.totalStake = _params.foundationRelayerStake;
-        rms.relayerCount = 1;
-        uint16[] memory cdf = new uint16[](1);
-        cdf[0] = CDF_PRECISION_MULTIPLIER;
-        RelayerAddress[] memory relayers = new RelayerAddress[](1);
-        relayers[0] = _params.foundationRelayerAddress;
-        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(cdf.m_hash(), relayers.m_hash())));
+        require(success, "registerFoundationRelayer failed");
     }
 
     /// @notice Adds a new module

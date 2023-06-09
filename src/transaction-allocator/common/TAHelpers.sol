@@ -33,6 +33,13 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
+    modifier onlySelf() {
+        if (msg.sender != address(this)) {
+            revert OnlySelf();
+        }
+        _;
+    }
+
     modifier onlyActiveRelayer(RelayerAddress _relayer) {
         if (!_isActiveRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
@@ -185,8 +192,10 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     ////////////////////////////// Delegation ////////////////////////
     function _addDelegatorRewards(RelayerAddress _relayer, TokenAddress _token, uint256 _amount) internal {
+        if (_amount == 0) {
+            return;
+        }
         getTADStorage().unclaimedRewards[_relayer][_token] += _amount;
-
         emit DelegatorRewardsAdded(_relayer, _token, _amount);
     }
 
@@ -194,9 +203,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _protocolRewardRate() internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
-        return (
-            ds.baseRewardRatePerMinimumStakePerSec.fp() * rs.minimumStakeAmount.fp() * (rs.relayerCount.fp().sqrt())
-        ).u256();
+        FixedPointType rate =
+            rs.relayerCount.fp().sqrt() * (ds.baseRewardRatePerMinimumStakePerSec * rs.minimumStakeAmount).fp();
+        return rate.u256();
     }
 
     function _getUpdatedUnpaidProtocolRewards() internal view returns (uint256) {
@@ -229,8 +238,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
         FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
-        FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.fp();
-        return rewards.u256();
+        uint256 rewards = totalValue.u256() - rs.relayerInfo[_relayer].stake;
+        return rewards;
     }
 
     function _splitRewards(uint256 _totalRewards, uint256 _delegatorRewardSharePercentage)

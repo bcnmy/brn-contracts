@@ -15,6 +15,7 @@ interface ITAHelpers {
     error RelayerAddressDoesNotMatchSelectedRelayer();
     error InvalidLatestRelayerState();
     error InvalidActiveRelayerState();
+    error OnlySelf();
 
     event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);
     event RelayerProtocolRewardSharesBurnt(

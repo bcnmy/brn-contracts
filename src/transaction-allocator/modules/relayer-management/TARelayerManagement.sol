@@ -36,11 +36,55 @@ contract TARelayerManagement is
         uint256 _delegatorPoolPremiumShare
     ) external override measureGas("register") {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _updateProtocolRewards();
 
-        RMStorage storage rms = getRMStorage();
+        // Register Relayer
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
-        RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+        _register(relayerAddress, _stake, _accounts, _endpoint, _delegatorPoolPremiumShare);
 
+        // Queue Update for Active Relayer List
+        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
+        _updateCdf_m(newActiveRelayers);
+        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
+    }
+
+    function registerFoundationRelayer(
+        RelayerAddress _foundationRelayerAddress,
+        uint256 _stake,
+        RelayerAccountAddress[] calldata _accounts,
+        string calldata _endpoint,
+        uint256 _delegatorPoolPremiumShare
+    ) external override {
+        RMStorage storage rms = getRMStorage();
+
+        // TODO: Check if this is the right way to protect this function
+        if (rms.relayerCount != 0) {
+            revert FoundationRelayerAlreadyRegistered();
+        }
+
+        _register(_foundationRelayerAddress, _stake, _accounts, _endpoint, _delegatorPoolPremiumShare);
+
+        // Set Initial Relayer State
+        uint16[] memory cdf = new uint16[](1);
+        cdf[0] = CDF_PRECISION_MULTIPLIER;
+        RelayerAddress[] memory relayers = new RelayerAddress[](1);
+        relayers[0] = _foundationRelayerAddress;
+        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(cdf.m_hash(), relayers.m_hash())));
+    }
+
+    function _register(
+        RelayerAddress _relayerAddress,
+        uint256 _stake,
+        RelayerAccountAddress[] calldata _accounts,
+        string calldata _endpoint,
+        uint256 _delegatorPoolPremiumShare
+    ) internal {
+        RMStorage storage rms = getRMStorage();
+        RelayerInfo storage node = rms.relayerInfo[_relayerAddress];
+
+        if (_relayerAddress == RelayerAddress.wrap(address(0))) {
+            revert InvalidRelayer(_relayerAddress);
+        }
         if (_accounts.length == 0) {
             revert NoAccountsProvided();
         }
@@ -52,24 +96,20 @@ contract TARelayerManagement is
         }
 
         // Transfer stake amount
-        rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
+        rms.bondToken.safeTransferFrom(RelayerAddress.unwrap(_relayerAddress), address(this), _stake);
 
         // Store relayer info
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-        node.rewardShares = _mintProtocolRewardShares(_stake);
+        node.rewardShares = _stake.fp() / _protocolRewardRelayerSharePrice();
         node.status = RelayerStatus.Active;
-        _setRelayerAccountStatus(relayerAddress, _accounts, true);
+        _setRelayerAccountStatus(_relayerAddress, _accounts, true);
 
         // Update Global Counters
         ++rms.relayerCount;
         rms.totalStake += _stake;
-
-        // Update Active Relayer List
-        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
-        _updateCdf_m(newActiveRelayers);
-        emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
+        rms.totalShares = rms.totalShares + node.rewardShares;
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
@@ -80,6 +120,7 @@ contract TARelayerManagement is
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _updateProtocolRewards();
 
         if (_latestState.cdf.length == 1) {
             revert CannotUnregisterLastRelayer();
@@ -91,6 +132,7 @@ contract TARelayerManagement is
             revert InvalidRelayer(relayerAddress);
         }
 
+        // Transfer any pending rewards to the relayers and delegators
         claimProtocolReward();
 
         RMStorage storage rms = getRMStorage();
@@ -105,9 +147,9 @@ contract TARelayerManagement is
         node.minExitTimestamp = block.timestamp + rms.withdrawDelayInSec;
 
         // Set Global Counters
-        rms.totalShares = rms.totalShares - node.rewardShares;
         --rms.relayerCount;
         rms.totalStake -= node.stake;
+        rms.totalShares = rms.totalShares - node.rewardShares;
 
         emit RelayerUnRegistered(relayerAddress);
     }
@@ -158,6 +200,7 @@ contract TARelayerManagement is
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
         }
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _updateProtocolRewards();
 
         // Transfer stake amount
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
@@ -166,11 +209,13 @@ contract TARelayerManagement is
         delete node.minExitTimestamp;
         node.status = RelayerStatus.Active;
         node.stake += _stake;
+        node.rewardShares = node.stake.fp() / _protocolRewardRelayerSharePrice();
 
         // Update Global Counters
-        // When jailing, the full stake is removed from the totalStake, so we need to add it back
-        rms.totalStake += node.stake;
+        // When jailing, the full stake and reward shares are removed, they need to be added back
         ++rms.relayerCount;
+        rms.totalStake += node.stake;
+        rms.totalShares = rms.totalShares + node.rewardShares;
 
         // Schedule CDF Update
         RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
@@ -230,35 +275,22 @@ contract TARelayerManagement is
     function claimProtocolReward() public override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
         _updateProtocolRewards();
 
+        RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
+
         // Calculate Rewards
-        (uint256 relayerReward, uint256 delegatorRewards) =
-            _burnRewardSharesForRelayerAndGetRewards(RelayerAddress.wrap(msg.sender));
+        (uint256 relayerReward, uint256 delegatorRewards) = _burnRewardSharesForRelayerAndGetRewards(relayerAddress);
 
         // Process Delegator Rewards
         RMStorage storage rs = getRMStorage();
-        _addDelegatorRewards(
-            RelayerAddress.wrap(msg.sender), TokenAddress.wrap(address(rs.bondToken)), delegatorRewards
-        );
+        _addDelegatorRewards(relayerAddress, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
 
         // Process Relayer Rewards
-        relayerReward += rs.relayerInfo[RelayerAddress.wrap(msg.sender)].unpaidProtocolRewards;
-        rs.relayerInfo[RelayerAddress.wrap(msg.sender)].unpaidProtocolRewards = 0;
-        _transfer(TokenAddress.wrap(address(rs.bondToken)), msg.sender, relayerReward);
-
-        emit RelayerProtocolRewardsClaimed(RelayerAddress.wrap(msg.sender), relayerReward);
-    }
-
-    function _mintProtocolRewardShares(uint256 _amount) internal returns (FixedPointType) {
-        _updateProtocolRewards();
-
-        RMStorage storage rs = getRMStorage();
-
-        FixedPointType rewardShares = _amount.fp() / _protocolRewardRelayerSharePrice();
-        rs.totalShares = rs.totalShares + rewardShares;
-
-        emit RelayerProtocolRewardMinted(rewardShares);
-
-        return rewardShares;
+        relayerReward += rs.relayerInfo[relayerAddress].unpaidProtocolRewards;
+        rs.relayerInfo[relayerAddress].unpaidProtocolRewards = 0;
+        if (relayerReward > 0) {
+            _transfer(TokenAddress.wrap(address(rs.bondToken)), msg.sender, relayerReward);
+            emit RelayerProtocolRewardsClaimed(relayerAddress, relayerReward);
+        }
     }
 
     ////////////////////////// Getters //////////////////////////

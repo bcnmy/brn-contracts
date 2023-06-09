@@ -818,8 +818,8 @@ DA:256,0
 DA:257,0
 DA:258,0
 DA:260,0
-FN:263,TARelayerManagement._mintProtocolRewardShares
-FNDA:0,TARelayerManagement._mintProtocolRewardShares
+FN:263,TARelayerManagement._calculateProtocolRewardSharesAtCurrentPrice
+FNDA:0,TARelayerManagement._calculateProtocolRewardSharesAtCurrentPrice
 DA:264,0
 DA:266,0
 DA:268,0
