@@ -20,7 +20,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     /// @notice allows relayer to execute a tx on behalf of a client
-    function execute(ExecuteParams calldata _params) public payable measureGas("execute") {
+    function execute(ExecuteParams calldata _params) public payable {
         uint256 length = _params.reqs.length;
         if (length != _params.forwardedNativeAmounts.length) {
             revert ParameterLengthMismatch();
@@ -97,7 +97,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerIndex,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _blockNumber
-    ) internal view measureGas("_verifyRelayerSelection") returns (uint256 selectionCount) {
+    ) internal view returns (uint256 selectionCount) {
         _verifyExternalStateForTransactionAllocation(
             _activeState.cdf.cd_hash(), _activeState.relayers.cd_hash(), _blockNumber
         );
@@ -165,7 +165,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerCount,
         RelayerAddress _relayerAddress,
         uint256 _relayerGenerationIterationBitmap
-    ) internal measureGas("executeTransactions") {
+    ) internal {
         uint256 length = _reqs.length;
 
         for (uint256 i; i != length;) {
@@ -199,11 +199,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         );
     }
 
-    function _verifySufficientValueAttached(uint256[] calldata _forwardedNativeAmounts)
-        internal
-        view
-        measureGas("_verifySufficientValueAttached")
-    {
+    function _verifySufficientValueAttached(uint256[] calldata _forwardedNativeAmounts) internal view {
         uint256 totalExpectedValue;
         uint256 length = _forwardedNativeAmounts.length;
         for (uint256 i; i != length;) {
@@ -285,7 +281,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateToPendingStateMap
-    ) internal measureGas("_processLivenessCheck") {
+    ) internal {
         ProcessLivenessCheckMemoryState memory state;
 
         TAStorage storage ta = getTAStorage();
@@ -324,7 +320,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256[] calldata _activeStateToPendingStateMap,
         uint256 _relayerIndex,
         ProcessLivenessCheckMemoryState memory _state
-    ) internal measureGas("_processLivenessCheckForRelayer") {
+    ) internal {
         if (
             _verifyRelayerLiveness(
                 _activeRelayerState, _relayerIndex, _state.epochEndTimestamp, _state.totalTransactionsInEpoch
@@ -335,29 +331,37 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         RelayerAddress relayerAddress = _activeRelayerState.relayers[_relayerIndex];
         RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
-        uint256 penalty = _calculatePenalty(relayerInfo.stake);
+        uint256 stake = relayerInfo.stake;
+        uint256 penalty = _calculatePenalty(stake);
 
-        if (relayerInfo.stake - penalty >= _state.stakeThresholdForJailing) {
-            _penalizeRelayer(relayerAddress, penalty, _state);
+        if (stake - penalty >= _state.stakeThresholdForJailing) {
+            _penalizeRelayer(relayerAddress, relayerInfo, stake, penalty, _state);
         } else {
             _penalizeAndJailRelayer(
-                _activeRelayerState, _pendingRelayerState, _activeStateToPendingStateMap, _relayerIndex, penalty, _state
+                _pendingRelayerState,
+                _activeStateToPendingStateMap,
+                relayerAddress,
+                relayerInfo,
+                stake,
+                _relayerIndex,
+                penalty,
+                _state
             );
         }
     }
 
     function _penalizeRelayer(
         RelayerAddress _relayerAddress,
+        RelayerInfo storage _relayerInfo,
+        uint256 _stake,
         uint256 _penalty,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
-        RMStorage storage rms = getRMStorage();
-        RelayerInfo storage relayerInfo = rms.relayerInfo[_relayerAddress];
-        RelayerStatus statusBeforeLivenessCheck = relayerInfo.status;
+        RelayerStatus statusBeforeLivenessCheck = _relayerInfo.status;
 
         // Penalize the relayer
-        uint256 updatedStake = relayerInfo.stake - _penalty;
-        relayerInfo.stake = updatedStake;
+        uint256 updatedStake = _stake - _penalty;
+        _relayerInfo.stake = updatedStake;
 
         // The amount to be transferred to the recipients of the penalty (msg.sender, foundation, dao, governance...)
         _state.totalPenalty += _penalty;
@@ -370,7 +374,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             // No need to process pending rewards since the relayer is still in the system, and pending rewards
             // don't change when shares equivalient to penalty are burnt
             FixedPointType protocolRewardSharesBurnt = _penalty.fp() / _state.updatedSharePrice;
-            relayerInfo.rewardShares = relayerInfo.rewardShares - protocolRewardSharesBurnt;
+            _relayerInfo.rewardShares = _relayerInfo.rewardShares - protocolRewardSharesBurnt;
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
         }
@@ -379,43 +383,43 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     function _penalizeAndJailRelayer(
-        RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateToPendingStateMap,
+        RelayerAddress _relayerAddress,
+        RelayerInfo storage _relayerInfo,
+        uint256 _stake,
         uint256 _relayerIndex,
         uint256 _penalty,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
         RMStorage storage rms = getRMStorage();
-        RelayerAddress relayerAddress = _activeRelayerState.relayers[_relayerIndex];
-        RelayerInfo storage relayerInfo = rms.relayerInfo[relayerAddress];
-        RelayerStatus statusBeforeLivenessCheck = relayerInfo.status;
+        RelayerStatus statusBeforeLivenessCheck = _relayerInfo.status;
 
         // If the relayer was an active relayer, process any pending protocol rewards, then destory all of it's shares
         if (statusBeforeLivenessCheck == RelayerStatus.Active) {
             // Calculate Rewards
             (uint256 relayerRewards, uint256 delegatorRewards,) =
-                _getPendingProtocolRewardsData(relayerAddress, _state.updatedUnpaidProtocolRewards);
-            relayerInfo.unpaidProtocolRewards += relayerRewards;
+                _getPendingProtocolRewardsData(_relayerAddress, _state.updatedUnpaidProtocolRewards);
+            _relayerInfo.unpaidProtocolRewards += relayerRewards;
 
             // Process Delegator Rewards
-            _addDelegatorRewards(relayerAddress, TokenAddress.wrap(address(rms.bondToken)), delegatorRewards);
+            _addDelegatorRewards(_relayerAddress, TokenAddress.wrap(address(rms.bondToken)), delegatorRewards);
 
-            FixedPointType protocolRewardSharesBurnt = relayerInfo.rewardShares;
-            relayerInfo.rewardShares = FP_ZERO;
+            FixedPointType protocolRewardSharesBurnt = _relayerInfo.rewardShares;
+            _relayerInfo.rewardShares = FP_ZERO;
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
             _state.totalProtocolRewardsPaid += relayerRewards + delegatorRewards;
         }
 
         // Penalize the relayer
-        uint256 updatedStake = relayerInfo.stake - _penalty;
-        relayerInfo.stake = updatedStake;
+        uint256 updatedStake = _stake - _penalty;
+        _relayerInfo.stake = updatedStake;
 
         // Jail the relayer
         uint256 jailedUntilTimestamp = block.timestamp + rms.jailTimeInSec;
-        relayerInfo.status = RelayerStatus.Jailed;
-        relayerInfo.minExitTimestamp = jailedUntilTimestamp;
+        _relayerInfo.status = RelayerStatus.Jailed;
+        _relayerInfo.minExitTimestamp = jailedUntilTimestamp;
 
         // The amount to be transferred to the recipients of the penalty (msg.sender, foundation, dao, governance...)
         _state.totalPenalty += _penalty;
@@ -434,22 +438,19 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
 
             _removeRelayerFromRelayerList(
-                _state.newRelayerList,
-                _activeRelayerState.relayers[_relayerIndex],
-                _activeStateToPendingStateMap[_relayerIndex]
+                _state.newRelayerList, _relayerAddress, _activeStateToPendingStateMap[_relayerIndex]
             );
             unchecked {
                 ++_state.activeRelayersJailedCount;
             }
         }
 
-        emit RelayerPenalized(relayerAddress, updatedStake, _penalty);
-        emit RelayerJailed(relayerAddress, jailedUntilTimestamp);
+        emit RelayerPenalized(_relayerAddress, updatedStake, _penalty);
+        emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
     }
 
     function _postLivenessCheck(RelayerState calldata _pendingState, ProcessLivenessCheckMemoryState memory _state)
         internal
-        measureGas("_postLivenessCheck")
     {
         RMStorage storage rms = getRMStorage();
 
@@ -499,7 +500,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _totalStake,
         FixedPointType _totalTransactions,
         FixedPointType _zScore
-    ) public view override measureGas("calculateMinimumTranasctionsForLiveness") returns (FixedPointType) {
+    ) public pure override returns (FixedPointType) {
         if (_totalTransactions == FP_ZERO) {
             return FP_ZERO;
         }
@@ -524,7 +525,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _relayerIndex,
         uint256 _epochEndTimestamp,
         FixedPointType _totalTransactionsInEpoch
-    ) internal measureGas("_verifyRelayerLiveness") returns (bool) {
+    ) internal returns (bool) {
         TAStorage storage ts = getTAStorage();
         FixedPointType minimumTransactions;
         {

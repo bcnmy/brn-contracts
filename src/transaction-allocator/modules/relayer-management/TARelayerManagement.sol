@@ -34,7 +34,7 @@ contract TARelayerManagement is
         RelayerAccountAddress[] calldata _accounts,
         string calldata _endpoint,
         uint256 _delegatorPoolPremiumShare
-    ) external override measureGas("register") {
+    ) external override {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
         getRMStorage().totalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
 
@@ -116,7 +116,6 @@ contract TARelayerManagement is
     function unregister(RelayerState calldata _latestState, uint256 _relayerIndex)
         external
         override
-        measureGas("unregister")
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
@@ -175,7 +174,7 @@ contract TARelayerManagement is
     }
 
     // TODO: Allow relayers to provide a list of relayer account addresses to be deleted, which could result in potential gas refunds
-    function withdraw() external override measureGas("withdraw") {
+    function withdraw() external override {
         RMStorage storage rms = getRMStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -201,11 +200,7 @@ contract TARelayerManagement is
         delete rms.relayerInfo[relayerAddress];
     }
 
-    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake)
-        external
-        override
-        measureGas("unjailAndReenter")
-    {
+    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external override {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
@@ -259,7 +254,7 @@ contract TARelayerManagement is
         RelayerAddress _relayerAddress,
         RelayerAccountAddress[] memory _accounts,
         bool[] calldata _status
-    ) internal measureGas("_setRelayerAccountStatus") {
+    ) internal {
         RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
 
         if (_accounts.length != _status.length) {
@@ -280,7 +275,7 @@ contract TARelayerManagement is
         RelayerAddress _relayerAddress,
         RelayerAccountAddress[] memory _accounts,
         bool _status
-    ) internal measureGas("_setRelayerAccountStatus") {
+    ) internal {
         RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
         uint256 length = _accounts.length;
         for (uint256 i; i != length;) {

@@ -55,11 +55,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return keccak256(abi.encodePacked(_cdfHash, _relayerArrayHash));
     }
 
-    function _verifyExternalStateForRelayerStateUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash)
-        internal
-        view
-        measureGas("verifyExternalStateForRelayerStateUpdation")
-    {
+    function _verifyExternalStateForRelayerStateUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash) internal view {
         RMStorage storage rs = getRMStorage();
 
         if (
@@ -75,7 +71,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         bytes32 _cdfHash,
         bytes32 _activeRelayersHash,
         uint256 _blockNumber
-    ) internal view measureGas("verifyExternalStateForTransactionAllocation") {
+    ) internal view {
         RMStorage storage rs = getRMStorage();
         uint256 windowIndex = _windowIndex(_blockNumber);
 
@@ -102,12 +98,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
-    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers)
-        internal
-        view
-        measureGas("_generateCdfArray_c")
-        returns (uint16[] memory)
-    {
+    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers) internal view returns (uint16[] memory) {
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
@@ -137,12 +128,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers)
-        internal
-        view
-        measureGas("_generateCdfArray_m")
-        returns (uint16[] memory)
-    {
+    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers) internal view returns (uint16[] memory) {
         RMStorage storage rs = getRMStorage();
         TADStorage storage ds = getTADStorage();
 
@@ -172,7 +158,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return cdf;
     }
 
-    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal measureGas("_updateCdf_c") {
+    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal {
         uint16[] memory cdf = _generateCdfArray_c(_relayerAddresses);
         bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.cd_hash());
 
@@ -181,7 +167,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         getRMStorage().relayerStateVersionManager.setPendingState(relayerStateHash, _windowIndex(block.number));
     }
 
-    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal measureGas("_updateCdf_m") {
+    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal {
         uint16[] memory cdf = _generateCdfArray_m(_relayerAddresses);
         bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.m_hash());
 
