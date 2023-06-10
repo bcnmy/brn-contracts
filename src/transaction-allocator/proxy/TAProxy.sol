@@ -78,8 +78,8 @@ contract TAProxy is
         rms.withdrawDelayInSec = _params.withdrawDelayInSec;
         rms.absencePenaltyPercentage = _params.absencePenaltyPercentage;
         rms.minimumStakeAmount = _params.minimumStakeAmount;
+        rms.baseRewardRatePerMinimumStakePerSec = _params.baseRewardRatePerMinimumStakePerSec;
         tds.minimumDelegationAmount = _params.minimumDelegationAmount;
-        tds.baseRewardRatePerMinimumStakePerSec = _params.baseRewardRatePerMinimumStakePerSec;
         rms.relayerStateUpdateDelayInWindows = _params.relayerStateUpdateDelayInWindows;
         tas.livenessZParameter = FixedPointType.wrap(_params.livenessZParameter);
         tas.stakeThresholdForJailing = _params.stakeThresholdForJailing;

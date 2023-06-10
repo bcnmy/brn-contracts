@@ -265,160 +265,222 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ///////////////////////////////// Liveness ///////////////////////////////
     struct ProcessLivenessCheckMemoryState {
+        // Cache
+        uint256 epochEndTimestamp;
+        uint256 updatedUnpaidProtocolRewards;
+        uint256 stakeThresholdForJailing;
+        FixedPointType totalTransactionsInEpoch;
+        FixedPointType updatedSharePrice;
+        // State
         uint256 activeRelayersJailedCount;
         uint256 totalPenalty;
         uint256 totalActiveRelayerPenalty;
         uint256 totalActiveRelayerJailedStake;
+        FixedPointType totalProtocolRewardSharesBurnt;
+        uint256 totalProtocolRewardsPaid;
         RelayerAddress[] newRelayerList;
     }
 
     function _processLivenessCheck(
-        RelayerState calldata _activeState,
-        RelayerState calldata _pendingState,
+        RelayerState calldata _activeRelayerState,
+        RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateToPendingStateMap
     ) internal measureGas("_processLivenessCheck") {
-        uint256 epochEndTimestamp_ = getTAStorage().epochEndTimestamp;
+        ProcessLivenessCheckMemoryState memory state;
 
-        FixedPointType totalTransactionsInEpoch = getTAStorage().totalTransactionsSubmitted[epochEndTimestamp_].fp();
-        delete getTAStorage().totalTransactionsSubmitted[epochEndTimestamp_];
+        TAStorage storage ta = getTAStorage();
+        state.epochEndTimestamp = ta.epochEndTimestamp;
+        state.updatedUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
+        state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
+        state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp].fp();
+        state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
+        delete getTAStorage().totalTransactionsSubmitted[state.epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
-        if (totalTransactionsInEpoch == FP_ZERO) {
+        if (state.totalTransactionsInEpoch == FP_ZERO) {
             emit NoTransactionsSubmittedInEpoch();
             return;
         }
 
-        // Save stuff to memory to help with stack too deep error
-        ProcessLivenessCheckMemoryState memory state;
-
-        uint256 activeRelayerCount = _activeState.relayers.length;
+        uint256 activeRelayerCount = _activeRelayerState.relayers.length;
         for (uint256 i; i != activeRelayerCount;) {
-            RelayerStatus statusBeforeLivenessCheck = getRMStorage().relayerInfo[_activeState.relayers[i]].status;
-
-            (uint256 penalty, uint256 jailedStake) =
-                _processLivenessCheckForRelayer(_activeState, i, epochEndTimestamp_, totalTransactionsInEpoch);
-
-            // The amount to be transferred to the recipients of the penalty (msg.sender, foundation, dao, governance...)
-            state.totalPenalty += penalty;
-
-            if (statusBeforeLivenessCheck == RelayerStatus.Active) {
-                // The penalty to be deducted from global totalStake
-                state.totalActiveRelayerPenalty += penalty;
-
-                // If the relayer was active and jailed, we need to remove it from the list of active relayers
-                if (jailedStake > 0) {
-                    // The jailed stake to be deducted from global totalStake
-                    state.totalActiveRelayerJailedStake += jailedStake;
-
-                    // Initialize jailedRelayers array if it is not initialized
-                    if (state.activeRelayersJailedCount == 0) {
-                        state.newRelayerList = _pendingState.relayers;
-                    }
-                    _removeRelayerFromRelayerList(
-                        state.newRelayerList, _activeState.relayers[i], _activeStateToPendingStateMap[i]
-                    );
-                    unchecked {
-                        ++state.activeRelayersJailedCount;
-                    }
-                }
-            }
+            _processLivenessCheckForRelayer(
+                _activeRelayerState, _pendingRelayerState, _activeStateToPendingStateMap, i, state
+            );
 
             unchecked {
                 ++i;
             }
         }
 
-        _postLivnessCheck(
-            _pendingState,
-            state.totalPenalty,
-            state.totalActiveRelayerPenalty,
-            state.totalActiveRelayerJailedStake,
-            state.activeRelayersJailedCount,
-            state.newRelayerList
-        );
+        _postLivenessCheck(_pendingRelayerState, state);
 
-        emit LivenessCheckProcessed(epochEndTimestamp_);
+        emit LivenessCheckProcessed(state.epochEndTimestamp);
     }
 
     function _processLivenessCheckForRelayer(
-        RelayerState calldata _activeState,
+        RelayerState calldata _activeRelayerState,
+        RelayerState calldata _pendingRelayerState,
+        uint256[] calldata _activeStateToPendingStateMap,
         uint256 _relayerIndex,
-        uint256 _epochEndTimestamp,
-        FixedPointType _totalTransactionsInEpoch
-    ) internal measureGas("_processLivenessCheckForRelayer") returns (uint256 penalty, uint256 jailedStake) {
-        if (_verifyRelayerLiveness(_activeState, _relayerIndex, _epochEndTimestamp, _totalTransactionsInEpoch)) {
-            return (0, 0);
+        ProcessLivenessCheckMemoryState memory _state
+    ) internal measureGas("_processLivenessCheckForRelayer") {
+        if (
+            _verifyRelayerLiveness(
+                _activeRelayerState, _relayerIndex, _state.epochEndTimestamp, _state.totalTransactionsInEpoch
+            )
+        ) {
+            return;
         }
 
-        RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
+        RelayerAddress relayerAddress = _activeRelayerState.relayers[_relayerIndex];
+        RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
+        uint256 penalty = _calculatePenalty(relayerInfo.stake);
 
-        // Penalize the relayer
-        (uint256 stakeAfterPenalization, uint256 penalty_) = _penalizeRelayer(relayerAddress);
-        penalty = penalty_;
-
-        if (stakeAfterPenalization < getTAStorage().stakeThresholdForJailing) {
-            _jailRelayer(relayerAddress);
-            jailedStake = stakeAfterPenalization;
+        if (relayerInfo.stake - penalty >= _state.stakeThresholdForJailing) {
+            _penalizeRelayer(relayerAddress, penalty, _state);
+        } else {
+            _penalizeAndJailRelayer(
+                _activeRelayerState, _pendingRelayerState, _activeStateToPendingStateMap, _relayerIndex, penalty, _state
+            );
         }
     }
 
-    function _postLivnessCheck(
-        RelayerState calldata _pendingState,
-        uint256 _totalPenalty,
-        uint256 _totalActiveRelayerPenalty,
-        uint256 _totalActiveRelayerJailedStake,
-        uint256 _activeRelayersJailedCount,
-        RelayerAddress[] memory _postJailRelayerList
-    ) internal measureGas("_postLivnessCheck") {
+    function _penalizeRelayer(
+        RelayerAddress _relayerAddress,
+        uint256 _penalty,
+        ProcessLivenessCheckMemoryState memory _state
+    ) internal {
+        RMStorage storage rms = getRMStorage();
+        RelayerInfo storage relayerInfo = rms.relayerInfo[_relayerAddress];
+        RelayerStatus statusBeforeLivenessCheck = relayerInfo.status;
+
+        // Penalize the relayer
+        uint256 updatedStake = relayerInfo.stake - _penalty;
+        relayerInfo.stake = updatedStake;
+
+        // The amount to be transferred to the recipients of the penalty (msg.sender, foundation, dao, governance...)
+        _state.totalPenalty += _penalty;
+
+        // If the relayer was an active relayer, decrease it's protocol reward shares accordingly
+        if (statusBeforeLivenessCheck == RelayerStatus.Active) {
+            // The penalty to be deducted from global totalStake in _postLivenessCheck
+            _state.totalActiveRelayerPenalty += _penalty;
+
+            // No need to process pending rewards since the relayer is still in the system, and pending rewards
+            // don't change when shares equivalient to penalty are burnt
+            FixedPointType protocolRewardSharesBurnt = _penalty.fp() / _state.updatedSharePrice;
+            relayerInfo.rewardShares = relayerInfo.rewardShares - protocolRewardSharesBurnt;
+
+            _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
+        }
+
+        emit RelayerPenalized(_relayerAddress, updatedStake, _penalty);
+    }
+
+    function _penalizeAndJailRelayer(
+        RelayerState calldata _activeRelayerState,
+        RelayerState calldata _pendingRelayerState,
+        uint256[] calldata _activeStateToPendingStateMap,
+        uint256 _relayerIndex,
+        uint256 _penalty,
+        ProcessLivenessCheckMemoryState memory _state
+    ) internal {
+        RMStorage storage rms = getRMStorage();
+        RelayerAddress relayerAddress = _activeRelayerState.relayers[_relayerIndex];
+        RelayerInfo storage relayerInfo = rms.relayerInfo[relayerAddress];
+        RelayerStatus statusBeforeLivenessCheck = relayerInfo.status;
+
+        // If the relayer was an active relayer, process any pending protocol rewards, then destory all of it's shares
+        if (statusBeforeLivenessCheck == RelayerStatus.Active) {
+            // Calculate Rewards
+            (uint256 relayerRewards, uint256 delegatorRewards,) =
+                _getPendingProtocolRewardsData(relayerAddress, _state.updatedUnpaidProtocolRewards);
+            relayerInfo.unpaidProtocolRewards += relayerRewards;
+
+            // Process Delegator Rewards
+            _addDelegatorRewards(relayerAddress, TokenAddress.wrap(address(rms.bondToken)), delegatorRewards);
+
+            FixedPointType protocolRewardSharesBurnt = relayerInfo.rewardShares;
+            relayerInfo.rewardShares = FP_ZERO;
+
+            _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
+            _state.totalProtocolRewardsPaid += relayerRewards + delegatorRewards;
+        }
+
+        // Penalize the relayer
+        uint256 updatedStake = relayerInfo.stake - _penalty;
+        relayerInfo.stake = updatedStake;
+
+        // Jail the relayer
+        uint256 jailedUntilTimestamp = block.timestamp + rms.jailTimeInSec;
+        relayerInfo.status = RelayerStatus.Jailed;
+        relayerInfo.minExitTimestamp = jailedUntilTimestamp;
+
+        // The amount to be transferred to the recipients of the penalty (msg.sender, foundation, dao, governance...)
+        _state.totalPenalty += _penalty;
+
+        // Update accumulators for _postLivenessCheck
+        if (statusBeforeLivenessCheck == RelayerStatus.Active) {
+            // The penalty to be deducted from global totalStake in _postLivenessCheck
+            _state.totalActiveRelayerPenalty += _penalty;
+
+            // The jailed stake to be deducted from global totalStake
+            _state.totalActiveRelayerJailedStake += updatedStake;
+
+            // Initialize jailedRelayers array if it is not initialized
+            if (_state.activeRelayersJailedCount == 0) {
+                _state.newRelayerList = _pendingRelayerState.relayers;
+            }
+
+            _removeRelayerFromRelayerList(
+                _state.newRelayerList,
+                _activeRelayerState.relayers[_relayerIndex],
+                _activeStateToPendingStateMap[_relayerIndex]
+            );
+            unchecked {
+                ++_state.activeRelayersJailedCount;
+            }
+        }
+
+        emit RelayerPenalized(relayerAddress, updatedStake, _penalty);
+        emit RelayerJailed(relayerAddress, jailedUntilTimestamp);
+    }
+
+    function _postLivenessCheck(RelayerState calldata _pendingState, ProcessLivenessCheckMemoryState memory _state)
+        internal
+        measureGas("_postLivenessCheck")
+    {
         RMStorage storage rms = getRMStorage();
 
         // Update Global Counters
-        if (_totalActiveRelayerPenalty + _totalActiveRelayerJailedStake != 0) {
-            rms.totalStake -= _totalActiveRelayerPenalty + _totalActiveRelayerJailedStake;
+        if (_state.totalActiveRelayerPenalty + _state.totalActiveRelayerJailedStake != 0) {
+            rms.totalStake -= _state.totalActiveRelayerPenalty + _state.totalActiveRelayerJailedStake;
         }
-        if (_activeRelayersJailedCount != 0) {
-            rms.relayerCount -= _activeRelayersJailedCount;
+        if (_state.activeRelayersJailedCount != 0) {
+            rms.relayerCount -= _state.activeRelayersJailedCount;
+        }
+        if (_state.totalProtocolRewardSharesBurnt != FP_ZERO) {
+            rms.totalProtocolRewardShares = rms.totalProtocolRewardShares - _state.totalProtocolRewardSharesBurnt;
+        }
+        if (_state.totalProtocolRewardsPaid != 0) {
+            rms.totalUnpaidProtocolRewards = _state.updatedUnpaidProtocolRewards - _state.totalProtocolRewardsPaid;
         }
 
         // Schedule CDF Update if Necessary
-        if (_totalActiveRelayerPenalty != 0 || _activeRelayersJailedCount != 0) {
+        if (_state.totalActiveRelayerPenalty != 0 || _state.activeRelayersJailedCount != 0) {
             _verifyExternalStateForRelayerStateUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
-            if (_activeRelayersJailedCount == 0) {
+            if (_state.activeRelayersJailedCount == 0) {
                 _updateCdf_c(_pendingState.relayers);
             } else {
-                _updateCdf_m(_postJailRelayerList);
+                _updateCdf_m(_state.newRelayerList);
             }
         }
 
         // Transfer the penalty to the caller
-        if (_totalPenalty != 0) {
-            _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, _totalPenalty);
+        if (_state.totalPenalty != 0) {
+            _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, _state.totalPenalty);
         }
-    }
-
-    function _jailRelayer(RelayerAddress _relayerAddress) internal measureGas("_jailRelayer") {
-        RMStorage storage rms = getRMStorage();
-        RelayerInfo storage relayerInfo = rms.relayerInfo[_relayerAddress];
-
-        uint256 jailedUntilTimestamp = block.timestamp + rms.jailTimeInSec;
-        relayerInfo.status = RelayerStatus.Jailed;
-        relayerInfo.minExitTimestamp = jailedUntilTimestamp;
-        emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
-    }
-
-    function _penalizeRelayer(RelayerAddress _relayerAddress)
-        internal
-        measureGas("_penalizeRelayer")
-        returns (uint256, uint256)
-    {
-        RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[_relayerAddress];
-        uint256 penalty = _calculatePenalty(relayerInfo.stake);
-        relayerInfo.stake -= penalty;
-        uint256 updatedStake = relayerInfo.stake;
-
-        emit RelayerPenalized(_relayerAddress, updatedStake, penalty);
-
-        return (updatedStake, penalty);
     }
 
     function _removeRelayerFromRelayerList(

@@ -75,4 +75,12 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function relayerStateUpdateDelayInWindows() external view returns (uint256);
 
     function relayerStateHash() external view returns (bytes32, bytes32);
+
+    function totalUnpaidProtocolRewards() external view returns (uint256);
+
+    function lastUnpaidRewardUpdatedTimestamp() external view returns (uint256);
+
+    function totalProtocolRewardShares() external view returns (FixedPointType);
+
+    function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 }

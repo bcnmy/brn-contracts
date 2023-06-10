@@ -27,9 +27,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using RAArrayHelper for RelayerAddress[];
 
     modifier measureGas(string memory _name) {
-        // uint256 gasStart = gasleft();
+        uint256 gasStart = gasleft();
         _;
-        // console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
+        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
@@ -200,44 +200,44 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
+    // TODO: consider converting these function to pure
     function _protocolRewardRate() internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
-        TADStorage storage ds = getTADStorage();
         FixedPointType rate =
-            rs.relayerCount.fp().sqrt() * (ds.baseRewardRatePerMinimumStakePerSec * rs.minimumStakeAmount).fp();
+            rs.relayerCount.fp().sqrt() * (rs.baseRewardRatePerMinimumStakePerSec * rs.minimumStakeAmount).fp();
         return rate.u256();
     }
 
-    function _getUpdatedUnpaidProtocolRewards() internal view returns (uint256) {
-        RMStorage storage rs = getRMStorage();
-        return
-            rs.unpaidProtocolRewards + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
-    }
-
-    function _updateProtocolRewards() internal {
+    function _getUpdatedTotalUnpaidProtocolRewards() internal returns (uint256 updatedTotalUnpaidProtocolRewards) {
         // Update unpaid rewards
         RMStorage storage rs = getRMStorage();
 
         if (block.timestamp == rs.lastUnpaidRewardUpdatedTimestamp) {
-            return;
+            return rs.totalUnpaidProtocolRewards;
         }
 
-        rs.unpaidProtocolRewards = _getUpdatedUnpaidProtocolRewards();
+        updatedTotalUnpaidProtocolRewards = rs.totalUnpaidProtocolRewards
+            + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
         rs.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
     }
 
-    function _protocolRewardRelayerSharePrice() internal view returns (FixedPointType) {
+    function _protocolRewardRelayerSharePrice(uint256 _unpaidRewards) internal view returns (FixedPointType) {
         RMStorage storage rs = getRMStorage();
 
-        if (rs.totalShares == FP_ZERO) {
+        if (rs.totalProtocolRewardShares == FP_ZERO) {
             return FP_ONE;
         }
-        return (rs.totalStake.fp() + rs.unpaidProtocolRewards.fp()) / rs.totalShares;
+        return (rs.totalStake.fp() + _unpaidRewards.fp()) / rs.totalProtocolRewardShares;
     }
 
-    function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
+    function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer, uint256 _unpaidRewards)
+        internal
+        view
+        returns (uint256)
+    {
         RMStorage storage rs = getRMStorage();
-        FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
+        FixedPointType totalValue =
+            rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice(_unpaidRewards);
         uint256 rewards = totalValue.u256() - rs.relayerInfo[_relayer].stake;
         return rewards;
     }
@@ -251,24 +251,20 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (_totalRewards - delegatorRewards, delegatorRewards);
     }
 
-    function _burnRewardSharesForRelayerAndGetRewards(RelayerAddress _relayer) internal returns (uint256, uint256) {
-        RMStorage storage rs = getRMStorage();
-
-        uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer);
+    function _getPendingProtocolRewardsData(RelayerAddress _relayer, uint256 _unpaidRewards)
+        internal
+        view
+        returns (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn)
+    {
+        uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer, _unpaidRewards);
         if (rewards == 0) {
-            return (0, 0);
+            return (0, 0, FP_ZERO);
         }
 
-        FixedPointType rewardShares = rewards.fp() / _protocolRewardRelayerSharePrice();
-        rs.relayerInfo[_relayer].rewardShares = rs.relayerInfo[_relayer].rewardShares - rewardShares;
-        rs.totalShares = rs.totalShares - rewardShares;
+        sharesToBurn = rewards.fp() / _protocolRewardRelayerSharePrice(_unpaidRewards);
 
-        (uint256 relayerRewards, uint256 delegatorRewards) =
-            _splitRewards(rewards, rs.relayerInfo[_relayer].delegatorPoolPremiumShare);
-
-        emit RelayerProtocolRewardSharesBurnt(_relayer, rewardShares, rewards, relayerRewards, delegatorRewards);
-
-        return (relayerRewards, delegatorRewards);
+        (relayerRewards, delegatorRewards) =
+            _splitRewards(rewards, getRMStorage().relayerInfo[_relayer].delegatorPoolPremiumShare);
     }
 
     ////////////////////////////// Misc //////////////////////////////

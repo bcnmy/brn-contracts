@@ -12,7 +12,6 @@ abstract contract TADelegationStorage {
 
     struct TADStorage {
         uint256 minimumDelegationAmount;
-        uint256 baseRewardRatePerMinimumStakePerSec;
         mapping(RelayerAddress => uint256) totalDelegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => FixedPointType))) shares;

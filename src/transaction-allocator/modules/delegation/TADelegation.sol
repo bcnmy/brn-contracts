@@ -10,7 +10,6 @@ import "src/library/FixedPointArithmetic.sol";
 
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
-import "ta-common/TAConstants.sol";
 import "ta-common/TAHelpers.sol";
 
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
@@ -41,22 +40,31 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     function _updateRelayerProtocolRewards(RelayerAddress _relayer) internal {
-        if (_isActiveRelayer(_relayer)) {
-            _updateProtocolRewards();
-            (uint256 relayerRewards, uint256 delegatorRewards) = _burnRewardSharesForRelayerAndGetRewards(_relayer);
-
-            // Process delegator rewards
-            RMStorage storage rs = getRMStorage();
-            if (delegatorRewards > 0) {
-                _addDelegatorRewards(_relayer, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
-            }
-
-            // Process relayer rewards
-            if (relayerRewards > 0) {
-                rs.relayerInfo[_relayer].unpaidProtocolRewards += relayerRewards;
-                emit RelayerProtocolRewardsGenerated(_relayer, relayerRewards);
-            }
+        if (!_isActiveRelayer(_relayer)) {
+            return;
         }
+
+        uint256 updatedTotalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
+        (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn) =
+            _getPendingProtocolRewardsData(_relayer, updatedTotalUnpaidProtocolRewards);
+
+        // Process delegator rewards
+        RMStorage storage rs = getRMStorage();
+        RelayerInfo storage relayerInfo = rs.relayerInfo[_relayer];
+
+        if (delegatorRewards > 0) {
+            _addDelegatorRewards(_relayer, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
+        }
+
+        // Process relayer rewards
+        if (relayerRewards > 0) {
+            relayerInfo.unpaidProtocolRewards += relayerRewards;
+            emit RelayerProtocolRewardsGenerated(_relayer, relayerRewards);
+        }
+
+        rs.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerRewards - delegatorRewards;
+        rs.totalProtocolRewardShares = rs.totalProtocolRewardShares - sharesToBurn;
+        relayerInfo.rewardShares = relayerInfo.rewardShares - sharesToBurn;
     }
 
     function _mintAllPoolShares(RelayerAddress _relayerAddress, DelegatorAddress _delegator, uint256 _amount)
@@ -84,7 +92,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
         RelayerAddress relayerAddress = _latestState.relayers[_relayerIndex];
-        // TODO: _updateRelayerProtocolRewards(relayerAddress);
+        _updateRelayerProtocolRewards(relayerAddress);
 
         getRMStorage().bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         TADStorage storage ds = getTADStorage();
@@ -143,7 +151,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         TADStorage storage ds = getTADStorage();
 
-        // TODO: _updateRelayerProtocolRewards(relayerAddress);
+        _updateRelayerProtocolRewards(_relayerAddress);
 
         {
             uint256 length = ds.supportedPools.length;
@@ -254,9 +262,5 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
     function minimumDelegationAmount() external view override returns (uint256) {
         return getTADStorage().minimumDelegationAmount;
-    }
-
-    function baseRewardRatePerMinimumStakePerSec() external view override returns (uint256) {
-        return getTADStorage().baseRewardRatePerMinimumStakePerSec;
     }
 }

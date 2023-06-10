@@ -324,6 +324,9 @@ abstract contract TATestBase is Test {
     }
 
     function _moveForwardToNextEpoch() internal {
+        if (ta.epochEndTimestamp() < block.timestamp) {
+            return;
+        }
         vm.warp(ta.epochEndTimestamp());
     }
 

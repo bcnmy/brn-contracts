@@ -36,7 +36,7 @@ contract TARelayerManagement is
         uint256 _delegatorPoolPremiumShare
     ) external override measureGas("register") {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        _updateProtocolRewards();
+        getRMStorage().totalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
 
         // Register Relayer
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -102,14 +102,14 @@ contract TARelayerManagement is
         node.stake += _stake;
         node.endpoint = _endpoint;
         node.delegatorPoolPremiumShare = _delegatorPoolPremiumShare;
-        node.rewardShares = _stake.fp() / _protocolRewardRelayerSharePrice();
+        node.rewardShares = _stake.fp() / _protocolRewardRelayerSharePrice(rms.totalUnpaidProtocolRewards);
         node.status = RelayerStatus.Active;
         _setRelayerAccountStatus(_relayerAddress, _accounts, true);
 
         // Update Global Counters
         ++rms.relayerCount;
         rms.totalStake += _stake;
-        rms.totalShares = rms.totalShares + node.rewardShares;
+        rms.totalProtocolRewardShares = rms.totalProtocolRewardShares + node.rewardShares;
     }
 
     /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
@@ -120,7 +120,6 @@ contract TARelayerManagement is
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        _updateProtocolRewards();
 
         if (_latestState.cdf.length == 1) {
             revert CannotUnregisterLastRelayer();
@@ -132,11 +131,32 @@ contract TARelayerManagement is
             revert InvalidRelayer(relayerAddress);
         }
 
-        // Transfer any pending rewards to the relayers and delegators
-        claimProtocolReward();
-
         RMStorage storage rms = getRMStorage();
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
+
+        /* Transfer any pending rewards to the relayers and delegators */
+        FixedPointType nodeRewardShares = node.rewardShares;
+        {
+            uint256 updatedTotalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
+
+            // Calculate Rewards
+            (uint256 relayerReward, uint256 delegatorRewards,) =
+                _getPendingProtocolRewardsData(relayerAddress, updatedTotalUnpaidProtocolRewards);
+
+            // Process Delegator Rewards
+            _addDelegatorRewards(relayerAddress, TokenAddress.wrap(address(rms.bondToken)), delegatorRewards);
+
+            // Process Relayer Rewards
+            rms.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerReward - delegatorRewards;
+            relayerReward += node.unpaidProtocolRewards;
+            node.unpaidProtocolRewards = 0;
+            node.rewardShares = FP_ZERO;
+
+            if (relayerReward > 0) {
+                _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, relayerReward);
+                emit RelayerProtocolRewardsClaimed(relayerAddress, relayerReward);
+            }
+        }
 
         // Update the CDF
         RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_remove(_relayerIndex);
@@ -149,7 +169,7 @@ contract TARelayerManagement is
         // Set Global Counters
         --rms.relayerCount;
         rms.totalStake -= node.stake;
-        rms.totalShares = rms.totalShares - node.rewardShares;
+        rms.totalProtocolRewardShares = rms.totalProtocolRewardShares - nodeRewardShares;
 
         emit RelayerUnRegistered(relayerAddress);
     }
@@ -200,7 +220,7 @@ contract TARelayerManagement is
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
         }
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        _updateProtocolRewards();
+        rms.totalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
 
         // Transfer stake amount
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
@@ -209,13 +229,13 @@ contract TARelayerManagement is
         delete node.minExitTimestamp;
         node.status = RelayerStatus.Active;
         node.stake += _stake;
-        node.rewardShares = node.stake.fp() / _protocolRewardRelayerSharePrice();
+        node.rewardShares = node.stake.fp() / _protocolRewardRelayerSharePrice(rms.totalUnpaidProtocolRewards);
 
         // Update Global Counters
         // When jailing, the full stake and reward shares are removed, they need to be added back
         ++rms.relayerCount;
         rms.totalStake += node.stake;
-        rms.totalShares = rms.totalShares + node.rewardShares;
+        rms.totalProtocolRewardShares = rms.totalProtocolRewardShares + node.rewardShares;
 
         // Schedule CDF Update
         RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
@@ -272,21 +292,26 @@ contract TARelayerManagement is
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
-    function claimProtocolReward() public override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
-        _updateProtocolRewards();
+    function claimProtocolReward() external override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
+        uint256 updatedTotalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
 
         // Calculate Rewards
-        (uint256 relayerReward, uint256 delegatorRewards) = _burnRewardSharesForRelayerAndGetRewards(relayerAddress);
+        (uint256 relayerReward, uint256 delegatorRewards, FixedPointType sharesToBurn) =
+            _getPendingProtocolRewardsData(relayerAddress, updatedTotalUnpaidProtocolRewards);
 
         // Process Delegator Rewards
         RMStorage storage rs = getRMStorage();
         _addDelegatorRewards(relayerAddress, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
 
         // Process Relayer Rewards
+        rs.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerReward - delegatorRewards;
+        rs.totalProtocolRewardShares = rs.totalProtocolRewardShares - sharesToBurn;
+        rs.relayerInfo[relayerAddress].rewardShares = rs.relayerInfo[relayerAddress].rewardShares - sharesToBurn;
         relayerReward += rs.relayerInfo[relayerAddress].unpaidProtocolRewards;
         rs.relayerInfo[relayerAddress].unpaidProtocolRewards = 0;
+
         if (relayerReward > 0) {
             _transfer(TokenAddress.wrap(address(rs.bondToken)), msg.sender, relayerReward);
             emit RelayerProtocolRewardsClaimed(relayerAddress, relayerReward);
@@ -378,5 +403,21 @@ contract TARelayerManagement is
         RMStorage storage rms = getRMStorage();
         activeStateHash = rms.relayerStateVersionManager.activeStateHash(_windowIndex(block.number));
         pendingStateHash = rms.relayerStateVersionManager.pendingStateHash();
+    }
+
+    function totalUnpaidProtocolRewards() external view override returns (uint256) {
+        return getRMStorage().totalUnpaidProtocolRewards;
+    }
+
+    function lastUnpaidRewardUpdatedTimestamp() external view override returns (uint256) {
+        return getRMStorage().lastUnpaidRewardUpdatedTimestamp;
+    }
+
+    function totalProtocolRewardShares() external view override returns (FixedPointType) {
+        return getRMStorage().totalProtocolRewardShares;
+    }
+
+    function baseRewardRatePerMinimumStakePerSec() external view override returns (uint256) {
+        return getRMStorage().baseRewardRatePerMinimumStakePerSec;
     }
 }

@@ -20,7 +20,6 @@ abstract contract TARelayerManagementStorage {
         // Relayer Status
         RelayerStatus status;
         uint256 minExitTimestamp;
-        // TODO: Reward share related data should be moved to it's own mapping
         // Delegation
         uint256 delegatorPoolPremiumShare; // *100
         uint256 unpaidProtocolRewards;
@@ -38,14 +37,15 @@ abstract contract TARelayerManagementStorage {
         uint256 absencePenaltyPercentage;
         uint256 minimumStakeAmount;
         uint256 relayerStateUpdateDelayInWindows;
+        uint256 baseRewardRatePerMinimumStakePerSec;
         // Relayer State Management
         VersionManager.VersionManagerState relayerStateVersionManager;
         // Maps relayer address to pending withdrawals
         mapping(TokenAddress => bool isGasTokenSupported) isGasTokenSupported;
         // Constant Rate Rewards
-        uint256 unpaidProtocolRewards;
+        uint256 totalUnpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;
-        FixedPointType totalShares;
+        FixedPointType totalProtocolRewardShares;
         // Latest State.
         uint256 relayerCount;
         uint256 totalStake;
