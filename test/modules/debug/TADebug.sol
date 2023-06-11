@@ -57,5 +57,18 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp] = _transactionsProcessed;
     }
 
+    function debug_setRelayerCount(uint256 _relayerCount) external override {
+        getRMStorage().relayerCount = _relayerCount;
+    }
+
+    function debug_getProtocolRewardRate() external view override returns (uint256) {
+        uint256 rate = _protocolRewardRate();
+        return rate;
+    }
+
+    function debug_setTotalStake(uint256 _totalStake) external override {
+        getRMStorage().totalStake = _totalStake;
+    }
+
     function test1() external {}
 }

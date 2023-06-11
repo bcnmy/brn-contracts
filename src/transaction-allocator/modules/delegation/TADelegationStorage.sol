@@ -2,8 +2,6 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/utils/math/SafeMath.sol";
-
 import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";
 
@@ -16,7 +14,6 @@ abstract contract TADelegationStorage {
         mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) delegation;
         mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => FixedPointType))) shares;
         mapping(RelayerAddress => mapping(TokenAddress => FixedPointType)) totalShares;
-        // TODO: Add C*Time
         mapping(RelayerAddress => mapping(TokenAddress => uint256)) unclaimedRewards;
         TokenAddress[] supportedPools;
     }

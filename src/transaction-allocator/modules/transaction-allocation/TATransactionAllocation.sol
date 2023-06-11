@@ -4,10 +4,7 @@ pragma solidity 0.8.19;
 
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
-import "ta-base-application/interfaces/IApplicationBase.sol";
-import "ta-relayer-management/TARelayerManagementStorage.sol";
 import "ta-common/TAHelpers.sol";
-import "ta-common/TATypes.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     using SafeCast for uint256;
@@ -286,7 +283,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         TAStorage storage ta = getTAStorage();
         state.epochEndTimestamp = ta.epochEndTimestamp;
-        state.updatedUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
+        state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
         state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
         state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp].fp();
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;

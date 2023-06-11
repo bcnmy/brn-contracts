@@ -6,8 +6,6 @@ import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
-import "src/library/FixedPointArithmetic.sol";
-
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
 import "ta-common/TAHelpers.sol";
@@ -29,7 +27,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     ) internal {
         TADStorage storage ds = getTADStorage();
 
-        FixedPointType sharePrice_ = delegationSharePrice(_relayerAddress, _pool);
+        FixedPointType sharePrice_ = _delegationSharePrice(_relayerAddress, _pool, 0);
         FixedPointType sharesMinted = (_delegatedAmount.fp() / sharePrice_);
 
         ds.shares[_relayerAddress][_delegatorAddress][_pool] =
@@ -44,7 +42,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             return;
         }
 
-        uint256 updatedTotalUnpaidProtocolRewards = _getUpdatedTotalUnpaidProtocolRewards();
+        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
         (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn) =
             _getPendingProtocolRewardsData(_relayer, updatedTotalUnpaidProtocolRewards);
 
@@ -115,7 +113,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     {
         TADStorage storage ds = getTADStorage();
 
-        uint256 rewardsEarned_ = delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
+        uint256 rewardsEarned_ = _delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
 
         if (rewardsEarned_ != 0) {
             ds.unclaimedRewards[_relayerAddress][_pool] -= rewardsEarned_;
@@ -179,41 +177,60 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
     }
 
-    function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
-        public
-        view
-        override
-        returns (FixedPointType)
-    {
+    function _delegationSharePrice(
+        RelayerAddress _relayerAddress,
+        TokenAddress _tokenAddress,
+        uint256 _extraUnclaimedRewards
+    ) internal view returns (FixedPointType) {
         TADStorage storage ds = getTADStorage();
         if (ds.totalShares[_relayerAddress][_tokenAddress] == FP_ZERO) {
             return FP_ONE;
         }
         FixedPointType totalDelegation_ = ds.totalDelegation[_relayerAddress].fp();
-        FixedPointType unclaimedRewards_ = ds.unclaimedRewards[_relayerAddress][_tokenAddress].fp();
+        FixedPointType unclaimedRewards_ =
+            (ds.unclaimedRewards[_relayerAddress][_tokenAddress] + _extraUnclaimedRewards).fp();
         FixedPointType totalShares_ = ds.totalShares[_relayerAddress][_tokenAddress];
 
         return (totalDelegation_ + unclaimedRewards_) / totalShares_;
     }
 
-    function delegationRewardsEarned(
+    function _delegationRewardsEarned(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddres,
         DelegatorAddress _delegatorAddress
-    ) public view override returns (uint256) {
+    ) internal view returns (uint256) {
         TADStorage storage ds = getTADStorage();
 
         FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
         FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].fp();
-        FixedPointType rewards = shares_ * delegationSharePrice(_relayerAddress, _tokenAddres) - delegation_;
+        FixedPointType rewards = shares_ * _delegationSharePrice(_relayerAddress, _tokenAddres, 0) - delegation_;
+
+        return rewards.u256();
+    }
+
+    function claimableDelegationRewards(
+        RelayerAddress _relayerAddress,
+        TokenAddress _tokenAddres,
+        DelegatorAddress _delegatorAddress
+    ) external view returns (uint256) {
+        TADStorage storage ds = getTADStorage();
+
+        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewards();
+
+        (, uint256 protocolDelegationRewards,) =
+            _getPendingProtocolRewardsData(_relayerAddress, updatedTotalUnpaidProtocolRewards);
+
+        FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
+        FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].fp();
+        FixedPointType rewards =
+            shares_ * _delegationSharePrice(_relayerAddress, _tokenAddres, protocolDelegationRewards) - delegation_;
 
         return rewards.u256();
     }
 
     ////////////////////////// Getters //////////////////////////
     function totalDelegation(RelayerAddress _relayerAddress) external view override returns (uint256) {
-        TADStorage storage ds = getTADStorage();
-        return ds.totalDelegation[_relayerAddress];
+        return getTADStorage().totalDelegation[_relayerAddress];
     }
 
     function delegation(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress)
@@ -222,8 +239,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         override
         returns (uint256)
     {
-        TADStorage storage ds = getTADStorage();
-        return ds.delegation[_relayerAddress][_delegatorAddress];
+        return getTADStorage().delegation[_relayerAddress][_delegatorAddress];
     }
 
     function shares(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress, TokenAddress _tokenAddress)
@@ -232,8 +248,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         override
         returns (FixedPointType)
     {
-        TADStorage storage ds = getTADStorage();
-        return ds.shares[_relayerAddress][_delegatorAddress][_tokenAddress];
+        return getTADStorage().shares[_relayerAddress][_delegatorAddress][_tokenAddress];
     }
 
     function totalShares(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
@@ -242,8 +257,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         override
         returns (FixedPointType)
     {
-        TADStorage storage ds = getTADStorage();
-        return ds.totalShares[_relayerAddress][_tokenAddress];
+        return getTADStorage().totalShares[_relayerAddress][_tokenAddress];
     }
 
     function unclaimedRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
@@ -252,8 +266,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         override
         returns (uint256)
     {
-        TADStorage storage ds = getTADStorage();
-        return ds.unclaimedRewards[_relayerAddress][_tokenAddress];
+        return getTADStorage().unclaimedRewards[_relayerAddress][_tokenAddress];
     }
 
     function supportedPools() external view override returns (TokenAddress[] memory) {

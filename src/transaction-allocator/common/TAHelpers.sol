@@ -186,25 +186,31 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
-    // TODO: consider converting these function to pure
     function _protocolRewardRate() internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
-        FixedPointType rate =
-            rs.relayerCount.fp().sqrt() * (rs.baseRewardRatePerMinimumStakePerSec * rs.minimumStakeAmount).fp();
+        FixedPointType rate = rs.relayerCount.fp().sqrt()
+            * (rs.baseRewardRatePerMinimumStakePerSec * rs.totalStake / rs.minimumStakeAmount).fp();
         return rate.u256();
     }
 
-    function _getUpdatedTotalUnpaidProtocolRewards() internal returns (uint256 updatedTotalUnpaidProtocolRewards) {
-        // Update unpaid rewards
+    function _getLatestTotalUnpaidProtocolRewards() internal view returns (uint256 updatedTotalUnpaidProtocolRewards) {
         RMStorage storage rs = getRMStorage();
 
         if (block.timestamp == rs.lastUnpaidRewardUpdatedTimestamp) {
             return rs.totalUnpaidProtocolRewards;
         }
 
-        updatedTotalUnpaidProtocolRewards = rs.totalUnpaidProtocolRewards
+        return rs.totalUnpaidProtocolRewards
             + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
-        rs.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+    }
+
+    function _getLatestTotalUnpaidProtocolRewardsAndUpdate()
+        internal
+        returns (uint256 updatedTotalUnpaidProtocolRewards)
+    {
+        uint256 unpaidRewards = _getLatestTotalUnpaidProtocolRewards();
+        getRMStorage().lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+        return unpaidRewards;
     }
 
     function _protocolRewardRelayerSharePrice(uint256 _unpaidRewards) internal view returns (FixedPointType) {
@@ -222,9 +228,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         returns (uint256)
     {
         RMStorage storage rs = getRMStorage();
-        FixedPointType totalValue =
-            rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice(_unpaidRewards);
-        uint256 rewards = totalValue.u256() - rs.relayerInfo[_relayer].stake;
+        uint256 totalValue =
+            (rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice(_unpaidRewards)).u256();
+        uint256 rewards = totalValue >= rs.relayerInfo[_relayer].stake ? totalValue - rs.relayerInfo[_relayer].stake : 0;
         return rewards;
     }
 

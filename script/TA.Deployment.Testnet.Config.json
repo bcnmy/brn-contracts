@@ -4,7 +4,7 @@
   "relayersPerWindow": 4,
   "jailTimeInSec": 100,
   "withdrawDelayInSec": 50,
-  "absencePenaltyPercentage": 250,
+  "absencePenaltyPercentage": 200,
   "minimumStakeAmount": 10000000000000000000000,
   "stakeThresholdForJailing": 9000000000000000000000,
   "minimumDelegationAmount": 100000000000000000,

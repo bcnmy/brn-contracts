@@ -33,7 +33,7 @@ abstract contract TATestBase is Test {
         relayersPerWindow: 10,
         jailTimeInSec: 10000,
         withdrawDelayInSec: 50,
-        absencePenaltyPercentage: 250,
+        absencePenaltyPercentage: 200,
         minimumStakeAmount: 10000 ether,
         stakeThresholdForJailing: 10000 ether,
         minimumDelegationAmount: 1 ether,
@@ -62,6 +62,7 @@ abstract contract TATestBase is Test {
     mapping(address => uint256) internal userKeys;
     mapping(RelayerAddress => uint256) internal initialRelayerStake;
     ERC20 bico;
+    uint256 deploymentTimestamp;
 
     // Test State
     RelayerState internal latestRelayerState;
@@ -71,6 +72,8 @@ abstract contract TATestBase is Test {
     uint256 delegatorPoolPremiumShare = 1000;
 
     function setUp() public virtual {
+        deploymentTimestamp = block.timestamp;
+
         // Deploy the bico token
         bico = new ERC20("BICO", "BICO");
         vm.label(address(bico), "ERC20(BICO)");

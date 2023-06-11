@@ -62,16 +62,16 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         assertEq(ta.totalDelegation(r0), expTotalDelegation[r0], "Total Delegation R0");
 
         assertApproxEqRel(
-            ta.delegationRewardsEarned(r0, t0, d0), expRewards[r0][d0][t0], ERROR_TOLERANCE, "Rewards R0 T0 D0"
+            ta.claimableDelegationRewards(r0, t0, d0), expRewards[r0][d0][t0], ERROR_TOLERANCE, "Rewards R0 T0 D0"
         );
         assertApproxEqRel(
-            ta.delegationRewardsEarned(r0, t0, d1), expRewards[r0][d1][t0], ERROR_TOLERANCE, "Rewards R0 T0 D1"
+            ta.claimableDelegationRewards(r0, t0, d1), expRewards[r0][d1][t0], ERROR_TOLERANCE, "Rewards R0 T0 D1"
         );
         assertApproxEqRel(
-            ta.delegationRewardsEarned(r0, t1, d0), expRewards[r0][d0][t1], ERROR_TOLERANCE, "Rewards R0 T1 D0"
+            ta.claimableDelegationRewards(r0, t1, d0), expRewards[r0][d0][t1], ERROR_TOLERANCE, "Rewards R0 T1 D0"
         );
         assertApproxEqRel(
-            ta.delegationRewardsEarned(r0, t1, d1), expRewards[r0][d1][t1], ERROR_TOLERANCE, "Rewards R0 T1 D1"
+            ta.claimableDelegationRewards(r0, t1, d1), expRewards[r0][d1][t1], ERROR_TOLERANCE, "Rewards R0 T1 D1"
         );
     }
 

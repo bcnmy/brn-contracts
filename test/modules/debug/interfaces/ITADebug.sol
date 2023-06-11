@@ -20,4 +20,10 @@ interface ITADebug {
         external;
 
     function debug_setTotalTransactionsProcessed(uint256 _transactionsProcessed) external;
+
+    function debug_setRelayerCount(uint256 _relayerCount) external;
+
+    function debug_getProtocolRewardRate() external view returns (uint256);
+
+    function debug_setTotalStake(uint256 _totalStake) external;
 }

@@ -34,8 +34,10 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
 
-    ////////////////////////// Constant Rate Rewards //////////////////////////
+    ////////////////////////// Protocol Rewards //////////////////////////
     function claimProtocolReward() external;
+
+    function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress) external view returns (uint256);
 
     ////////////////////// Getters //////////////////////
     function relayerCount() external view returns (uint256);

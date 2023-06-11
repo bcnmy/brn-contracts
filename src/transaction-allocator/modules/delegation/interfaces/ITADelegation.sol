@@ -11,12 +11,7 @@ interface ITADelegation is ITADelegationEventsErrors {
     function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
         external;
 
-    function delegationSharePrice(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
-        external
-        view
-        returns (FixedPointType);
-
-    function delegationRewardsEarned(
+    function claimableDelegationRewards(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddres,
         DelegatorAddress _delegatorAddress
