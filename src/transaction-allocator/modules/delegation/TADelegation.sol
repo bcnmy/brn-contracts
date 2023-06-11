@@ -4,7 +4,6 @@ pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
@@ -17,7 +16,6 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using U32ArrayHelper for uint32[];
     using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
-    using SafeCast for uint256;
 
     function _mintPoolShares(
         RelayerAddress _relayerAddress,
@@ -42,7 +40,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
             return;
         }
 
-        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
         (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn) =
             _getPendingProtocolRewardsData(_relayer, updatedTotalUnpaidProtocolRewards);
 
@@ -127,25 +125,8 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     // TODO: Non Reentrant
-    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
-        external
-        override
-    {
-        bool shouldUpdateCdf = false;
-
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress) external override {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        if (_relayerIndex < _latestState.relayers.length && _latestState.relayers[_relayerIndex] == _relayerAddress) {
-            // Relayer is active in the pending state, therefore it's CDF should be updated
-            shouldUpdateCdf = true;
-        } else {
-            // Relayer is not active in the pending state, therefore it's CDF should not be updated
-            // We need to verify that the relayer is not present in the active relayers array at all,
-            // by scanning the array linearly
-            // In this case, the relayerIndex should not be used.
-            if (_latestState.relayers.cd_linearSearch(_relayerAddress) != _latestState.relayers.length) {
-                revert RelayerIsActiveInPendingState();
-            }
-        }
 
         TADStorage storage ds = getTADStorage();
 
@@ -172,7 +153,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         // Update the CDF if and only if the relayer is still registered
         // There can be a case where the relayer is unregistered and the user still has rewards
-        if (shouldUpdateCdf) {
+        if (_isActiveRelayer(_relayerAddress)) {
             _updateCdf_c(_latestState.relayers);
         }
     }
@@ -183,15 +164,16 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         uint256 _extraUnclaimedRewards
     ) internal view returns (FixedPointType) {
         TADStorage storage ds = getTADStorage();
-        if (ds.totalShares[_relayerAddress][_tokenAddress] == FP_ZERO) {
-            return FP_ONE;
-        }
-        FixedPointType totalDelegation_ = ds.totalDelegation[_relayerAddress].fp();
-        FixedPointType unclaimedRewards_ =
-            (ds.unclaimedRewards[_relayerAddress][_tokenAddress] + _extraUnclaimedRewards).fp();
         FixedPointType totalShares_ = ds.totalShares[_relayerAddress][_tokenAddress];
 
-        return (totalDelegation_ + unclaimedRewards_) / totalShares_;
+        if (totalShares_ == FP_ZERO) {
+            return FP_ONE;
+        }
+
+        return (
+            ds.totalDelegation[_relayerAddress] + ds.unclaimedRewards[_relayerAddress][_tokenAddress]
+                + _extraUnclaimedRewards
+        ).fp() / totalShares_;
     }
 
     function _delegationRewardsEarned(
@@ -260,7 +242,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return getTADStorage().totalShares[_relayerAddress][_tokenAddress];
     }
 
-    function unclaimedRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+    function unclaimedDelegationRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
         view
         override

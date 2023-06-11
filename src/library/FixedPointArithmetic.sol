@@ -31,6 +31,14 @@ library FixedPointTypeHelper {
     function sqrt(FixedPointType _a) internal pure returns (FixedPointType) {
         return FixedPointType.wrap((FixedPointType.unwrap(_a) * MULTIPLIER).sqrt());
     }
+
+    function mul(FixedPointType _a, uint256 _value) internal pure returns (FixedPointType) {
+        return FixedPointType.wrap(FixedPointType.unwrap(_a) * _value);
+    }
+
+    function div(FixedPointType _a, uint256 _value) internal pure returns (FixedPointType) {
+        return FixedPointType.wrap(FixedPointType.unwrap(_a) / _value);
+    }
 }
 
 function fixedPointAdd(FixedPointType _a, FixedPointType _b) pure returns (FixedPointType) {

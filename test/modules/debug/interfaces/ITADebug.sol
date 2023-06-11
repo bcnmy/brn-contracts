@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.19;
 
+import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";
 
 interface ITADebug {
@@ -26,4 +27,6 @@ interface ITADebug {
     function debug_getProtocolRewardRate() external view returns (uint256);
 
     function debug_setTotalStake(uint256 _totalStake) external;
+
+    function debug_protocolRewardsSharePrice() external view returns (FixedPointType);
 }

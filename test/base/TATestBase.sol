@@ -6,7 +6,6 @@ import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
 import "forge-std/Test.sol";
 
-import "src/library/FixedPointArithmetic.sol";
 import "../modules/ITransactionAllocatorDebug.sol";
 import "script/TA.Deployment.s.sol";
 
@@ -33,7 +32,7 @@ abstract contract TATestBase is Test {
         relayersPerWindow: 10,
         jailTimeInSec: 10000,
         withdrawDelayInSec: 50,
-        absencePenaltyPercentage: 200,
+        absencePenaltyPercentage: 2 * PERCENTAGE_MULTIPLIER,
         minimumStakeAmount: 10000 ether,
         stakeThresholdForJailing: 10000 ether,
         minimumDelegationAmount: 1 ether,
@@ -314,7 +313,7 @@ abstract contract TATestBase is Test {
 
     // Assert Utils
     function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
-        assertEq(_a.u256(), _b.u256());
+        assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b));
     }
 
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {

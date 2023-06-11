@@ -85,7 +85,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
 
     function undelegate(RelayerAddress r, DelegatorAddress d) internal {
         _prankDa(d);
-        ta.undelegate(latestRelayerState, r, _findRelayerIndex(r));
+        ta.undelegate(latestRelayerState, r);
 
         expTotalDelegation[r] -= expDelegation[r][d];
         expDelegation[r][d] = 0;

@@ -7,8 +7,8 @@
     "hbuild": "hardhat compile",
     "simulation:chain": "anvil --block-time 2",
     "simulation:deploy": "FOUNDRY_PROFILE=test ./script/TA.Deploy.Testnet.sh",
-    "simulation:run": "ts-node hardhat/testnet/index.ts",
-    "simulation:watch": "watch -n 5 hardhat/testnet/cat-latest-metrics.sh",
+    "simulation:run": "ts-node hardhat/simulation/index.ts",
+    "simulation:watch": "watch -n 5 hardhat/simulationtestnet/cat-latest-metrics.sh",
     "test": "FOUNDRY_PROFILE=test forge test"
   },
   "repository": "git+https://github.com/bcnmy/POC-DRN.git",

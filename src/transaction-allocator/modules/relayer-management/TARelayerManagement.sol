@@ -33,7 +33,7 @@ contract TARelayerManagement is
         uint256 _delegatorPoolPremiumShare
     ) external override {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        getRMStorage().totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+        getRMStorage().totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
         // Register Relayer
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -133,7 +133,7 @@ contract TARelayerManagement is
         /* Transfer any pending rewards to the relayers and delegators */
         FixedPointType nodeRewardShares = node.rewardShares;
         {
-            uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+            uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
             // Calculate Rewards
             (uint256 relayerReward, uint256 delegatorRewards,) =
@@ -212,7 +212,7 @@ contract TARelayerManagement is
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
         }
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
-        rms.totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+        rms.totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
         // Transfer stake amount
         rms.bondToken.safeTransferFrom(msg.sender, address(this), _stake);
@@ -285,7 +285,7 @@ contract TARelayerManagement is
 
     ////////////////////////// Protocol Rewards //////////////////////////
     function claimProtocolReward() external override onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
-        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
 
@@ -311,11 +311,17 @@ contract TARelayerManagement is
     }
 
     function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress) external view override returns (uint256) {
+        RMStorage storage rs = getRMStorage();
+        RelayerInfo storage node = rs.relayerInfo[_relayerAddress];
+        if (node.status == RelayerStatus.Jailed) {
+            return 0;
+        }
+
         uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewards();
 
         (uint256 relayerReward,,) = _getPendingProtocolRewardsData(_relayerAddress, updatedTotalUnpaidProtocolRewards);
 
-        return relayerReward + getRMStorage().relayerInfo[_relayerAddress].unpaidProtocolRewards;
+        return relayerReward + node.unpaidProtocolRewards;
     }
 
     ////////////////////////// Getters //////////////////////////

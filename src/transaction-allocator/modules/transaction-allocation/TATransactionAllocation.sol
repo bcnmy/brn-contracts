@@ -283,7 +283,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         TAStorage storage ta = getTAStorage();
         state.epochEndTimestamp = ta.epochEndTimestamp;
-        state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdate();
+        state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
         state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
         state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp].fp();
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
@@ -369,13 +369,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _state.totalActiveRelayerPenalty += _penalty;
 
             // No need to process pending rewards since the relayer is still in the system, and pending rewards
-            // don't change when shares equivalient to penalty are burnt
+            // don't change when shares equivalent to penalty are burnt
             FixedPointType protocolRewardSharesBurnt = _penalty.fp() / _state.updatedSharePrice;
             _relayerInfo.rewardShares = _relayerInfo.rewardShares - protocolRewardSharesBurnt;
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
         }
 
+        // TODO: Emit shares burnt
         emit RelayerPenalized(_relayerAddress, updatedStake, _penalty);
     }
 
@@ -461,8 +462,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         if (_state.totalProtocolRewardSharesBurnt != FP_ZERO) {
             rms.totalProtocolRewardShares = rms.totalProtocolRewardShares - _state.totalProtocolRewardSharesBurnt;
         }
-        if (_state.totalProtocolRewardsPaid != 0) {
-            rms.totalUnpaidProtocolRewards = _state.updatedUnpaidProtocolRewards - _state.totalProtocolRewardsPaid;
+
+        uint256 newUnpaidRewards = _state.updatedUnpaidProtocolRewards - _state.totalProtocolRewardsPaid;
+        if (newUnpaidRewards != rms.totalUnpaidProtocolRewards) {
+            rms.totalUnpaidProtocolRewards = newUnpaidRewards;
         }
 
         // Schedule CDF Update if Necessary

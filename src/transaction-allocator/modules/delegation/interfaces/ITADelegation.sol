@@ -8,8 +8,7 @@ import "ta-common/TATypes.sol";
 interface ITADelegation is ITADelegationEventsErrors {
     function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external;
 
-    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress, uint256 _relayerIndex)
-        external;
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress) external;
 
     function claimableDelegationRewards(
         RelayerAddress _relayerAddress,
@@ -35,7 +34,7 @@ interface ITADelegation is ITADelegationEventsErrors {
         view
         returns (FixedPointType);
 
-    function unclaimedRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
+    function unclaimedDelegationRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
         external
         view
         returns (uint256);

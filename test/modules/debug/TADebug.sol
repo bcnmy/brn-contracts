@@ -70,5 +70,9 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         getRMStorage().totalStake = _totalStake;
     }
 
+    function debug_protocolRewardsSharePrice() external view override returns (FixedPointType) {
+        return _protocolRewardRelayerSharePrice(_getLatestTotalUnpaidProtocolRewards());
+    }
+
     function test1() external {}
 }
