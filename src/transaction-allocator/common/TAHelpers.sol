@@ -93,10 +93,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return _windowIndex(_blockNumber) + getRMStorage().relayerStateUpdateDelayInWindows;
     }
 
-    function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
-        return __windowIndex * getRMStorage().blocksPerWindow;
-    }
-
     ////////////////////////////// Relayer State //////////////////////////////
     function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers) internal view returns (uint16[] memory) {
         RMStorage storage rs = getRMStorage();
