@@ -24,8 +24,12 @@ const config = {
   generationIntervalSec: 4,
   relayerCount: 10,
   fundingAmount: parseEther('50'),
-  writeLogIntervalSec: 10,
   metricsUpdateIntervalSec: 5,
+  relayerClaimProbability: 0.1,
+  inactiveRelayers: [
+    '0x6d009bc5fa151f1c45531DcDB38dF1F695d57EEE',
+    '0xE047BC7029328A2ba8318E1123c18e1Adc7c7a6e',
+  ],
 };
 
 export { config };

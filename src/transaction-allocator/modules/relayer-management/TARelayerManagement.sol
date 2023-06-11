@@ -324,6 +324,10 @@ contract TARelayerManagement is
         return relayerReward + node.unpaidProtocolRewards;
     }
 
+    function protocolRewardRate() external view override returns (uint256) {
+        return _protocolRewardRate();
+    }
+
     ////////////////////////// Getters //////////////////////////
     function relayerCount() external view override returns (uint256) {
         return getRMStorage().relayerCount;

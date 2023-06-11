@@ -5,7 +5,6 @@ import { Mempool } from './mempool';
 import { logTransaction } from './utils';
 import { IMinimalApplication, IMinimalApplication__factory } from '../../typechain-types';
 import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
-import { metrics } from './metrics';
 
 export class Relayer {
   wallet: Wallet;
@@ -13,6 +12,7 @@ export class Relayer {
   application: IMinimalApplication;
   windowsSelectedIn = new Set<number>();
   windowsSelectedInButNoTransactions = new Set<number>();
+  claimedRewards = BigNumber.from(0);
 
   static stateHashCache: Map<number, [string, string]> = new Map();
   static allotedRelayersCache: Map<number, string[]> = new Map();
@@ -118,22 +118,100 @@ export class Relayer {
       return Relayer.allotedRelayersCache.get(window)!;
     }
 
-    const [currentStateHash] = await this.getRelayerState(window);
-    const currentState = hashToRelayerState[currentStateHash];
-    if (!currentState) {
-      throw new Error(
-        `Relayer ${this.wallet.address}: Current state not found for hash ${currentStateHash}`
-      );
-    }
+    const { currentState } = await this.getState();
 
     const [allotedRelayers] = await config.transactionAllocator.allocateRelayers(currentState);
     Relayer.allotedRelayersCache.set(window, allotedRelayers);
     return allotedRelayers;
   }
 
+  public async claimRewards() {
+    const relayerStatus = (await config.transactionAllocator.relayerInfo(this.wallet.address))
+      .status;
+    if (relayerStatus === 3) {
+      console.log(`Relayer ${this.wallet.address}: Relayer is jailed. Not claiming rewards`);
+      return;
+    }
+
+    console.log(`Relayer ${this.wallet.address}: Claiming rewards`);
+    const balanceBefore = await config.bondToken.balanceOf(this.wallet.address);
+    await logTransaction(
+      config.transactionAllocator.connect(this.wallet).claimProtocolReward(),
+      `Relayer ${this.wallet.address}: Claimed rewards`
+    );
+    const balanceAfter = await config.bondToken.balanceOf(this.wallet.address);
+    this.claimedRewards = this.claimedRewards.add(balanceAfter.sub(balanceBefore));
+  }
+
+  private async isRelayerSelected(windowIndex: number): Promise<boolean> {
+    const allotedRelayers = await this.getAllotedRelayers(windowIndex);
+    return allotedRelayers.includes(this.wallet.address);
+  }
+
+  private async getState() {
+    const [currentStateHash, latestStateHash] =
+      await config.transactionAllocator.relayerStateHash();
+    const currentState = hashToRelayerState[currentStateHash];
+    if (!currentState) {
+      throw new Error(
+        `Relayer ${this.wallet.address}: Current state not found for hash ${currentStateHash}`
+      );
+    }
+    const latestState = hashToRelayerState[latestStateHash];
+    if (!latestState) {
+      throw new Error(
+        `Relayer ${this.wallet.address}: Latest state not found for hash ${latestStateHash}`
+      );
+    }
+
+    return { currentState, latestState };
+  }
+
+  private async submitTransactions(
+    blockNumber: number,
+    txnAllocated: string[],
+    relayerIndex: number,
+    relayerGenerationIterations: number,
+    currentState: RelayerStateStruct,
+    latestState: RelayerStateStruct
+  ) {
+    // Submit transactions
+    console.log(`Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`);
+    try {
+      await logTransaction(
+        config.transactionAllocator.connect(this.wallet).execute(
+          {
+            reqs: txnAllocated,
+            forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
+            relayerIndex,
+            relayerGenerationIterationBitmap: relayerGenerationIterations,
+            activeState: currentState,
+            latestState: latestState,
+            activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
+              currentState,
+              latestState
+            ),
+          },
+          {
+            gasLimit: 10000000,
+          }
+        ),
+        `Relayer ${this.wallet.address}: Submitted transaction at ${blockNumber}`
+      );
+      // Delete transactions from mempool
+      console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
+    } catch (e) {
+      process.exit(1);
+    }
+
+    await this.mempool.removeTransactions(txnAllocated);
+  }
+
   public async run() {
     config.wsProvider.on('block', async (blockNumber: number) => {
-      metrics.setBlocksUntilNextWindow(blockNumber, this.windowLength);
+      if (config.inactiveRelayers.includes(this.wallet.address)) {
+        return;
+      }
 
       console.log(`Relayer ${this.wallet.address}: New block ${blockNumber}`);
 
@@ -143,9 +221,7 @@ export class Relayer {
       console.log(`Relayer ${this.wallet.address}: New window ${blockNumber}`);
       const windowIndex = blockNumber / this.windowLength;
 
-      // Check if relayer is selected
-      const allotedRelayers = await this.getAllotedRelayers(windowIndex);
-      if (!allotedRelayers.includes(this.wallet.address)) {
+      if (!(await this.isRelayerSelected(windowIndex))) {
         return;
       }
       this.windowsSelectedIn.add(windowIndex);
@@ -157,20 +233,7 @@ export class Relayer {
         return;
       }
 
-      // Get the current state
-      const [currentStateHash, latestHash] = await config.transactionAllocator.relayerStateHash();
-      const currentState = hashToRelayerState[currentStateHash];
-      if (!currentState) {
-        throw new Error(
-          `Relayer ${this.wallet.address}: Current state not found for hash ${currentStateHash}`
-        );
-      }
-      const latestState = hashToRelayerState[latestHash];
-      if (!latestState) {
-        throw new Error(
-          `Relayer ${this.wallet.address}: Latest state not found for hash ${latestHash}`
-        );
-      }
+      const { currentState, latestState } = await this.getState();
 
       const [txnAllocated, relayerGenerationIterations, relayerIndex]: [
         string[],
@@ -192,38 +255,20 @@ export class Relayer {
         );
       }
 
-      // Submit transactions
-      console.log(
-        `Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`
+      await this.submitTransactions(
+        blockNumber,
+        txnAllocated,
+        relayerIndex.toNumber(),
+        relayerGenerationIterations.toNumber(),
+        currentState,
+        latestState
       );
-      try {
-        await logTransaction(
-          config.transactionAllocator.connect(this.wallet).execute(
-            {
-              reqs: txnAllocated,
-              forwardedNativeAmounts: new Array(txnAllocated.length).fill(0),
-              relayerIndex,
-              relayerGenerationIterationBitmap: relayerGenerationIterations,
-              activeState: currentState,
-              latestState: latestState,
-              activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
-                currentState,
-                latestState
-              ),
-            },
-            {
-              gasLimit: 10000000,
-            }
-          ),
-          `Relayer ${this.wallet.address}: Submitted transaction at ${blockNumber}`
-        );
-        // Delete transactions from mempool
-        console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
-      } catch (e) {
-        process.exit(1);
-      }
+    });
 
-      await this.mempool.removeTransactions(txnAllocated);
+    config.wsProvider.on('block', async () => {
+      if (Math.random() < config.relayerClaimProbability) {
+        await this.claimRewards();
+      }
     });
   }
 

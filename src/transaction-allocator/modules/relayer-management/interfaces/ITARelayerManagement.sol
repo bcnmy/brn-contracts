@@ -39,6 +39,8 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
 
     function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress) external view returns (uint256);
 
+    function protocolRewardRate() external view returns (uint256);
+
     ////////////////////// Getters //////////////////////
     function relayerCount() external view returns (uint256);
 

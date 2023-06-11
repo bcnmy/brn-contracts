@@ -54,4 +54,9 @@ import { metrics } from './metrics';
 
   // Start the metrics
   metrics.init();
+
+  const windowLength = (await config.transactionAllocator.blocksPerWindow()).toNumber();
+  config.wsProvider.on('block', async (blockNumber: number) => {
+    metrics.setBlocksUntilNextWindow(blockNumber, windowLength);
+  });
 })();
