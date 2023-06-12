@@ -17,7 +17,8 @@ contract ProtocolRewardsTest is
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
 
-    uint256 constant TEST_SETUP_PROTOCOL_REWARD_RATE = 174447047123188;
+    uint256 constant TEST_SETUP_PROTOCOL_REWARD_RATE = 743844708255694;
+    uint256 constant FOUNDATION_RELAYER_POST_REGISTRATION_REWARD_RATE = 100300000000000;
     uint256 constant REWARDS_MAX_ABSOLUTE_ERROR = 1; // 1 wei
 
     mapping(RelayerAddress => uint256) claimableRewards;
@@ -47,30 +48,30 @@ contract ProtocolRewardsTest is
 
     function testProtocolRewardRates() external {
         // Check Reward Rate at current stake
-        assertEq(ta.debug_getProtocolRewardRate(), TEST_SETUP_PROTOCOL_REWARD_RATE);
+        assertEq(ta.protocolRewardRate(), TEST_SETUP_PROTOCOL_REWARD_RATE);
 
         // Check Reward Rate at 10 relayers each with minimum stake
         ta.debug_setTotalStake(ta.minimumStakeAmount() * 10);
         ta.debug_setRelayerCount(10);
-        assertEq(ta.debug_getProtocolRewardRate(), 31717644931488);
+        assertEq(ta.protocolRewardRate(), 317176449314888);
 
         // Check Reward Rate at 1 relayer with minimum stake
         ta.debug_setTotalStake(ta.minimumStakeAmount());
         ta.debug_setRelayerCount(1);
-        assertEq(ta.debug_getProtocolRewardRate(), deployParams.baseRewardRatePerMinimumStakePerSec);
+        assertEq(ta.protocolRewardRate(), FOUNDATION_RELAYER_POST_REGISTRATION_REWARD_RATE);
     }
 
     FixedPointType[10] initialExpectedRelayerShares = [
         FixedPointType.wrap(10000000000000000000000000000000000000000000000),
-        FixedPointType.wrap(19999999899700000503004497477432445150676287569),
-        FixedPointType.wrap(29999999849550000754506746216148667726014431354),
-        FixedPointType.wrap(39999999799400001006008994954864890301352575138),
-        FixedPointType.wrap(49999999749250001257511243693581112876690718923),
-        FixedPointType.wrap(59999999699100001509013492432297335452028862708),
-        FixedPointType.wrap(69999999648950001760515741171013558027367006492),
-        FixedPointType.wrap(79999999598800002012017989909729780602705150277),
-        FixedPointType.wrap(89999999548650002263520238648446003178043294062),
-        FixedPointType.wrap(99999999498500002515022487387162225753381437846)
+        FixedPointType.wrap(19999989970005030042477433697567000670149163920),
+        FixedPointType.wrap(29999984955007545063716150546350501005223745880),
+        FixedPointType.wrap(39999979940010060084954867395134001340298327840),
+        FixedPointType.wrap(49999974925012575106193584243917501675372909800),
+        FixedPointType.wrap(59999969910015090127432301092701002010447491760),
+        FixedPointType.wrap(69999964895017605148671017941484502345522073720),
+        FixedPointType.wrap(79999959880020120169909734790268002680596655680),
+        FixedPointType.wrap(89999954865022635191148451639051503015671237640),
+        FixedPointType.wrap(99999949850025150212387168487835003350745819600)
     ];
 
     function testRelayersShouldHaveCorrectInitialProtocolRewardShares() external {
@@ -83,7 +84,7 @@ contract ProtocolRewardsTest is
         // we waited for half an epoch before registering other relayers so that the foundation relayer has accrued some rewards
         // check setUp()
         uint256 initialRewardsGenerated =
-            (deployParams.baseRewardRatePerMinimumStakePerSec * (deployParams.epochLengthInSec / 2));
+            (FOUNDATION_RELAYER_POST_REGISTRATION_REWARD_RATE * (deployParams.epochLengthInSec / 2));
         FixedPointType newSharePrice = (initialRelayerStake[relayerMainAddress[0]].fp() + initialRewardsGenerated.fp())
             / ta.relayerInfo(relayerMainAddress[0]).rewardShares;
 
@@ -99,22 +100,22 @@ contract ProtocolRewardsTest is
     }
 
     uint256[10] expectedRelayerRewardsAfter100Sec = [
-        367326450876606,
-        570917608714740,
-        856376413072110,
-        1141835217429480,
-        1427294021786849,
-        1712752826144220,
-        1998211630501589,
-        2283670434858959,
-        2569129239216329,
-        2854588043573699
+        6367445590020546,
+        2434400841184962,
+        3651601261777443,
+        4868801682369923,
+        6086002102962405,
+        7303202523554886,
+        8520402944147366,
+        9737603364739847,
+        10954803785332328,
+        12172004205924809
     ];
 
     function testRelayersShouldAccrueRewardsProportionally() external {
         // Foundation relayer has been registered for 1.5 epoch + 1 window. It should have accrued rewards
         uint256 initialFoundationRelayerRewards =
-            deployParams.baseRewardRatePerMinimumStakePerSec * (block.timestamp - deploymentTimestamp);
+            FOUNDATION_RELAYER_POST_REGISTRATION_REWARD_RATE * (block.timestamp - deploymentTimestamp);
         assertEq(ta.relayerClaimableProtocolRewards(relayerMainAddress[0]), initialFoundationRelayerRewards);
 
         // Other relayers were just registered, therefore they should have no rewards
@@ -126,8 +127,7 @@ contract ProtocolRewardsTest is
         vm.warp(block.timestamp + t);
 
         // All relayers should have accrued rewards proportionally in the last t s as per TEST_SETUP_PROTOCOL_REWARD_RATE
-        uint256 expectedTotalRewardsAccrued = t * TEST_SETUP_PROTOCOL_REWARD_RATE
-            + (deployParams.baseRewardRatePerMinimumStakePerSec * (deployParams.epochLengthInSec / 2));
+        uint256 expectedTotalRewardsAccrued = t * TEST_SETUP_PROTOCOL_REWARD_RATE + initialFoundationRelayerRewards;
         FixedPointType newPrice =
             (ta.totalStake().fp() + expectedTotalRewardsAccrued.fp()) / ta.totalProtocolRewardShares();
 
@@ -216,15 +216,15 @@ contract ProtocolRewardsTest is
 
     uint256[10] expectedDelegatorRewardsAfter100Sec = [
         0, // Foundation relayer specified the delegator pool premium share as 0
-        63435289857193,
-        95152934785789,
-        126870579714386,
-        158588224642983,
-        190305869571579,
-        222023514500176,
-        253741159428773,
-        285458804357369,
-        317176449285966
+        270488982353884,
+        405733473530826,
+        540977964707769,
+        676222455884711,
+        811466947061653,
+        946711438238596,
+        1081955929415538,
+        1217200420592480,
+        1352444911769423
     ];
 
     function testRelayerClaimShouldCreditRewardsToDelegators() external {
@@ -249,15 +249,15 @@ contract ProtocolRewardsTest is
     }
 
     uint256[9] expectedRewardRatesAsRelayersExit = [
-        162486000000000,
-        147519445118262,
-        130030739684891,
-        110557719540518,
-        89711047257291,
-        68204000000000,
-        46905667919772,
-        26950667858144,
-        10030000000000
+        737051463603458,
+        723273585858076,
+        702100000000000,
+        672832854429686,
+        634352898629776,
+        584844475052983,
+        521174087997475,
+        437197564037129,
+        317176449314888
     ];
 
     function testExitingRelayersShouldLowerRewardRate() external {
@@ -267,7 +267,7 @@ contract ProtocolRewardsTest is
             ta.unregister(latestRelayerState, _findRelayerIndex(relayerAddress));
             _removeRelayerFromLatestState(relayerAddress);
 
-            assertEq(ta.debug_getProtocolRewardRate(), expectedRewardRatesAsRelayersExit[i]);
+            assertEq(ta.protocolRewardRate(), expectedRewardRatesAsRelayersExit[i]);
         }
     }
 

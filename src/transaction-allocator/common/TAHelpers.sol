@@ -184,8 +184,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function _protocolRewardRate() internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
-        FixedPointType rate = rs.relayerCount.fp().sqrt().mul(rs.baseRewardRatePerMinimumStakePerSec).mul(rs.totalStake)
-            .div(rs.minimumStakeAmount);
+        FixedPointType rate =
+            rs.totalStake.fp().div(BOND_TOKEN_DECIMAL_MULTIPLIER).sqrt().mul(rs.baseRewardRatePerMinimumStakePerSec);
         return rate.u256();
     }
 
