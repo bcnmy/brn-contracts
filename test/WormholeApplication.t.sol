@@ -3,10 +3,9 @@
 pragma solidity 0.8.19;
 
 import "./base/TATestBase.sol";
-import "ta-common/TAConstants.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
-import "ta-wormhole-application/interfaces/IWormholeApplicationEventsErrors.sol";
+import "wormhole-application/interfaces/IWormholeApplicationEventsErrors.sol";
 
 contract WormholeApplicationTest is
     TATestBase,
@@ -19,7 +18,7 @@ contract WormholeApplicationTest is
     bytes constant defaultVAA =
         hex"01000000000100dd9410ea42cce096a51f9c02a91ed565d71e5cfdd09966e5246c1d3cd4064ad97fb8bce9993227fbaf4d366fc8b3e73029bc7565f6ad4473f29a3532e8b1f9060163bff8f400000041000500000000000000000000000084fee39095b18962b875588df7f9ad1be87e86530000000000000041c875e5f7065b71d698d6ab1bf73f7b0604a5c9f3015ab01248fbc127af5a8e3c2a";
 
-    IDelivery deliveryMock = IDelivery(address(0xFFF01));
+    IWormholeRelayerDelivery deliveryMock = IWormholeRelayerDelivery(address(0xFFF01));
     IWormhole wormholeMock = IWormhole(address(0xFFF02));
 
     function setUp() public override {
@@ -38,19 +37,7 @@ contract WormholeApplicationTest is
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
 
         for (uint256 i = 0; i < userCount; i++) {
-            txns.push(
-                abi.encodeCall(
-                    ta.executeWormhole,
-                    (
-                        IDelivery.TargetDeliveryParameters({
-                            encodedVMs: new bytes[](0),
-                            encodedDeliveryVAA: defaultVAA,
-                            relayerRefundAddress: payable(address(ta)),
-                            overrides: bytes("")
-                        })
-                    )
-                )
-            );
+            txns.push(abi.encodeCall(ta.executeWormhole, (new bytes[](0), defaultVAA, payable(address(ta)), bytes(""))));
         }
     }
 

@@ -6,8 +6,6 @@ import "./interfaces/ITADebug.sol";
 import "ta-common/TAHelpers.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 
-import "forge-std/console2.sol";
-
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];

@@ -3,6 +3,7 @@
 pragma solidity 0.8.19;
 
 import "solidity-bytes-utils/contracts/BytesLib.sol";
+
 import "./interfaces/IWormholeApplication.sol";
 import "./WormholeApplicationStorage.sol";
 import "ta-base-application/ApplicationBase.sol";
@@ -13,7 +14,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     using BytesLib for bytes;
 
     // TODO: Only Governance
-    function initialize(IWormhole _wormhole, IDelivery _delivery) external {
+    function initialize(IWormhole _wormhole, IWormholeRelayerDelivery _delivery) external {
         WHStorage storage ws = getWHStorage();
         if (ws.initialized) {
             revert AlreadyInitialized();
@@ -28,10 +29,9 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
     ////// Alloction Logic //////
     function _getTransactionHash(bytes calldata _calldata) internal pure virtual override returns (bytes32) {
-        (IDelivery.TargetDeliveryParameters memory params) =
-            abi.decode(_calldata[4:], (IDelivery.TargetDeliveryParameters));
+        (, bytes memory encodedDeliveryVAA,,) = abi.decode(_calldata[4:], (bytes[], bytes, address, bytes));
 
-        return keccak256(abi.encode(_getVAASequenceNumber(params.encodedDeliveryVAA)));
+        return keccak256(abi.encode(_getVAASequenceNumber(encodedDeliveryVAA)));
     }
 
     // TODO: Optimize
@@ -58,22 +58,23 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     }
 
     /// Execution Logic
-    function executeWormhole(IDelivery.TargetDeliveryParameters calldata _targetParams)
-        external
-        payable
-        override
-        applicationHandler(msg.data)
-    {
+    function executeWormhole(
+        bytes[] calldata _encodedVMs,
+        bytes calldata _encodedDeliveryVAA,
+        address payable _relayerRefundAddress,
+        bytes calldata _deliveryOverrides
+    ) external payable override applicationHandler(msg.data) {
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();
-        whs.delivery.deliver{value: msg.value}(_targetParams);
+        whs.delivery.deliver{value: msg.value}(
+            _encodedVMs, _encodedDeliveryVAA, _relayerRefundAddress, _deliveryOverrides
+        );
 
         // Generate a ReceiptVAA
         (RelayerAddress relayerAddress,,) = _getCalldataParams();
-        bytes memory receiptVAAPayload =
-            abi.encode(_getVAASequenceNumber(_targetParams.encodedDeliveryVAA), relayerAddress);
+        bytes memory receiptVAAPayload = abi.encode(_getVAASequenceNumber(_encodedDeliveryVAA), relayerAddress);
         whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);
 
-        emit WormholeDeliveryExecuted(_targetParams.encodedDeliveryVAA);
+        emit WormholeDeliveryExecuted(_encodedDeliveryVAA);
     }
 }
