@@ -13,7 +13,9 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
         return keccak256(abi.encodePacked(param));
     }
 
-    function executeMinimalApplication(bytes32 _data) external payable override applicationHandler(msg.data) {
+    function executeMinimalApplication(bytes32 _data) external payable override {
+        _verifyTransaction(_getTransactionHash(msg.data));
+
         count++;
         emit MessageEmitted(_data);
     }
@@ -26,5 +28,6 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
         return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
 
+    // Skip coverage
     function test2() external {}
 }

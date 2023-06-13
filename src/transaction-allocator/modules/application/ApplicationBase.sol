@@ -7,16 +7,14 @@ import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 import "ta-relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
-    modifier applicationHandler(bytes calldata _dataToHash) {
+    function _verifyTransaction(bytes32 _txHash) internal view {
         if (msg.sender != address(this)) revert ExternalCallsNotAllowed();
 
         (, uint256 relayerGenerationIterationBitmap, uint256 relayersPerWindow) = _getCalldataParams();
 
-        if (!_verifyTransactionAllocation(_dataToHash, relayerGenerationIterationBitmap, relayersPerWindow)) {
+        if (!_verifyTransactionAllocation(_txHash, relayerGenerationIterationBitmap, relayersPerWindow)) {
             revert RelayerNotAssignedToTransaction();
         }
-
-        _;
     }
 
     function _getCalldataParams()
@@ -37,24 +35,18 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         }
     }
 
-    function _getTransactionHash(bytes calldata _txCalldata) internal pure virtual returns (bytes32);
-
-    function _getAllotedRelayerIndex(bytes calldata _txCalldata, uint256 _relayersPerWindow)
-        internal
-        pure
-        virtual
-        returns (uint256)
-    {
-        bytes32 txHash = _getTransactionHash(_txCalldata);
-        return uint256(txHash) % _relayersPerWindow;
+    function _getAllotedRelayerIndex(bytes32 _txHash, uint256 _relayersPerWindow) private pure returns (uint256) {
+        return uint256(_txHash) % _relayersPerWindow;
     }
 
+    function _getTransactionHash(bytes calldata _calldata) internal pure virtual returns (bytes32);
+
     function _verifyTransactionAllocation(
-        bytes calldata _txCalldata,
+        bytes32 _txHash,
         uint256 _relayerGenerationIterationBitmap,
         uint256 _relayersPerWindow
-    ) internal pure virtual returns (bool) {
-        uint256 relayerIndex = _getAllotedRelayerIndex(_txCalldata, _relayersPerWindow);
+    ) private pure returns (bool) {
+        uint256 relayerIndex = _getAllotedRelayerIndex(_txHash, _relayersPerWindow);
         return (_relayerGenerationIterationBitmap >> relayerIndex) & 1 == 1;
     }
 
@@ -79,7 +71,8 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
         uint256 j;
         for (uint256 i; i != length;) {
             // If the transaction can be processed by this relayer, store it's info
-            uint256 relayerIndex = _getAllotedRelayerIndex(_requests[i], relayersAllocated.length);
+            bytes32 txHash = _getTransactionHash(_requests[i]);
+            uint256 relayerIndex = _getAllotedRelayerIndex(txHash, relayersAllocated.length);
             if (relayersAllocated[relayerIndex] == _relayerAddress) {
                 relayerGenerationIterations |= (1 << relayerIndex);
                 txnAllocated[j] = _requests[i];

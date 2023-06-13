@@ -10,6 +10,10 @@ import "ta-base-application/ApplicationBase.sol";
 
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;
+    uint256 constant SIGNATURE_SIZE = 66;
+    uint256 constant VERSION_OFFSET = 0;
+    uint256 constant SIGNATURE_LENGTH_OFFSET = 5;
+    uint256 constant SEQUENCE_ID_BODY_OFFSET = 48;
 
     using BytesLib for bytes;
 
@@ -34,19 +38,37 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         return keccak256(abi.encode(_getVAASequenceNumber(encodedDeliveryVAA)));
     }
 
-    // TODO: Optimize
     function _getVAASequenceNumber(bytes memory _encodedVAA) internal pure returns (uint256 sequenceNumber) {
-        uint256 index = 0;
+        // VAA Structure
+        //
+        // Offset (bytes) | Data                  | Size (bytes)
+        // -----------------------------------------------------
+        // 0              | version               | 1
+        // 1              | guardian_set_index    | 4
+        // 5              | len_signatures        | 1
+        // 6              | signatures[0]         | 66
+        // 72             | signatures[1]         | 66
+        // ...            | ...                   | ...
+        // 6 + 66n        | signatures[n]         | 66
+        // (Body starts)
+        // 6 + 66x        | timestamp             | 4
+        // 10 + 66x       | nonce                 | 4
+        // 14 + 66x       | emitter_chain         | 2
+        // 16 + 66x       | emitter_address[0]    | 32
+        // 48 + 66x       | sequence              | 8
+        // 56 + 66x       | consistency_level     | 1
+        // 57 + 66x       | payload[0]            | variable
+        // ...            | ...                   | ...
+        //
+        // x = len_signatures
 
-        uint256 version = _encodedVAA.toUint8(index);
+        uint256 version = _encodedVAA.toUint8(VERSION_OFFSET);
         if (version != EXPECTED_VM_VERSION) {
             revert VMVersionIncompatible(EXPECTED_VM_VERSION, version);
         }
 
-        index += 4 + 1;
-        uint256 signersLen = _encodedVAA.toUint8(index);
-        index += 1 + (1 + 32 + 32 + 1) * signersLen + 4 + 4 + 2 + 32;
-        sequenceNumber = _encodedVAA.toUint64(index);
+        uint256 signersLen = _encodedVAA.toUint8(SIGNATURE_LENGTH_OFFSET);
+        sequenceNumber = _encodedVAA.toUint64(SEQUENCE_ID_BODY_OFFSET + SIGNATURE_SIZE * signersLen);
     }
 
     function allocateWormholeDeliveryVAA(
@@ -63,7 +85,10 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         bytes calldata _encodedDeliveryVAA,
         address payable _relayerRefundAddress,
         bytes calldata _deliveryOverrides
-    ) external payable override applicationHandler(msg.data) {
+    ) external payable override {
+        uint256 sequenceNo = _getVAASequenceNumber(_encodedDeliveryVAA);
+        _verifyTransaction(keccak256(abi.encode(sequenceNo)));
+
         // Forward the call the CoreRelayerDelivery with value
         WHStorage storage whs = getWHStorage();
         whs.delivery.deliver{value: msg.value}(
@@ -72,7 +97,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
         // Generate a ReceiptVAA
         (RelayerAddress relayerAddress,,) = _getCalldataParams();
-        bytes memory receiptVAAPayload = abi.encode(_getVAASequenceNumber(_encodedDeliveryVAA), relayerAddress);
+        bytes memory receiptVAAPayload = abi.encode(sequenceNo, relayerAddress);
         whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);
 
         emit WormholeDeliveryExecuted(_encodedDeliveryVAA);
