@@ -170,8 +170,7 @@ contract TARelayerManagement is
         emit RelayerUnRegistered(relayerAddress);
     }
 
-    // TODO: Allow relayers to provide a list of relayer account addresses to be deleted, which could result in potential gas refunds
-    function withdraw() external override {
+    function withdraw(RelayerAccountAddress[] calldata _relayerAccountsToRemove) external override {
         RMStorage storage rms = getRMStorage();
 
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -191,10 +190,25 @@ contract TARelayerManagement is
             revert RelayerJailNotExpired(node.minExitTimestamp);
         }
 
+        _deleteRelayerAccountAddresses(relayerAddress, _relayerAccountsToRemove);
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);
 
         delete rms.relayerInfo[relayerAddress];
+    }
+
+    function _deleteRelayerAccountAddresses(
+        RelayerAddress _relayerAddress,
+        RelayerAccountAddress[] calldata _relayerAccountAddresses
+    ) internal {
+        RelayerInfo storage node = getRMStorage().relayerInfo[_relayerAddress];
+        uint256 length = _relayerAccountAddresses.length;
+        for (uint256 i; i != length;) {
+            delete node.isAccount[_relayerAccountAddresses[i]];
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external override {

@@ -4,7 +4,6 @@ pragma solidity 0.8.19;
 
 import "./ITARelayerManagementEventsErrors.sol";
 import "src/library/FixedPointArithmetic.sol";
-import "ta-common/TAConstants.sol";
 
 interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
@@ -28,7 +27,7 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
         uint256 _delegatorPoolPremiumShare
     ) external;
 
-    function withdraw() external;
+    function withdraw(RelayerAccountAddress[] calldata _relayerAccountsToRemove) external;
 
     function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;
 

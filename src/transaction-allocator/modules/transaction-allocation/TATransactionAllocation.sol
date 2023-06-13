@@ -105,11 +105,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             // Verify Each Iteration against _cdfIndex in _cdf
             uint16 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
+            uint256 relayersPerWindow = ds.relayersPerWindow;
 
             // I wonder if an efficient implementation of __builtin_ctzl exists in solidity.
             while (_relayerGenerationIterationBitmap != 0) {
                 if (_relayerGenerationIterationBitmap & 1 == 1) {
-                    if (relayerGenerationIteration >= ds.relayersPerWindow) {
+                    if (relayerGenerationIteration >= relayersPerWindow) {
                         revert InvalidRelayerGenerationIteration();
                     }
 
@@ -287,7 +288,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
         state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp].fp();
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
-        delete getTAStorage().totalTransactionsSubmitted[state.epochEndTimestamp];
+        delete ta.totalTransactionsSubmitted[state.epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (state.totalTransactionsInEpoch == FP_ZERO) {
@@ -513,8 +514,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         FixedPointType s = ((p * (FP_ONE - p)) * _totalTransactions).sqrt();
         FixedPointType d = _zScore * s;
         FixedPointType e = p * _totalTransactions;
-        if (e > d) {
-            return e - d;
+        unchecked {
+            if (e > d) {
+                return e - d;
+            }
         }
 
         return FP_ZERO;
