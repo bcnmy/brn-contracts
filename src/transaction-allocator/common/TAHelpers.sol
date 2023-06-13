@@ -2,15 +2,17 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/utils/math/SafeCast.sol";
 
 import "./interfaces/ITAHelpers.sol";
 import "./TAConstants.sol";
-import "./TATypes.sol";
-import "../modules/relayer-management/TARelayerManagementStorage.sol";
-import "../modules/delegation/TADelegationStorage.sol";
+import "ta-relayer-management/TARelayerManagementStorage.sol";
+import "ta-delegation/TADelegationStorage.sol";
+import "src/library/arrays/U32ArrayHelper.sol";
+import "src/library/arrays/RAArrayHelper.sol";
+import "src/library/arrays/U16ArrayHelper.sol";
 
 import "forge-std/console2.sol";
 
@@ -19,108 +21,67 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using SafeCast for uint256;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
+    using VersionManager for VersionManager.VersionManagerState;
+    using U32ArrayHelper for uint32[];
+    using U16ArrayHelper for uint16[];
+    using RAArrayHelper for RelayerAddress[];
 
-    ////////////////////////////// Hash Functions //////////////////////////////
-    function _hashUint32ArrayCalldata(uint32[] calldata _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint32ArrayMemory(uint32[] memory _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint16ArrayCalldata(uint16[] calldata _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
-    }
-
-    function _hashUint16ArrayMemory(uint16[] memory _array) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked((_array)));
+    modifier measureGas(string memory _name) {
+        uint256 gasStart = gasleft();
+        _;
+        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
-    modifier verifyDelegationArrayHash(uint32[] calldata _array) {
-        if (!_verifyDelegationArrayHash(_array)) {
-            revert InvalidDelegationArrayHash();
+    modifier onlySelf() {
+        if (msg.sender != address(this)) {
+            revert OnlySelf();
         }
         _;
     }
 
-    modifier verifyStakeArrayHash(uint32[] calldata _array) {
-        if (!_verifyStakeArrayHash(_array)) {
-            revert InvalidStakeArrayHash();
-        }
-        _;
-    }
-
-    modifier onlyStakedRelayer(RelayerAddress _relayer) {
-        if (!_isStakedRelayer(_relayer)) {
+    modifier onlyActiveRelayer(RelayerAddress _relayer) {
+        if (!_isActiveRelayer(_relayer)) {
             revert InvalidRelayer(_relayer);
         }
         _;
     }
 
-    function _verifyDelegationArrayHash(uint32[] calldata _array) internal view returns (bool) {
-        TADStorage storage ds = getTADStorage();
-        return ds.delegationArrayHash == _hashUint32ArrayCalldata(_array);
+    function _isActiveRelayer(RelayerAddress _relayer) internal view returns (bool) {
+        return getRMStorage().relayerInfo[_relayer].status == RelayerStatus.Active;
     }
 
-    function _verifyStakeArrayHash(uint32[] calldata _array) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-        return ds.stakeArrayHash == _hashUint32ArrayCalldata(_array);
+    function _getRelayerStateHash(bytes32 _cdfHash, bytes32 _relayerArrayHash) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(_cdfHash, _relayerArrayHash));
     }
 
-    function _verifyCdfHashAtWindow(uint16[] calldata _array, uint256 __windowIndex, uint256 _cdfLogIndex)
-        internal
-        view
-        returns (bool)
-    {
-        RMStorage storage ds = getRMStorage();
-
-        if (_cdfLogIndex >= ds.cdfHashUpdateLog.length) {
-            return false;
-        }
+    function _verifyExternalStateForRelayerStateUpdation(bytes32 _cdfHash, bytes32 _activeRelayersHash) internal view {
+        RMStorage storage rs = getRMStorage();
 
         if (
-            !(
-                ds.cdfHashUpdateLog[_cdfLogIndex].windowIndex <= __windowIndex
-                    && (
-                        _cdfLogIndex == ds.cdfHashUpdateLog.length - 1
-                            || ds.cdfHashUpdateLog[_cdfLogIndex + 1].windowIndex > __windowIndex
-                    )
+            !rs.relayerStateVersionManager.verifyHashAgainstLatestState(
+                _getRelayerStateHash(_cdfHash, _activeRelayersHash)
             )
         ) {
-            return false;
+            revert InvalidLatestRelayerState();
         }
-
-        return ds.cdfHashUpdateLog[_cdfLogIndex].cdfHash == _hashUint16ArrayCalldata(_array);
     }
 
-    function _verifyRelayerUpdationLogIndexAtBlock(
-        uint256 _relayerIndex,
-        uint256 _blockNumber,
-        uint256 _relayerIndexUpdationLogIndex
-    ) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
+    function _verifyExternalStateForTransactionAllocation(
+        bytes32 _cdfHash,
+        bytes32 _activeRelayersHash,
+        uint256 _blockNumber
+    ) internal view {
+        RMStorage storage rs = getRMStorage();
+        uint256 windowIndex = _windowIndex(_blockNumber);
 
-        uint256 windowIndexAtBlock = _windowIndex(_blockNumber);
-        RelayerIndexToRelayerUpdateInfo[] storage relayerIndexUpdateLog =
-            ds.relayerIndexToRelayerUpdationLog[_relayerIndex];
-
-        if (_relayerIndexUpdationLogIndex >= relayerIndexUpdateLog.length) {
-            return false;
+        if (
+            !rs.relayerStateVersionManager.verifyHashAgainstActiveState(
+                _getRelayerStateHash(_cdfHash, _activeRelayersHash), windowIndex
+            )
+        ) {
+            revert InvalidActiveRelayerState();
         }
-
-        return (
-            relayerIndexUpdateLog[_relayerIndexUpdationLogIndex].windowIndex <= windowIndexAtBlock
-                && (
-                    _relayerIndexUpdationLogIndex == relayerIndexUpdateLog.length - 1
-                        || relayerIndexUpdateLog[_relayerIndexUpdationLogIndex + 1].windowIndex > windowIndexAtBlock
-                )
-        );
-    }
-
-    function _isStakedRelayer(RelayerAddress _relayer) internal view returns (bool) {
-        return getRMStorage().relayerInfo[_relayer].stake > 0;
     }
 
     ////////////////////////////// Relayer Selection //////////////////////////////
@@ -128,88 +89,22 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return _blockNumber / getRMStorage().blocksPerWindow;
     }
 
-    function _windowIndexToStartingBlock(uint256 __windowIndex) internal view returns (uint256) {
-        return __windowIndex * getRMStorage().blocksPerWindow;
-    }
-
-    function _randomCdfNumber(uint256 _blockNumber, uint256 _iter, uint256 _max) internal view returns (uint256) {
-        // The seed for jth iteration is a function of the base seed and j
-        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
-        uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
-        return (seed % _max);
-    }
-
-    function _verifyRelayerSelection(
-        address _relayer,
-        uint16[] calldata _cdf,
-        uint256 _cdfUpdationLogIndex,
-        uint256 _relayerIndex,
-        uint256 _relayerIndexUpdationLogIndex,
-        uint256[] calldata _relayerGenerationIterations,
-        uint256 _blockNumber
-    ) internal view returns (bool) {
-        RMStorage storage ds = getRMStorage();
-
-        uint256 iterationCount = _relayerGenerationIterations.length;
-        uint256 stakeSum = _cdf[_cdf.length - 1];
-
-        // Verify CDF
-        if (!_verifyCdfHashAtWindow(_cdf, _windowIndex(_blockNumber), _cdfUpdationLogIndex)) {
-            revert InvalidCdfArrayHash();
-        }
-
-        // Verify Relayer Index Updation Log Index
-        if (!_verifyRelayerUpdationLogIndexAtBlock(_relayerIndex, _blockNumber, _relayerIndexUpdationLogIndex)) {
-            revert InvalidRelayerUpdationLogIndex();
-        }
-
-        // Verify Each Iteration against _cdfIndex in _cdf
-        for (uint256 i = 0; i < iterationCount;) {
-            uint256 relayerGenerationIteration = _relayerGenerationIterations[i];
-
-            if (relayerGenerationIteration >= ds.relayersPerWindow) {
-                revert InvalidRelayerGenerationIteration();
-            }
-
-            // Verify if correct stake prefix sum index has been provided
-            uint256 randomRelayerStake = _randomCdfNumber(_blockNumber, relayerGenerationIteration, stakeSum);
-
-            if (
-                !(
-                    (_relayerIndex == 0 || _cdf[_relayerIndex - 1] < randomRelayerStake)
-                        && randomRelayerStake <= _cdf[_relayerIndex]
-                )
-            ) {
-                // The supplied index does not point to the correct interval
-                revert RelayerIndexDoesNotPointToSelectedCdfInterval();
-            }
-
-            unchecked {
-                ++i;
-            }
-        }
-
-        RelayerAddress relayerAddress =
-            ds.relayerIndexToRelayerUpdationLog[_relayerIndex][_relayerIndexUpdationLogIndex].relayerAddress;
-        RelayerInfo storage node = ds.relayerInfo[relayerAddress];
-        if (relayerAddress != RelayerAddress.wrap(_relayer) && !node.isAccount[RelayerAccountAddress.wrap(_relayer)]) {
-            revert RelayerAddressDoesNotMatchSelectedRelayer();
-        }
-
-        return true;
+    function _nextWindowForUpdate(uint256 _blockNumber) internal view returns (uint256) {
+        return _windowIndex(_blockNumber) + getRMStorage().relayerStateUpdateDelayInWindows;
     }
 
     ////////////////////////////// Relayer State //////////////////////////////
-    function _generateCdfArray(uint32[] memory _stakeArray, uint32[] memory _delegationArray)
-        internal
-        pure
-        returns (uint16[] memory, bytes32)
-    {
-        uint16[] memory cdf = new uint16[](_stakeArray.length);
+    function _generateCdfArray_c(RelayerAddress[] calldata _activeRelayers) internal view returns (uint16[] memory) {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
+
+        uint256 length = _activeRelayers.length;
+        uint16[] memory cdf = new uint16[](length);
         uint256 totalStakeSum = 0;
-        uint256 length = _stakeArray.length;
-        for (uint256 i = 0; i < length;) {
-            totalStakeSum += _stakeArray[i] + _delegationArray[i];
+
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
             unchecked {
                 ++i;
             }
@@ -217,120 +112,126 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         // Scale the values to fit uint16 and get the CDF
         uint256 sum = 0;
-        for (uint256 i = 0; i < length;) {
-            sum += _stakeArray[i] + _delegationArray[i];
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
             cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
             unchecked {
                 ++i;
             }
         }
 
-        return (cdf, _hashUint16ArrayMemory(cdf));
+        return cdf;
     }
 
-    function _updateAccountingState(
-        uint32[] memory _stakeArray,
-        bool _shouldUpdateStakeAccounting,
-        uint32[] memory _delegationArray,
-        bool _shouldUpdateDelegationAccounting
-    ) internal returns (uint256) {
-        RMStorage storage ds = getRMStorage();
+    function _generateCdfArray_m(RelayerAddress[] memory _activeRelayers) internal view returns (uint16[] memory) {
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
 
-        // Update Stake Array Hash
-        if (_shouldUpdateStakeAccounting) {
-            ds.stakeArrayHash = _hashUint32ArrayMemory(_stakeArray);
-            emit StakeArrayUpdated(ds.stakeArrayHash);
+        uint256 length = _activeRelayers.length;
+        uint16[] memory cdf = new uint16[](length);
+        uint256 totalStakeSum = 0;
+
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
+            unchecked {
+                ++i;
+            }
         }
 
-        // Update Delegation Array Hash
-        if (_shouldUpdateDelegationAccounting) {
-            TADStorage storage tds = getTADStorage();
-            tds.delegationArrayHash = _hashUint32ArrayMemory(_delegationArray);
-            emit DelegationArrayUpdated(tds.delegationArrayHash);
+        // Scale the values to fit uint16 and get the CDF
+        uint256 sum = 0;
+        for (uint256 i; i != length;) {
+            RelayerAddress relayerAddress = _activeRelayers[i];
+            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
+            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
+            unchecked {
+                ++i;
+            }
         }
 
-        if (_stakeArray.length != _delegationArray.length) {
-            revert ParameterLengthMismatch();
-        }
+        return cdf;
+    }
 
-        // Update cdf hash
-        (, bytes32 cdfHash) = _generateCdfArray(_stakeArray, _delegationArray);
-        uint256 updateEffectiveAtwindowIndex =
-            _windowIndex(block.number) + RELAYER_CONFIGURATION_UPDATE_DELAY_IN_WINDOWS;
-        if (
-            ds.cdfHashUpdateLog.length > 0
-                && ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].windowIndex == updateEffectiveAtwindowIndex
-        ) {
-            ds.cdfHashUpdateLog[ds.cdfHashUpdateLog.length - 1].cdfHash = cdfHash;
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length - 1);
-        } else {
-            ds.cdfHashUpdateLog.push(CdfHashUpdateInfo({windowIndex: updateEffectiveAtwindowIndex, cdfHash: cdfHash}));
-            emit CdfArrayUpdateQueued(cdfHash, updateEffectiveAtwindowIndex, ds.cdfHashUpdateLog.length);
-        }
+    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal {
+        uint16[] memory cdf = _generateCdfArray_c(_relayerAddresses);
+        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.cd_hash());
 
-        return updateEffectiveAtwindowIndex;
+        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+
+        getRMStorage().relayerStateVersionManager.setPendingState(relayerStateHash, _windowIndex(block.number));
+    }
+
+    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal {
+        uint16[] memory cdf = _generateCdfArray_m(_relayerAddresses);
+        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.m_hash());
+
+        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+
+        getRMStorage().relayerStateVersionManager.setPendingState(relayerStateHash, _windowIndex(block.number));
     }
 
     ////////////////////////////// Delegation ////////////////////////
     function _addDelegatorRewards(RelayerAddress _relayer, TokenAddress _token, uint256 _amount) internal {
+        if (_amount == 0) {
+            return;
+        }
         getTADStorage().unclaimedRewards[_relayer][_token] += _amount;
-
         emit DelegatorRewardsAdded(_relayer, _token, _amount);
     }
 
     ////////////////////////// Constant Rate Rewards //////////////////////////
     function _protocolRewardRate() internal view returns (uint256) {
-        return (
-            BASE_REWARD_RATE_PER_MIN_STAKE_PER_SEC.toFixedPointType() * MINIMUM_STAKE_AMOUNT.toFixedPointType()
-                * fixedPointSqrt(getRMStorage().relayerCount.toFixedPointType())
-        ).toUint256();
-    }
-
-    function _getUpdatedUnpaidProtocolRewards() internal view returns (uint256) {
         RMStorage storage rs = getRMStorage();
-        return
-            rs.unpaidProtocolRewards + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
+        FixedPointType rate =
+            rs.totalStake.fp().div(BOND_TOKEN_DECIMAL_MULTIPLIER).sqrt().mul(rs.baseRewardRatePerMinimumStakePerSec);
+        return rate.u256();
     }
 
-    function _updateProtocolRewards() internal {
-        // Update unpaid rewards
+    function _getLatestTotalUnpaidProtocolRewards() internal view returns (uint256 updatedTotalUnpaidProtocolRewards) {
         RMStorage storage rs = getRMStorage();
 
         if (block.timestamp == rs.lastUnpaidRewardUpdatedTimestamp) {
-            return;
+            return rs.totalUnpaidProtocolRewards;
         }
 
-        // console2.log("Updating Protocol Rewards", block.timestamp, rs.lastUnpaidRewardUpdatedTimestamp);
-
-        rs.unpaidProtocolRewards = _getUpdatedUnpaidProtocolRewards();
-        rs.lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+        return rs.totalUnpaidProtocolRewards
+            + _protocolRewardRate() * (block.timestamp - rs.lastUnpaidRewardUpdatedTimestamp);
     }
 
-    function _protocolRewardRelayerSharePrice() internal view returns (FixedPointType) {
+    function _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp()
+        internal
+        returns (uint256 updatedTotalUnpaidProtocolRewards)
+    {
+        uint256 unpaidRewards = _getLatestTotalUnpaidProtocolRewards();
+        getRMStorage().lastUnpaidRewardUpdatedTimestamp = block.timestamp;
+        return unpaidRewards;
+    }
+
+    function _protocolRewardRelayerSharePrice(uint256 _unpaidRewards) internal view returns (FixedPointType) {
         RMStorage storage rs = getRMStorage();
 
-        if (rs.totalShares == uint256(0).toFixedPointType()) {
-            return uint256(1).toFixedPointType();
+        if (rs.totalProtocolRewardShares == FP_ZERO) {
+            return FP_ONE;
         }
-
-        // console2.log("Total Stake", FixedPointType.unwrap(rs.totalStake.toFixedPointType()));
-        // console2.log("Unpaid Rewards", FixedPointType.unwrap(rs.unpaidProtocolRewards.toFixedPointType()));
-        // console2.log("Total Shares", FixedPointType.unwrap(rs.totalShares));
-
-        return (rs.totalStake.toFixedPointType() + rs.unpaidProtocolRewards.toFixedPointType()) / rs.totalShares;
+        return (rs.totalStake + _unpaidRewards).fp() / rs.totalProtocolRewardShares;
     }
 
-    function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer) internal view returns (uint256) {
+    function _protocolRewardsEarnedByRelayer(RelayerAddress _relayer, uint256 _unpaidRewards)
+        internal
+        view
+        returns (uint256)
+    {
         RMStorage storage rs = getRMStorage();
+        uint256 totalValue =
+            (rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice(_unpaidRewards)).u256();
 
-        FixedPointType totalValue = rs.relayerInfo[_relayer].rewardShares * _protocolRewardRelayerSharePrice();
-        // console2.log("Reward Shares", FixedPointType.unwrap(rs.relayerInfo[_relayer].rewardShares));
-        // console2.log("Share Price", FixedPointType.unwrap(_protocolRewardRelayerSharePrice()));
-        // console2.log("Total value", FixedPointType.unwrap(totalValue));
-        // console2.log("Stake", FixedPointType.unwrap(rs.relayerInfo[_relayer].stake.toFixedPointType()));
-
-        FixedPointType rewards = totalValue - rs.relayerInfo[_relayer].stake.toFixedPointType();
-        return rewards.toUint256();
+        unchecked {
+            uint256 rewards =
+                totalValue >= rs.relayerInfo[_relayer].stake ? totalValue - rs.relayerInfo[_relayer].stake : 0;
+            return rewards;
+        }
     }
 
     function _splitRewards(uint256 _totalRewards, uint256 _delegatorRewardSharePercentage)
@@ -342,28 +243,20 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return (_totalRewards - delegatorRewards, delegatorRewards);
     }
 
-    function _burnRewardSharesForRelayerAndGetRewards(RelayerAddress _relayer) internal returns (uint256, uint256) {
-        RMStorage storage rs = getRMStorage();
-
-        // console2.log("Pre rewards check", block.timestamp);
-
-        uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer);
+    function _getPendingProtocolRewardsData(RelayerAddress _relayer, uint256 _unpaidRewards)
+        internal
+        view
+        returns (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn)
+    {
+        uint256 rewards = _protocolRewardsEarnedByRelayer(_relayer, _unpaidRewards);
         if (rewards == 0) {
-            return (0, 0);
+            return (0, 0, FP_ZERO);
         }
 
-        // console2.log("Post rewards check", block.timestamp, rewards);
+        sharesToBurn = rewards.fp() / _protocolRewardRelayerSharePrice(_unpaidRewards);
 
-        FixedPointType rewardShares = rewards.toFixedPointType() / _protocolRewardRelayerSharePrice();
-        rs.relayerInfo[_relayer].rewardShares = rs.relayerInfo[_relayer].rewardShares - rewardShares;
-        rs.totalShares = rs.totalShares - rewardShares;
-
-        (uint256 relayerRewards, uint256 delegatorRewards) =
-            _splitRewards(rewards, rs.relayerInfo[_relayer].delegatorPoolPremiumShare);
-
-        emit RelayerProtocolRewardSharesBurnt(_relayer, rewardShares, rewards, relayerRewards, delegatorRewards);
-
-        return (relayerRewards, delegatorRewards);
+        (relayerRewards, delegatorRewards) =
+            _splitRewards(rewards, getRMStorage().relayerInfo[_relayer].delegatorPoolPremiumShare);
     }
 
     ////////////////////////////// Misc //////////////////////////////
@@ -387,13 +280,5 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
             token.safeTransfer(_to, _amount);
         }
-    }
-
-    function _scaleStake(uint256 _stake) internal pure returns (uint32) {
-        return (_stake / STAKE_SCALING_FACTOR).toUint32();
-    }
-
-    function _unscaleStake(uint32 _scaledStake) internal pure returns (uint256) {
-        return _scaledStake * STAKE_SCALING_FACTOR;
     }
 }

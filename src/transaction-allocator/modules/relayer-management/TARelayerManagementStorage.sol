@@ -2,39 +2,53 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 
 import "src/library/FixedPointArithmetic.sol";
-import "src/transaction-allocator/common/TATypes.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
+import "src/library/VersionManager.sol";
+import "ta-common/TATypes.sol";
 
 abstract contract TARelayerManagementStorage {
     bytes32 internal constant RELAYER_MANAGEMENT_STORAGE_SLOT = keccak256("RelayerManagement.storage");
 
-    // TODO: Check packing
+    // Relayer Information
+    struct RelayerInfo {
+        // Info
+        uint256 stake;
+        string endpoint;
+        mapping(RelayerAccountAddress => bool) isAccount;
+        // Relayer Status
+        RelayerStatus status;
+        uint256 minExitTimestamp;
+        // Delegation
+        uint256 delegatorPoolPremiumShare; // *100
+        uint256 unpaidProtocolRewards;
+        FixedPointType rewardShares;
+    }
+
     struct RMStorage {
         // Config
         IERC20 bondToken;
-        uint256 penaltyDelayBlocks;
-        // No of registered relayers
-        uint256 relayerCount;
         mapping(RelayerAddress => RelayerInfo) relayerInfo;
-        uint256 totalStake;
-        // Update log of a relayer's index in the CDF -> Relayer Address over time
-        mapping(uint256 => RelayerIndexToRelayerUpdateInfo[]) relayerIndexToRelayerUpdationLog;
-        // TODO: Dynamic?
         uint256 relayersPerWindow;
         uint256 blocksPerWindow;
-        // cdf array hash
-        CdfHashUpdateInfo[] cdfHashUpdateLog;
-        bytes32 stakeArrayHash;
-        /// Maps relayer address to pending withdrawals
-        mapping(RelayerAddress => WithdrawalInfo) withdrawalInfo;
-        mapping(TokenAddress => bool) isGasTokenSupported;
+        uint256 jailTimeInSec;
+        uint256 withdrawDelayInSec;
+        uint256 absencePenaltyPercentage;
+        uint256 minimumStakeAmount;
+        uint256 relayerStateUpdateDelayInWindows;
+        uint256 baseRewardRatePerMinimumStakePerSec;
+        // Relayer State Management
+        VersionManager.VersionManagerState relayerStateVersionManager;
+        // Maps relayer address to pending withdrawals
+        mapping(TokenAddress => bool isGasTokenSupported) isGasTokenSupported;
         // Constant Rate Rewards
-        uint256 unpaidProtocolRewards;
+        uint256 totalUnpaidProtocolRewards;
         uint256 lastUnpaidRewardUpdatedTimestamp;
-        FixedPointType totalShares;
+        FixedPointType totalProtocolRewardShares;
+        // Latest State.
+        uint256 relayerCount;
+        uint256 totalStake;
     }
 
     /* solhint-disable no-inline-assembly */

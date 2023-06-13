@@ -2,12 +2,14 @@
 
 pragma solidity 0.8.19;
 
-import "src/transaction-allocator/common/TATypes.sol";
+import "ta-common/TATypes.sol";
 import "src/library/FixedPointArithmetic.sol";
 
 interface ITADelegationEventsErrors {
     error PoolNotSupported(RelayerAddress relayerAddress, TokenAddress tokenAddress);
-    error NoSupportedGasTokens(RelayerAddress relayerAddress);
+    error NoSupportedGasTokens();
+    error RelayerIsActiveInPendingState();
+    error InvalidRelayerIndex();
 
     event SharesMinted(
         RelayerAddress indexed relayerAddress,

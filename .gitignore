@@ -12,10 +12,8 @@ docs/
 
 # Dotenv file
 .env
-hardhat
-
 node_modules
-.env
+.env.sh
 coverage
 coverage.json
 typechain
@@ -26,3 +24,7 @@ stats
 #Hardhat files
 cache_hardhat
 artifacts
+
+.DS_Store
+ScratchPad.t.sol
+metrics/

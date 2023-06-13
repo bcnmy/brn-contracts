@@ -2,56 +2,63 @@
 
 pragma solidity 0.8.19;
 
-import "src/library/FixedPointArithmetic.sol";
-import "src/transaction-allocator/common/TAConstants.sol";
-import "src/interfaces/IDebug_GasConsumption.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITARelayerManagementEventsErrors.sol";
+import "src/library/FixedPointArithmetic.sol";
+import "ta-common/TAConstants.sol";
 
-interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEventsErrors {
-    function getStakeArray() external view returns (uint32[] memory);
-
-    function getCdfArray() external view returns (uint16[] memory);
+interface ITARelayerManagement is ITARelayerManagementEventsErrors {
+    function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
 
     ////////////////////////// Relayer Registration //////////////////////////
     function register(
-        uint32[] calldata _previousStakeArray,
-        uint32[] calldata _currentDelegationArray,
+        RelayerState calldata _latestState,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint,
         uint256 _delegatorPoolPremiumShare
-    ) external returns (RelayerAddress);
+    ) external;
 
-    function unRegister(uint32[] calldata _previousStakeArray, uint32[] calldata _currentDelegationArray) external;
+    function unregister(RelayerState calldata _latestState, uint256 _relayerIndex) external;
+
+    function registerFoundationRelayer(
+        RelayerAddress _foundationRelayerAddress,
+        uint256 _stake,
+        RelayerAccountAddress[] calldata _accounts,
+        string calldata _endpoint,
+        uint256 _delegatorPoolPremiumShare
+    ) external;
 
     function withdraw() external;
 
-    function processAbsenceProof(
-        AbsenceProofReporterData calldata _reporterData,
-        AbsenceProofAbsenteeData calldata _absenteeData,
-        uint32[] calldata _currentStakeArray,
-        uint32[] calldata _currentDelegationArray
-    ) external;
+    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;
 
-    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts) external;
+    function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status) external;
 
-    ////////////////////////// Constant Rate Rewards //////////////////////////
+    ////////////////////////// Protocol Rewards //////////////////////////
     function claimProtocolReward() external;
 
-    ////////////////////// Getters //////////////////////
+    function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress) external view returns (uint256);
 
+    function protocolRewardRate() external view returns (uint256);
+
+    ////////////////////// Getters //////////////////////
     function relayerCount() external view returns (uint256);
 
-    function relayerInfo_Stake(RelayerAddress) external view returns (uint256);
+    function totalStake() external view returns (uint256);
 
-    function relayerInfo_Endpoint(RelayerAddress) external view returns (string memory);
+    struct RelayerInfoView {
+        uint256 stake;
+        string endpoint;
+        uint256 delegatorPoolPremiumShare;
+        RelayerStatus status;
+        uint256 minExitTimestamp;
+        uint256 unpaidProtocolRewards;
+        FixedPointType rewardShares;
+    }
 
-    function relayerInfo_Index(RelayerAddress) external view returns (uint256);
+    function relayerInfo(RelayerAddress) external view returns (RelayerInfoView memory);
 
     function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
-
-    function relayerInfo_delegatorPoolPremiumShare(RelayerAddress) external view returns (uint256);
 
     function isGasTokenSupported(TokenAddress) external view returns (bool);
 
@@ -59,18 +66,25 @@ interface ITARelayerManagement is IDebug_GasConsumption, ITARelayerManagementEve
 
     function blocksPerWindow() external view returns (uint256);
 
-    function cdfHashUpdateLog(uint256) external view returns (CdfHashUpdateInfo memory);
-
-    function stakeArrayHash() external view returns (bytes32);
-
-    function penaltyDelayBlocks() external view returns (uint256);
-
-    function withdrawalInfo(RelayerAddress) external view returns (WithdrawalInfo memory);
-
     function bondTokenAddress() external view returns (TokenAddress);
 
-    function getRelayerIndexUpdationLog(uint256 _index)
-        external
-        view
-        returns (RelayerIndexToRelayerUpdateInfo[] memory);
+    function jailTimeInSec() external view returns (uint256);
+
+    function withdrawDelayInSec() external view returns (uint256);
+
+    function absencePenaltyPercentage() external view returns (uint256);
+
+    function minimumStakeAmount() external view returns (uint256);
+
+    function relayerStateUpdateDelayInWindows() external view returns (uint256);
+
+    function relayerStateHash() external view returns (bytes32, bytes32);
+
+    function totalUnpaidProtocolRewards() external view returns (uint256);
+
+    function lastUnpaidRewardUpdatedTimestamp() external view returns (uint256);
+
+    function totalProtocolRewardShares() external view returns (FixedPointType);
+
+    function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 }

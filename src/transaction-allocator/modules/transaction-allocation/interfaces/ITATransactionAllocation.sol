@@ -2,30 +2,40 @@
 
 pragma solidity 0.8.19;
 
-import "src/interfaces/IDebug_GasConsumption.sol";
-import "src/transaction-allocator/common/TAStructs.sol";
 import "./ITATransactionAllocationEventsErrors.sol";
+import "ta-common/TATypes.sol";
+import "src/library/FixedPointArithmetic.sol";
 
-interface ITATransactionAllocation is IDebug_GasConsumption, ITATransactionAllocationEventsErrors {
-    function execute(
-        Transaction[] calldata _reqs,
-        uint16[] calldata _cdf,
-        uint256[] calldata _relayerGenerationIterations,
-        uint256 _cdfIndex,
-        uint256 _currentCdfLogIndex,
-        uint256 _relayerIndexUpdationLogIndex
-    ) external returns (bool[] memory, bytes[] memory);
+interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
+    struct ExecuteParams {
+        bytes[] reqs;
+        uint256[] forwardedNativeAmounts;
+        uint256 relayerIndex;
+        uint256 relayerGenerationIterationBitmap;
+        RelayerState activeState;
+        RelayerState latestState;
+        uint256[] activeStateToPendingStateMap;
+    }
 
-    function allocateRelayers(uint16[] calldata _cdf, uint256 _currentCdfLogIndex)
+    function execute(ExecuteParams calldata _data) external payable;
+
+    function allocateRelayers(RelayerState calldata _activeState)
         external
         view
         returns (RelayerAddress[] memory, uint256[] memory);
 
-    function allocateTransaction(AllocateTransactionParams calldata _data)
-        external
-        view
-        returns (Transaction[] memory, uint256[] memory, uint256);
+    function calculateMinimumTranasctionsForLiveness(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        FixedPointType _totalTransactions,
+        FixedPointType _zScore
+    ) external view returns (FixedPointType);
 
     ////////////////////////// Getters //////////////////////////
-    function attendance(uint256, RelayerAddress) external view returns (bool);
+    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
+    function totalTransactionsSubmitted() external view returns (uint256);
+    function epochLengthInSec() external view returns (uint256);
+    function epochEndTimestamp() external view returns (uint256);
+    function livenessZParameter() external view returns (FixedPointType);
+    function stakeThresholdForJailing() external view returns (uint256);
 }

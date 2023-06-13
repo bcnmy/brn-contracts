@@ -4,7 +4,13 @@
   "description": "POC for the decentralized relayer network",
   "scripts": {
     "build": "forge build --sizes",
-    "hbuild": "hardhat compile"
+    "hbuild": "hardhat compile",
+    "simulation:chain": "anvil --block-time 2",
+    "simulation:deploy": "FOUNDRY_PROFILE=test ./script/TA.Deploy.Testnet.sh",
+    "simulation:run": "ts-node hardhat/simulation/index.ts",
+    "simulation:watch": "watch -n 5 hardhat/simulation/cat-latest-metrics.sh",
+    "test": "FOUNDRY_PROFILE=test forge test",
+    "coverage": "FOUNDRY_PROFILE=test forge coverage"
   },
   "repository": "git+https://github.com/bcnmy/POC-DRN.git",
   "author": "Ankur Dubey <ankurdubey521@protonmail.com>",
@@ -18,6 +24,7 @@
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",
     "@typechain/ethers-v5": "^10.2.0",
     "@typechain/hardhat": "^6.1.5",
+    "@types/async-lock": "^1.4.0",
     "ethers": "5.4",
     "hardhat": "^2.12.7",
     "hardhat-preprocessor": "^0.1.5",
@@ -28,6 +35,10 @@
   },
   "dependencies": {
     "@nomiclabs/hardhat-ethers": "^2.2.2",
-    "csv-writer": "^1.6.0"
+    "async-lock": "^1.4.0",
+    "csv-writer": "^1.6.0",
+    "dotenv": "^16.1.0",
+    "table": "^6.8.1",
+    "uuidv4": "^6.2.13"
   }
 }
