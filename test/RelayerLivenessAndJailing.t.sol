@@ -3,7 +3,6 @@
 pragma solidity 0.8.19;
 
 import "./base/TATestBase.sol";
-import "ta-common/TAConstants.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
@@ -325,7 +324,7 @@ contract RelayerLivenessAndJailingTest is
         uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
         vm.expectEmit(true, true, true, true);
         emit Withdraw(inactiveRelayer, stake);
-        ta.withdraw();
+        ta.withdraw(relayerAccountAddresses[inactiveRelayer]);
         vm.stopPrank();
 
         _moveForwardToNextEpoch();
@@ -400,7 +399,7 @@ contract RelayerLivenessAndJailingTest is
         _startPrankRA(inactiveRelayer);
         bico.approve(address(ta), initialRelayerStake[inactiveRelayer]);
         vm.expectRevert(abi.encodeWithSelector(RelayerJailNotExpired.selector, jailedUntilTimestamp));
-        ta.withdraw();
+        ta.withdraw(relayerAccountAddresses[inactiveRelayer]);
         vm.stopPrank();
     }
 

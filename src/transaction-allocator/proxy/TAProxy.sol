@@ -11,8 +11,6 @@ import "ta-delegation/TADelegationStorage.sol";
 import "ta-relayer-management/TARelayerManagementStorage.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagement.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
-import "ta-common/TATypes.sol";
-import "ta-common/TAConstants.sol";
 import "src/library/VersionManager.sol";
 import "src/library/arrays/U16ArrayHelper.sol";
 import "src/library/arrays/RAArrayHelper.sol";
@@ -64,7 +62,6 @@ contract TAProxy is
 
     /* solhint-enable no-complex-fallback, payable-fallback, no-inline-assembly */
 
-    // TODO: Move to custom calldata?
     function _initialize(InitializerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
         TADStorage storage tds = getTADStorage();

@@ -172,7 +172,7 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
             _startPrankRA(relayerAddress);
             vm.expectEmit(true, true, true, true);
             emit Withdraw(relayerAddress, initialRelayerStake[relayerAddress]);
-            ta.withdraw();
+            ta.withdraw(relayerAccountAddresses[relayerAddress]);
             vm.stopPrank();
 
             assertEq(ta.relayerInfo(relayerAddress).stake, 0);
@@ -182,6 +182,9 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
                 bico.balanceOf(RelayerAddress.unwrap(relayerAddress)),
                 balanceBefore + initialRelayerStake[relayerAddress]
             );
+            for (uint256 j = 0; j < relayerAccountAddresses[relayerAddress].length; j++) {
+                assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), false);
+            }
         }
     }
 
@@ -364,7 +367,7 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
 
         vm.expectRevert(abi.encodeWithSelector(RelayerNotExiting.selector));
         _prankRA(relayerMainAddress[1]);
-        ta.withdraw();
+        ta.withdraw(relayerAccountAddresses[relayerMainAddress[1]]);
     }
 
     function testCannotWithdrawBeforeWithdrawTime() external {
@@ -404,6 +407,6 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
             )
         );
         _prankRA(relayerMainAddress[1]);
-        ta.withdraw();
+        ta.withdraw(relayerAccountAddresses[relayerMainAddress[1]]);
     }
 }

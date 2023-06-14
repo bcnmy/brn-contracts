@@ -103,7 +103,7 @@ export class Relayer {
     return state;
   }
 
-  private async getRelayerState(window: number): Promise<[string, string]> {
+  private async getRelayerStateHashes(window: number): Promise<[string, string]> {
     if (Relayer.stateHashCache.has(window)) {
       return Relayer.stateHashCache.get(window)!;
     }
