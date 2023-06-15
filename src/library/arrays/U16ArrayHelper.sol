@@ -53,7 +53,7 @@ library U16ArrayHelper {
     }
 
     function cd_lowerBound(uint16[] calldata _array, uint16 _target) internal pure returns (uint256) {
-        uint256 low = 0;
+        uint256 low;
         uint256 high = _array.length;
         unchecked {
             while (low < high) {

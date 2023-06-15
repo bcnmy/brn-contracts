@@ -6,6 +6,7 @@ import {IWormholeRelayerDelivery} from "wormhole-contracts/interfaces/relayer/IW
 import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
 
 import "./IWormholeApplicationEventsErrors.sol";
+import "./WormholeTypes.sol";
 import "ta-base-application/interfaces/IApplicationBase.sol";
 
 interface IWormholeApplication is IWormholeApplicationEventsErrors, IApplicationBase {

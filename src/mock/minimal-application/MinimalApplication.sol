@@ -6,7 +6,7 @@ import "./interfaces/IMinimalApplication.sol";
 import "ta-base-application/ApplicationBase.sol";
 
 contract MinimalApplication is IMinimalApplication, ApplicationBase {
-    uint256 public count = 0;
+    uint256 public count;
 
     function _getTransactionHash(bytes calldata _tx) internal pure virtual override returns (bytes32) {
         bytes32 param = abi.decode(_tx[4:], (bytes32));

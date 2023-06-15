@@ -100,7 +100,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         uint256 length = _activeRelayers.length;
         uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum = 0;
+        uint256 totalStakeSum;
 
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
@@ -111,7 +111,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
 
         // Scale the values to fit uint16 and get the CDF
-        uint256 sum = 0;
+        uint256 sum;
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
             sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
@@ -130,7 +130,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         uint256 length = _activeRelayers.length;
         uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum = 0;
+        uint256 totalStakeSum;
 
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
@@ -141,7 +141,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
 
         // Scale the values to fit uint16 and get the CDF
-        uint256 sum = 0;
+        uint256 sum;
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
             sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];

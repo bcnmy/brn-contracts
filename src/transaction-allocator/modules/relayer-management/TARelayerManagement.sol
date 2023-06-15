@@ -145,7 +145,7 @@ contract TARelayerManagement is
             // Process Relayer Rewards
             rms.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerReward - delegatorRewards;
             relayerReward += node.unpaidProtocolRewards;
-            node.unpaidProtocolRewards = 0;
+            delete node.unpaidProtocolRewards;
             node.rewardShares = FP_ZERO;
 
             if (relayerReward > 0) {
