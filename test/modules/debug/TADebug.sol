@@ -11,12 +11,6 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using RAArrayHelper for RelayerAddress[];
     using VersionManager for VersionManager.VersionManagerState;
 
-    constructor() {
-        if (block.chainid != 31337) {
-            revert("TADebug: only for testing");
-        }
-    }
-
     function debug_increaseRewards(RelayerAddress _relayerAddress, TokenAddress _pool, uint256 _amount)
         external
         override

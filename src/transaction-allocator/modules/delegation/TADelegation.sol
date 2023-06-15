@@ -124,7 +124,8 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
     }
 
-    // TODO: Non Reentrant
+    // TODO: Non Reentrant Tests
+    // TODO: This function should return the original stake 🤦
     function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress) external override {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
