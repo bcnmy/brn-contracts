@@ -7,9 +7,10 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/access/Ownable.sol";
 
 import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
-import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
+import "wormhole-contracts/relayer/wormholeRelayer/WormholeRelayerSerde.sol";
 import "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
 
+import "src/library/AddressUtils.sol";
 import "./interfaces/IBRNWormholeDeliveryProvider.sol";
 
 contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
@@ -19,9 +20,11 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiPriceLib for WeiPrice;
     using TargetNativeLib for TargetNative;
     using LocalNativeLib for LocalNative;
+    using AddressUtils for address;
 
     /////////////////////// State ///////////////////////
     IWormhole public immutable wormhole;
+    bytes32 public immutable wormholeRelayerAddress;
     IWormholeRelayer public immutable relayer;
     WormholeChainId public immutable chainId;
 
@@ -41,10 +44,11 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     constructor(IWormhole _wormhole, IWormholeRelayer _relayer, address _owner) Ownable(_owner) {
         wormhole = _wormhole;
         relayer = _relayer;
+        wormholeRelayerAddress = address(_relayer).toBytes32();
         chainId = WormholeChainId.wrap(_wormhole.chainId());
     }
 
-    /////////////////////// RelayerProvider Specification ///////////////////////
+    /////////////////////// DeliveryProvider Specification ///////////////////////
     function quoteEvmDeliveryPrice(uint16 targetChain, Gas gasLimit, TargetNative receiverValue)
         public
         view
@@ -185,46 +189,26 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
             revert NoFunds();
         }
 
+        // The sequnce number can correspond to a delivery VAA or a re-delivery VAA
         uint256 deliveryVAASequenceNumber = wormhole.nextSequence(address(relayer)) - 1;
         fundsDepositedForRelaying[deliveryVAASequenceNumber] += msg.value;
 
         emit FundsDepositedForRelaying(deliveryVAASequenceNumber, msg.value);
     }
 
-    function claimFee(bytes[] calldata _encodedReceiptVAAs) external override {
+    function claimFee(bytes[] calldata _encodedReceiptVAAs, bytes[][] calldata _encodedRedeliveryVAAs)
+        external
+        override
+    {
         uint256 totalFee;
         uint256 length = _encodedReceiptVAAs.length;
 
+        if (length != _encodedRedeliveryVAAs.length) {
+            revert ParamterLengthMismatch();
+        }
+
         for (uint256 i; i != length;) {
-            (IWormhole.VM memory vm, bool valid, string memory reason) =
-                wormhole.parseAndVerifyVM(_encodedReceiptVAAs[i]);
-
-            if (!valid) {
-                revert WormholeDeliveryVAAVerificationFailed(i, reason);
-            }
-
-            if (vm.emitterAddress != brnTransactionAllocatorAddress[WormholeChainId.wrap(vm.emitterChainId)]) {
-                revert WormholeDeliveryVAAEmitterMismatch(
-                    i, brnTransactionAllocatorAddress[WormholeChainId.wrap(vm.emitterChainId)], vm.emitterAddress
-                );
-            }
-
-            ReceiptVAAPayload memory payload = abi.decode(vm.payload, (ReceiptVAAPayload));
-
-            if (payload.deliveryVAASourceChainId != chainId) {
-                revert WormholeDeliveryVAASourceChainMismatch(i, chainId, payload.deliveryVAASourceChainId);
-            }
-
-            if (payload.relayer != RelayerAddress.wrap(msg.sender)) {
-                revert NotAuthorized(i);
-            }
-
-            uint256 amount = fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
-            totalFee += amount;
-            delete fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
-
-            emit FeeClaimed(payload.deliveryVAASequenceNumber, payload.relayer, amount);
-
+            totalFee += _checkClaim(_encodedReceiptVAAs[i], _encodedRedeliveryVAAs[i]);
             unchecked {
                 ++i;
             }
@@ -235,6 +219,110 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         if (!status) {
             revert NativeTransferFailed();
         }
+    }
+
+    function _checkClaim(bytes calldata _encodedReceiptVAA, bytes[] calldata _encodedRedeliveryVAA)
+        internal
+        returns (uint256)
+    {
+        IWormhole.VM memory receiptVM = _parseAndVerifyVAA(_encodedReceiptVAA);
+
+        bytes32 targetChainBRNTransactionAllocatorAddress =
+            brnTransactionAllocatorAddress[WormholeChainId.wrap(receiptVM.emitterChainId)];
+
+        if (receiptVM.emitterAddress != targetChainBRNTransactionAllocatorAddress) {
+            revert WormholeDeliveryVAAEmitterMismatch(
+                targetChainBRNTransactionAllocatorAddress, receiptVM.emitterAddress
+            );
+        }
+
+        ReceiptVAAPayload memory payload = abi.decode(receiptVM.payload, (ReceiptVAAPayload));
+
+        if (payload.deliveryVAASourceChainId != chainId) {
+            revert WormholeDeliveryVAASourceChainMismatch(chainId, payload.deliveryVAASourceChainId);
+        }
+
+        if (payload.relayer != RelayerAddress.wrap(msg.sender)) {
+            revert NotAuthorized();
+        }
+
+        uint256 amount = fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
+        delete fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
+
+        emit DeliveryFeeClaimed(payload.deliveryVAASequenceNumber, payload.relayer, amount);
+
+        // Process any re-delivery VAAs
+        uint256 redeliveryVAACount = _encodedRedeliveryVAA.length;
+        VaaKey memory deliveryVAAKey = VaaKey({
+            sequence: payload.deliveryVAASequenceNumber,
+            chainId: WormholeChainId.unwrap(payload.deliveryVAASourceChainId),
+            emitterAddress: targetChainBRNTransactionAllocatorAddress
+        });
+        for (uint256 i; i != redeliveryVAACount;) {
+            amount += _checkRedeliveryVAAClaim(
+                deliveryVAAKey,
+                WormholeChainId.wrap(receiptVM.emitterChainId),
+                _encodedRedeliveryVAA[i],
+                payload.relayer
+            );
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        return amount;
+    }
+
+    function _checkRedeliveryVAAClaim(
+        VaaKey memory _deliveryInstructionVAAKey,
+        WormholeChainId _destinationChainId,
+        bytes calldata _encodedRedeliveryVAA,
+        RelayerAddress _relayer
+    ) internal returns (uint256) {
+        IWormhole.VM memory redeliveryVM = _parseAndVerifyVAA(_encodedRedeliveryVAA);
+
+        if (WormholeChainId.wrap(redeliveryVM.emitterChainId) != chainId) {
+            revert WormholeReceiptVAAEmitterChainMismatch(chainId, WormholeChainId.wrap(redeliveryVM.emitterChainId));
+        }
+
+        if (redeliveryVM.emitterAddress != wormholeRelayerAddress) {
+            revert WormholeReceiptVAAEmitterMismatch(wormholeRelayerAddress, redeliveryVM.emitterAddress);
+        }
+
+        RedeliveryInstruction memory redeliveryPayload =
+            WormholeRelayerSerde.decodeRedeliveryInstruction(redeliveryVM.payload);
+
+        if (!_compareVaaKey(_deliveryInstructionVAAKey, redeliveryPayload.deliveryVaaKey)) {
+            revert WormholeRedeliveryVAAKeyMismatch(_deliveryInstructionVAAKey, redeliveryPayload.deliveryVaaKey);
+        }
+
+        if (WormholeChainId.wrap(redeliveryPayload.targetChain) != _destinationChainId) {
+            revert WormholeRedeliveryVAATargetChainMismatch(
+                _destinationChainId, WormholeChainId.wrap(redeliveryPayload.targetChain)
+            );
+        }
+
+        uint256 amount = fundsDepositedForRelaying[redeliveryVM.sequence];
+        delete fundsDepositedForRelaying[redeliveryVM.sequence];
+
+        emit RedeliveryFeeClaimed(redeliveryVM.sequence, _relayer, amount);
+
+        return amount;
+    }
+
+    function _parseAndVerifyVAA(bytes calldata _encodedVAA) internal view returns (IWormhole.VM memory) {
+        (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole.parseAndVerifyVM(_encodedVAA);
+
+        if (!valid) {
+            revert WormholeVAAVerificationFailed(reason);
+        }
+
+        return vm;
+    }
+
+    function _compareVaaKey(VaaKey memory _a, VaaKey memory _b) internal pure returns (bool) {
+        return _a.chainId == _b.chainId && _a.emitterAddress == _b.emitterAddress && _a.sequence == _b.sequence;
     }
 
     /////////////////////// Setters ///////////////////////

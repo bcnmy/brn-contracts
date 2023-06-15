@@ -16,7 +16,7 @@ interface IBRNWormholeDeliveryProvider is IDeliveryProvider, IBRNWormholeDeliver
         uint16 denominator;
     }
 
-    function claimFee(bytes[] calldata _encodedDeliveryVAAs) external;
+    function claimFee(bytes[] calldata _encodedReceiptVAAs, bytes[][] calldata _encodedRedeliveryVAAs) external;
 
     /////////////////////// Setters ///////////////////////
     function setGasPrice(WormholeChainId targetChain, GasPrice gasPrice_) external;

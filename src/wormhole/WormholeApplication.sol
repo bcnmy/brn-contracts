@@ -46,7 +46,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     function _parseVAASelective(bytes memory _encodedVAA)
         internal
         pure
-        returns (uint256 sequenceNumber, WormholeChainId emitterChain)
+        returns (uint64 sequenceNumber, WormholeChainId emitterChain)
     {
         // VAA Structure
         //
@@ -96,7 +96,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         address payable _relayerRefundAddress,
         bytes calldata _deliveryOverrides
     ) external payable override {
-        (uint256 deliveryVAASequenceNumber, WormholeChainId emitterChain) = _parseVAASelective(_encodedDeliveryVAA);
+        (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain) = _parseVAASelective(_encodedDeliveryVAA);
         _verifyTransaction(_hashSequenceNumber(deliveryVAASequenceNumber));
 
         // Forward the call the CoreRelayerDelivery with value

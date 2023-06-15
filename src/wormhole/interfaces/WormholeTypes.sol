@@ -3,18 +3,24 @@
 pragma solidity 0.8.19;
 
 import "wormhole-contracts/interfaces/relayer/TypedUnits.sol";
+import {IWormholeRelayer, VaaKey} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
+
 import "ta-common/TATypes.sol";
 
 struct ReceiptVAAPayload {
-    uint256 deliveryVAASequenceNumber;
+    uint64 deliveryVAASequenceNumber;
     WormholeChainId deliveryVAASourceChainId;
     RelayerAddress relayer;
 }
 
 type WormholeChainId is uint16;
 
+function wormholeChainIdEquality(WormholeChainId a, WormholeChainId b) pure returns (bool) {
+    return WormholeChainId.unwrap(a) == WormholeChainId.unwrap(b);
+}
+
 function wormholeChainIdInequality(WormholeChainId a, WormholeChainId b) pure returns (bool) {
     return WormholeChainId.unwrap(a) != WormholeChainId.unwrap(b);
 }
 
-using {wormholeChainIdInequality as !=} for WormholeChainId global;
+using {wormholeChainIdInequality as !=, wormholeChainIdEquality as ==} for WormholeChainId global;
