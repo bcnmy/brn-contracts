@@ -37,4 +37,7 @@ interface IBRNWormholeDeliveryProvider is IDeliveryProvider, IBRNWormholeDeliver
 
     function setAssetConversionBuffer(WormholeChainId targetChain, AssetConversion calldata assetConversionBuffer_)
         external;
+
+    function setBrnTransactionAllocatorAddress(WormholeChainId targetChain, bytes32 brnTransactionAllocatorAddress_)
+        external;
 }

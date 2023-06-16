@@ -40,7 +40,7 @@ contract MockWormholeReceiver is IMockWormholeReceiver, IWormholeReceiver {
     ) public payable {
         bytes memory payload = abi.encode(_payloadValue);
 
-        //calculate cost to deliver message
+        // calculate cost to deliver message
         (LocalNative deliveryCost,) =
             deliveryProvider.quoteEvmDeliveryPrice(WormholeChainId.unwrap(_targetChain), _gasLimit, _receiverValue);
 

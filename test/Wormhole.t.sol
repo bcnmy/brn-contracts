@@ -28,6 +28,7 @@ contract WormholeTest is WormholeTestBase {
         deliveryProviderSource.setMaximumBudget(targetChain, Wei.wrap(10_000_000 * 1 ether));
         deliveryProviderSource.setIsWormholeChainSupported(targetChain, true);
         deliveryProviderSource.setBrnRelayerProviderAddress(targetChain, address(deliveryProviderTarget).toBytes32());
+        deliveryProviderSource.setBrnTransactionAllocatorAddress(targetChain, address(ta).toBytes32());
         deliveryProviderSource.setAssetConversionBuffer(
             targetChain, IBRNWormholeDeliveryProvider.AssetConversion({denominator: 100, buffer: 10})
         );
@@ -104,5 +105,73 @@ contract WormholeTest is WormholeTestBase {
         );
 
         assertEq(receiverTarget.sum(), payload, "Payload was not delivered");
+    }
+
+    function testRelayerRefund() external {
+        uint256 payload = 0x123;
+
+        // Send payload from source chain
+        vm.selectFork(sourceFork);
+        vm.recordLogs();
+        receiverSource.sendPayload(
+            targetChain, payload, Gas.wrap(100000), TargetNative.wrap(0), address(receiverTarget)
+        );
+        Vm.Log[] memory deliveryVMLogs = guardianSource.fetchWormholeMessageFromLog(vm.getRecordedLogs());
+
+        // Sign the delivery request
+        IWormhole.VM memory deliveryVM = guardianSource.parseVMFromLogs(deliveryVMLogs[0]);
+        deliveryVM.emitterChainId = WormholeChainId.unwrap(sourceChain);
+        deliveryVM.version = 1;
+        bytes memory signedDeliveryVAA = guardianSource.encodeAndSignMessage(deliveryVM);
+
+        uint256 fundsDepositedForRelaying = deliveryProviderSource.fundsDepositedForRelaying(deliveryVM.sequence);
+        assertTrue(fundsDepositedForRelaying > 0, "No funds deposited");
+
+        // Execute the delivery request on destination chain
+        vm.selectFork(targetFork);
+
+        bytes memory txn =
+            abi.encodeCall(IWormholeApplication.executeWormhole, (new bytes[](0), signedDeliveryVAA, bytes("")));
+        bytes[] memory txns = new bytes[](1);
+        txns[0] = txn;
+        uint256[] memory forwardedNativeAmounts = new uint256[](1);
+        vm.recordLogs();
+        // TODO: Calculate and Validate this amount
+        forwardedNativeAmounts[0] = 1 ether;
+        (RelayerAddress relayerAddress, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+            _getRelayerAssignedToTx(txn);
+        _prankRA(relayerAddress);
+        ta.execute{value: forwardedNativeAmounts[0]}(
+            ITATransactionAllocation.ExecuteParams({
+                reqs: txns,
+                forwardedNativeAmounts: forwardedNativeAmounts,
+                relayerIndex: selectedRelayerCdfIndex,
+                relayerGenerationIterationBitmap: relayerGenerationIterations,
+                activeState: latestRelayerState,
+                latestState: latestRelayerState,
+                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(latestRelayerState)
+            })
+        );
+
+        // Sign RefundVAA
+        IWormhole.VM memory receiptVM =
+            guardianTarget.parseVMFromLogs(guardianTarget.fetchWormholeMessageFromLog(vm.getRecordedLogs())[1]);
+        receiptVM.emitterChainId = WormholeChainId.unwrap(targetChain);
+        receiptVM.version = 1;
+        bytes memory signedRefundVAA = guardianTarget.encodeAndSignMessage(receiptVM);
+        bytes[] memory refundVAAs = new bytes[](1);
+        refundVAAs[0] = signedRefundVAA;
+
+        // Claim
+        vm.selectFork(sourceFork);
+        _prankRA(relayerAddress);
+        uint256 balance = address(RelayerAddress.unwrap(relayerAddress)).balance;
+        deliveryProviderSource.claimFee(refundVAAs, new bytes[][](1));
+        assertEq(
+            address(RelayerAddress.unwrap(relayerAddress)).balance,
+            balance + fundsDepositedForRelaying,
+            "Relayer was not refunded"
+        );
+        assertEq(deliveryProviderSource.fundsDepositedForRelaying(deliveryVM.sequence), 0, "Funds were not cleared");
     }
 }

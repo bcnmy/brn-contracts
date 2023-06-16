@@ -13,6 +13,8 @@ import "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
 import "src/library/AddressUtils.sol";
 import "./interfaces/IBRNWormholeDeliveryProvider.sol";
 
+import "forge-std/console2.sol";
+
 contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiLib for Wei;
     using GasLib for Gas;
@@ -231,6 +233,8 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         bytes32 targetChainBRNTransactionAllocatorAddress =
             brnTransactionAllocatorAddress[WormholeChainId.wrap(receiptVM.emitterChainId)];
 
+        console2.log(receiptVM.emitterChainId);
+
         if (receiptVM.emitterAddress != targetChainBRNTransactionAllocatorAddress) {
             revert WormholeDeliveryVAAEmitterMismatch(
                 targetChainBRNTransactionAllocatorAddress, receiptVM.emitterAddress
@@ -369,5 +373,13 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         onlyOwner
     {
         assetConversionBuffer[targetChain] = assetConversionBuffer_;
+    }
+
+    function setBrnTransactionAllocatorAddress(WormholeChainId targetChain, bytes32 brnTransactionAllocatorAddress_)
+        external
+        override
+        onlyOwner
+    {
+        brnTransactionAllocatorAddress[targetChain] = brnTransactionAllocatorAddress_;
     }
 }
