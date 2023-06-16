@@ -16,6 +16,10 @@ interface IBRNWormholeDeliveryProvider is IDeliveryProvider, IBRNWormholeDeliver
         uint16 denominator;
     }
 
+    function quoteEvmDeliveryPrice(uint16 targetChain, Gas gasLimit, TargetNative receiverValue)
+        external
+        returns (LocalNative nativePriceQuote, GasPrice targetChainRefundPerUnitGasUnused);
+
     function claimFee(bytes[] calldata _encodedReceiptVAAs, bytes[][] calldata _encodedRedeliveryVAAs) external;
 
     /////////////////////// Setters ///////////////////////

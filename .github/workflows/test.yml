@@ -45,3 +45,6 @@ jobs:
         run: |
           FOUNDRY_PROFILE=test forge test -vvv --ffi
         id: test
+        env:
+          FUJI_RPC_URL: https://api.avax-test.network/ext/bc/C/rpc
+          MUMBAI_RPC_URL: https://rpc.ankr.com/polygon_mumbai

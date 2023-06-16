@@ -8,6 +8,8 @@ import "./interfaces/IWormholeApplication.sol";
 import "./WormholeApplicationStorage.sol";
 import "ta-base-application/ApplicationBase.sol";
 
+import "forge-std/console2.sol";
+
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;
     uint256 constant SIGNATURE_SIZE = 66;
@@ -18,7 +20,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
     using BytesLib for bytes;
 
-    function initialize(IWormhole _wormhole, IWormholeRelayerDelivery _delivery) external {
+    function initializeWormholeApplication(IWormhole _wormhole, IWormholeRelayerDelivery _delivery) external {
         WHStorage storage ws = getWHStorage();
         if (ws.initialized) {
             revert AlreadyInitialized();
@@ -33,7 +35,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
     ////// Alloction Logic //////
     function _getTransactionHash(bytes calldata _calldata) internal pure virtual override returns (bytes32) {
-        (, bytes memory encodedDeliveryVAA,,) = abi.decode(_calldata[4:], (bytes[], bytes, address, bytes));
+        (, bytes memory encodedDeliveryVAA,) = abi.decode(_calldata[4:], (bytes[], bytes, bytes));
         (uint256 sequenceNumber,) = _parseVAASelective(encodedDeliveryVAA);
 
         return _hashSequenceNumber(sequenceNumber);
@@ -93,20 +95,19 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     function executeWormhole(
         bytes[] calldata _encodedVMs,
         bytes calldata _encodedDeliveryVAA,
-        address payable _relayerRefundAddress,
         bytes calldata _deliveryOverrides
     ) external payable override {
         (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain) = _parseVAASelective(_encodedDeliveryVAA);
         _verifyTransaction(_hashSequenceNumber(deliveryVAASequenceNumber));
 
         // Forward the call the CoreRelayerDelivery with value
+        (RelayerAddress relayerAddress,,) = _getCalldataParams();
         WHStorage storage whs = getWHStorage();
         whs.delivery.deliver{value: msg.value}(
-            _encodedVMs, _encodedDeliveryVAA, _relayerRefundAddress, _deliveryOverrides
+            _encodedVMs, _encodedDeliveryVAA, payable(RelayerAddress.unwrap(relayerAddress)), _deliveryOverrides
         );
 
         // Generate a ReceiptVAA
-        (RelayerAddress relayerAddress,,) = _getCalldataParams();
         bytes memory receiptVAAPayload = abi.encode(
             ReceiptVAAPayload({
                 relayer: relayerAddress,

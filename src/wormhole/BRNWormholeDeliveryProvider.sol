@@ -52,6 +52,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     function quoteEvmDeliveryPrice(uint16 targetChain, Gas gasLimit, TargetNative receiverValue)
         public
         view
+        override
         returns (LocalNative nativePriceQuote, GasPrice targetChainRefundPerUnitGasUnused)
     {
         targetChainRefundPerUnitGasUnused = gasPrice[WormholeChainId.wrap(targetChain)];
