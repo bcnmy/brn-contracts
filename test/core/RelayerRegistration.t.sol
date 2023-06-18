@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "./base/TATestBase.sol";
+import "test/base/TATestBase.sol";
 import "ta-common/TAConstants.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";

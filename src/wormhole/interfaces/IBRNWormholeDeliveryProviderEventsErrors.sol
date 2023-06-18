@@ -7,10 +7,11 @@ import "./WormholeTypes.sol";
 interface IBRNWormholeDeliveryProviderEventsErrors {
     error CallerMustBeWormholeRelayer();
     error WormholeVAAVerificationFailed(string reason);
-    error WormholeDeliveryVAAEmitterMismatch(bytes32 expected, bytes32 actual);
+    error WormholeReceiptVAAEmitterMismatch(bytes32 expected, bytes32 actual);
     error WormholeDeliveryVAASourceChainMismatch(WormholeChainId expected, WormholeChainId actual);
     error WormholeReceiptVAAEmitterChainMismatch(WormholeChainId expected, WormholeChainId actual);
-    error WormholeReceiptVAAEmitterMismatch(bytes32 expected, bytes32 actual);
+    error WormholeRedeliveryVAAEmitterChainMismatch(WormholeChainId expected, WormholeChainId actual);
+    error WormholeRedeliveryVAAEmitterMismatch(bytes32 expected, bytes32 actual);
     error WormholeRedeliveryVAAKeyMismatch(VaaKey expected, VaaKey actual);
     error WormholeRedeliveryVAATargetChainMismatch(WormholeChainId expected, WormholeChainId actual);
     error NotAuthorized();

@@ -233,10 +233,8 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         bytes32 targetChainBRNTransactionAllocatorAddress =
             brnTransactionAllocatorAddress[WormholeChainId.wrap(receiptVM.emitterChainId)];
 
-        console2.log(receiptVM.emitterChainId);
-
         if (receiptVM.emitterAddress != targetChainBRNTransactionAllocatorAddress) {
-            revert WormholeDeliveryVAAEmitterMismatch(
+            revert WormholeReceiptVAAEmitterMismatch(
                 targetChainBRNTransactionAllocatorAddress, receiptVM.emitterAddress
             );
         }
@@ -288,11 +286,11 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         IWormhole.VM memory redeliveryVM = _parseAndVerifyVAA(_encodedRedeliveryVAA);
 
         if (WormholeChainId.wrap(redeliveryVM.emitterChainId) != chainId) {
-            revert WormholeReceiptVAAEmitterChainMismatch(chainId, WormholeChainId.wrap(redeliveryVM.emitterChainId));
+            revert WormholeRedeliveryVAAEmitterChainMismatch(chainId, WormholeChainId.wrap(redeliveryVM.emitterChainId));
         }
 
         if (redeliveryVM.emitterAddress != wormholeRelayerAddress) {
-            revert WormholeReceiptVAAEmitterMismatch(wormholeRelayerAddress, redeliveryVM.emitterAddress);
+            revert WormholeRedeliveryVAAEmitterMismatch(wormholeRelayerAddress, redeliveryVM.emitterAddress);
         }
 
         RedeliveryInstruction memory redeliveryPayload =

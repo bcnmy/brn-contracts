@@ -18,14 +18,14 @@ abstract contract WormholeTestBase is
     ITAHelpers,
     IMockWormholeReceiver
 {
-    string FUJI_URL;
-    string MUMBAI_URL;
-
-    WormholeChainId constant sourceChain = WormholeChainId.wrap(6); // fuji testnet
-    WormholeChainId constant targetChain = WormholeChainId.wrap(5); // mumbai testnet
+    using AddressUtils for address;
 
     uint256 constant sourceChainForkBlock = 23134119;
     uint256 constant targetChainForkBlock = 36895494;
+    uint8 constant wormholeVMVersion = 1;
+
+    WormholeChainId constant sourceChain = WormholeChainId.wrap(6); // fuji testnet
+    WormholeChainId constant targetChain = WormholeChainId.wrap(5); // mumbai testnet
 
     uint256 sourceFork;
     uint256 targetFork;
@@ -48,6 +48,14 @@ abstract contract WormholeTestBase is
     SigningWormholeSimulator guardianTarget;
     MockWormholeReceiver receiverTarget;
 
+    GasPrice sourceChainGasPrice = GasPrice.wrap(25 wei); // 25 nAVAX
+    GasPrice targetChainGasPrice = GasPrice.wrap(16 gwei); // 16 gwei MATIC
+
+    WeiPrice sourceChainNativeTokenPrice = WeiPrice.wrap(11.5 * 1 ether); // $11.5, AVAX
+    WeiPrice targetChainNativeTokenPrice = WeiPrice.wrap(0.59 * 1 ether); // $0.59, MATIC
+
+    mapping(WormholeChainId => SigningWormholeSimulator) guardians;
+
     function setUp() public virtual override {
         vm.label(address(relayerSource), "WormholeRelayerSource");
         vm.label(address(wormholeSource), "WormholeCoreSource");
@@ -56,8 +64,8 @@ abstract contract WormholeTestBase is
         vm.label(address(wormholeTarget), "WormholeCoreTarget");
 
         // Set up forks
-        FUJI_URL = vm.envString("FUJI_RPC_URL");
-        MUMBAI_URL = vm.envString("MUMBAI_RPC_URL");
+        string memory sourceChainUrl = vm.envString("FUJI_RPC_URL");
+        string memory targetChainUrl = vm.envString("MUMBAI_RPC_URL");
 
         // Set up Wormhole
         devnetPrivateKey = getNextPrivateKey();
@@ -66,11 +74,12 @@ abstract contract WormholeTestBase is
         vm.label(brnOwnerAddress, "brnOwner");
 
         // Source Chain
-        sourceFork = vm.createSelectFork(FUJI_URL, sourceChainForkBlock);
+        sourceFork = vm.createSelectFork(sourceChainUrl, sourceChainForkBlock);
         guardianSource = new SigningWormholeSimulator(
             wormholeSource,
             devnetPrivateKey
         );
+        guardians[sourceChain] = guardianSource;
         vm.label(address(guardianSource), "SigningWormholeSimulatorSource");
         deliveryProviderSource = new BRNWormholeDeliveryProvider(
             wormholeSource,
@@ -79,6 +88,7 @@ abstract contract WormholeTestBase is
         );
         vm.label(address(deliveryProviderSource), "BRNWormholeDeliveryProviderSource");
         receiverSource = new MockWormholeReceiver(
+            wormholeSource,
             deliveryProviderSource,
             relayerSource,
             sourceChain
@@ -87,7 +97,7 @@ abstract contract WormholeTestBase is
         vm.label(address(receiverSource), "MockWormholeReceiverSource");
 
         // Destination Chain
-        targetFork = vm.createSelectFork(MUMBAI_URL, targetChainForkBlock);
+        targetFork = vm.createSelectFork(targetChainUrl, targetChainForkBlock);
         if (tx.gasprice == 0) {
             fail("Gas Price is 0. Please set it to 1 gwei or more.");
         }
@@ -113,13 +123,52 @@ abstract contract WormholeTestBase is
             wormholeTarget,
             devnetPrivateKey
         );
+        guardians[targetChain] = guardianTarget;
         vm.label(address(guardianTarget), "SigningWormholeSimulatorTarget");
         receiverTarget = new MockWormholeReceiver(
+            wormholeTarget,
             deliveryProviderTarget,
             relayerTarget,
             targetChain
         );
         vm.label(address(receiverTarget), "MockWormholeReceiverTarget");
+    }
+
+    function _configureWormholeEnvironment() internal {
+        // Populate Test Data for Oracles on Source Chain
+        vm.selectFork(sourceFork);
+        vm.startPrank(brnOwnerAddress);
+        deliveryProviderSource.setGasPrice(targetChain, targetChainGasPrice);
+        deliveryProviderSource.setNativeCurrencyPrice(sourceChain, sourceChainNativeTokenPrice);
+        deliveryProviderSource.setNativeCurrencyPrice(targetChain, targetChainNativeTokenPrice);
+        deliveryProviderSource.setDeliverGasOverhead(targetChain, Gas.wrap(100_000));
+        deliveryProviderSource.setMaximumBudget(targetChain, Wei.wrap(10_000_000 * 1 ether));
+        deliveryProviderSource.setIsWormholeChainSupported(targetChain, true);
+        deliveryProviderSource.setBrnRelayerProviderAddress(targetChain, address(deliveryProviderTarget).toBytes32());
+        deliveryProviderSource.setBrnTransactionAllocatorAddress(targetChain, address(ta).toBytes32());
+        deliveryProviderSource.setAssetConversionBuffer(
+            targetChain, IBRNWormholeDeliveryProvider.AssetConversion({denominator: 100, buffer: 10})
+        );
+        receiverSource.setMockWormholeReceiverAddress(targetChain, address(receiverTarget));
+        vm.stopPrank();
+
+        deal(address(receiverSource), 10000 ether);
+
+        // Populate Test Data for Oracles on Destination Chain
+        vm.selectFork(targetFork);
+        vm.startPrank(brnOwnerAddress);
+        deliveryProviderTarget.setGasPrice(sourceChain, sourceChainGasPrice);
+        deliveryProviderTarget.setNativeCurrencyPrice(sourceChain, sourceChainNativeTokenPrice);
+        deliveryProviderTarget.setNativeCurrencyPrice(targetChain, targetChainNativeTokenPrice);
+        deliveryProviderTarget.setDeliverGasOverhead(sourceChain, Gas.wrap(100_000));
+        deliveryProviderTarget.setMaximumBudget(sourceChain, Wei.wrap(10_000_000 * 1 ether));
+        deliveryProviderTarget.setIsWormholeChainSupported(sourceChain, true);
+        deliveryProviderTarget.setBrnRelayerProviderAddress(sourceChain, address(deliveryProviderSource).toBytes32());
+        deliveryProviderTarget.setAssetConversionBuffer(
+            sourceChain, IBRNWormholeDeliveryProvider.AssetConversion({denominator: 100, buffer: 10})
+        );
+        receiverTarget.setMockWormholeReceiverAddress(sourceChain, address(receiverSource));
+        vm.stopPrank();
     }
 
     // For forked contracts traces are not visible in the console
@@ -137,5 +186,11 @@ abstract contract WormholeTestBase is
 
         // Override the bytecode of the existing WormholeRelayer contract
         vm.etch(address(_relayer), deployed.code);
+    }
+
+    function _signWormholeVM(IWormhole.VM memory _vm, WormholeChainId _emitterChain) internal returns (bytes memory) {
+        _vm.emitterChainId = WormholeChainId.unwrap(_emitterChain);
+        _vm.version = wormholeVMVersion;
+        return guardians[_emitterChain].encodeAndSignMessage(_vm);
     }
 }
