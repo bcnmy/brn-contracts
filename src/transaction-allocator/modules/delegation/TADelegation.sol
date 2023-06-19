@@ -106,26 +106,36 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         _updateCdf_c(_latestState.relayers);
     }
 
-    function _processRewards(RelayerAddress _relayerAddress, TokenAddress _pool, DelegatorAddress _delegatorAddress)
-        internal
-    {
+    struct TokensToBeTransferred {
+        TokenAddress token;
+        uint256 amount;
+    }
+
+    function _processRewards(
+        RelayerAddress _relayerAddress,
+        TokenAddress _pool,
+        DelegatorAddress _delegatorAddress,
+        TokenAddress _bondToken,
+        uint256 _delegation
+    ) internal returns (TokensToBeTransferred memory) {
         TADStorage storage ds = getTADStorage();
 
         uint256 rewardsEarned_ = _delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
 
         if (rewardsEarned_ != 0) {
             ds.unclaimedRewards[_relayerAddress][_pool] -= rewardsEarned_;
-            ds.totalShares[_relayerAddress][_pool] =
-                ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
-            ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
-
-            _transfer(_pool, DelegatorAddress.unwrap(_delegatorAddress), rewardsEarned_);
-            emit RewardSent(_relayerAddress, _delegatorAddress, _pool, rewardsEarned_);
         }
+
+        ds.totalShares[_relayerAddress][_pool] =
+            ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
+        ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
+
+        return TokensToBeTransferred({
+            token: _pool,
+            amount: _pool == _bondToken ? rewardsEarned_ + _delegation : rewardsEarned_
+        });
     }
 
-    // TODO: Non Reentrant Tests
-    // TODO: This function should return the original stake 🤦
     function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress) external override {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
@@ -133,23 +143,36 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         _updateRelayerProtocolRewards(_relayerAddress);
 
-        {
-            uint256 length = ds.supportedPools.length;
-            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-            for (uint256 i; i != length;) {
-                _processRewards(_relayerAddress, ds.supportedPools[i], delegatorAddress);
-                unchecked {
-                    ++i;
-                }
+        uint256 delegation_ = ds.delegation[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+        TokenAddress bondToken = TokenAddress.wrap(address(getRMStorage().bondToken));
+
+        // Burn shares for each pool and calculate rewards
+        uint256 length = ds.supportedPools.length;
+        TokensToBeTransferred[] memory tokensToBeTransferred = new TokensToBeTransferred[](length);
+        for (uint256 i; i != length;) {
+            tokensToBeTransferred[i] = _processRewards(
+                _relayerAddress, ds.supportedPools[i], DelegatorAddress.wrap(msg.sender), bondToken, delegation_
+            );
+            unchecked {
+                ++i;
             }
         }
 
-        {
-            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-            uint256 delegation_ = ds.delegation[_relayerAddress][delegatorAddress];
-            ds.totalDelegation[_relayerAddress] -= delegation_;
-            ds.delegation[_relayerAddress][delegatorAddress] = 0;
-            emit DelegationRemoved(_relayerAddress, delegatorAddress, delegation_);
+        // Update delegation state
+        ds.totalDelegation[_relayerAddress] -= delegation_;
+        delete ds.delegation[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+        emit DelegationRemoved(_relayerAddress, DelegatorAddress.wrap(msg.sender), delegation_);
+
+        // Transfer the rewards and the original stake
+        for (uint256 i; i != length;) {
+            TokensToBeTransferred memory t = tokensToBeTransferred[i];
+            if (t.amount > 0) {
+                _transfer(t.token, msg.sender, t.amount);
+                emit RewardSent(_relayerAddress, DelegatorAddress.wrap(msg.sender), t.token, t.amount);
+            }
+            unchecked {
+                ++i;
+            }
         }
 
         // Update the CDF if and only if the relayer is still registered
