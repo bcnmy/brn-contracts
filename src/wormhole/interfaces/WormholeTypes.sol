@@ -8,9 +8,8 @@ import {IWormholeRelayer, VaaKey} from "wormhole-contracts/interfaces/relayer/IW
 import "ta-common/TATypes.sol";
 
 struct ReceiptVAAPayload {
-    uint64 deliveryVAASequenceNumber;
-    WormholeChainId deliveryVAASourceChainId;
-    RelayerAddress relayer;
+    RelayerAddress relayerAddress;
+    VaaKey deliveryVAAKey;
 }
 
 type WormholeChainId is uint16;

@@ -16,6 +16,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     uint256 constant VERSION_OFFSET = 0;
     uint256 constant SIGNATURE_LENGTH_OFFSET = 5;
     uint256 constant EMITTER_CHAIN_BODY_OFFSET = 14;
+    uint256 constant EMITTER_ADDRESS_BODY_OFFSET = 16;
     uint256 constant SEQUENCE_ID_BODY_OFFSET = 48;
 
     using BytesLib for bytes;
@@ -36,7 +37,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     ////// Alloction Logic //////
     function _getTransactionHash(bytes calldata _calldata) internal pure virtual override returns (bytes32) {
         (, bytes memory encodedDeliveryVAA,) = abi.decode(_calldata[4:], (bytes[], bytes, bytes));
-        (uint256 sequenceNumber,) = _parseVAASelective(encodedDeliveryVAA);
+        (uint256 sequenceNumber,,) = _parseVAASelective(encodedDeliveryVAA);
 
         return _hashSequenceNumber(sequenceNumber);
     }
@@ -48,7 +49,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     function _parseVAASelective(bytes memory _encodedVAA)
         internal
         pure
-        returns (uint64 sequenceNumber, WormholeChainId emitterChain)
+        returns (uint64 sequenceNumber, WormholeChainId emitterChain, bytes32 emitterAddress)
     {
         // VAA Structure
         //
@@ -80,6 +81,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         uint256 signersLen = _encodedVAA.toUint8(SIGNATURE_LENGTH_OFFSET);
         emitterChain =
             WormholeChainId.wrap(_encodedVAA.toUint16(EMITTER_CHAIN_BODY_OFFSET + SIGNATURE_SIZE * signersLen));
+        emitterAddress = _encodedVAA.toBytes32(EMITTER_CHAIN_BODY_OFFSET + SIGNATURE_SIZE * signersLen + 2);
         sequenceNumber = _encodedVAA.toUint64(SEQUENCE_ID_BODY_OFFSET + SIGNATURE_SIZE * signersLen);
     }
 
@@ -97,7 +99,8 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         bytes calldata _encodedDeliveryVAA,
         bytes calldata _deliveryOverrides
     ) external payable override {
-        (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain) = _parseVAASelective(_encodedDeliveryVAA);
+        (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain, bytes32 emitterAddress) =
+            _parseVAASelective(_encodedDeliveryVAA);
         _verifyTransaction(_hashSequenceNumber(deliveryVAASequenceNumber));
 
         // Forward the call the CoreRelayerDelivery with value
@@ -110,9 +113,12 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         // Generate a ReceiptVAA
         bytes memory receiptVAAPayload = abi.encode(
             ReceiptVAAPayload({
-                relayer: relayerAddress,
-                deliveryVAASourceChainId: emitterChain,
-                deliveryVAASequenceNumber: deliveryVAASequenceNumber
+                relayerAddress: relayerAddress,
+                deliveryVAAKey: VaaKey({
+                    sequence: deliveryVAASequenceNumber,
+                    chainId: WormholeChainId.unwrap(emitterChain),
+                    emitterAddress: emitterAddress
+                })
             })
         );
         whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);

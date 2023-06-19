@@ -352,5 +352,5 @@ abstract contract TATestBase is Test {
     }
 
     // Add this to be excluded from coverage
-    function test() external pure {}
+    function test() external pure virtual {}
 }

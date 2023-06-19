@@ -5,19 +5,10 @@ pragma solidity 0.8.19;
 import {SigningWormholeSimulator} from "wormhole-contracts-test/relayer/WormholeSimulator.sol";
 
 import "./TATestBase.sol";
-import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
-import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
-import "ta-common/interfaces/ITAHelpers.sol";
 import "wormhole-application/BRNWormholeDeliveryProvider.sol";
 import "src/mock/wormhole/MockWormholeReceiver.sol";
 
-abstract contract WormholeTestBase is
-    TATestBase,
-    ITATransactionAllocationEventsErrors,
-    ITARelayerManagementEventsErrors,
-    ITAHelpers,
-    IMockWormholeReceiver
-{
+abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
     using AddressUtils for address;
 
     uint256 constant sourceChainForkBlock = 23134119;
@@ -193,4 +184,7 @@ abstract contract WormholeTestBase is
         _vm.version = wormholeVMVersion;
         return guardians[_emitterChain].encodeAndSignMessage(_vm);
     }
+
+    // Excluce from test coverage
+    function test() external pure override {}
 }

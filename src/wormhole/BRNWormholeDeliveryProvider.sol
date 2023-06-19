@@ -13,8 +13,6 @@ import "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
 import "src/library/AddressUtils.sol";
 import "./interfaces/IBRNWormholeDeliveryProvider.sol";
 
-import "forge-std/console2.sol";
-
 contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiLib for Wei;
     using GasLib for Gas;
@@ -233,41 +231,31 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         bytes32 targetChainBRNTransactionAllocatorAddress =
             brnTransactionAllocatorAddress[WormholeChainId.wrap(receiptVM.emitterChainId)];
 
+        ReceiptVAAPayload memory payload = abi.decode(receiptVM.payload, (ReceiptVAAPayload));
+
+        if (WormholeChainId.wrap(payload.deliveryVAAKey.chainId) != chainId) {
+            revert WormholeDeliveryVAASourceChainMismatch(chainId, WormholeChainId.wrap(payload.deliveryVAAKey.chainId));
+        }
+
         if (receiptVM.emitterAddress != targetChainBRNTransactionAllocatorAddress) {
             revert WormholeReceiptVAAEmitterMismatch(
                 targetChainBRNTransactionAllocatorAddress, receiptVM.emitterAddress
             );
         }
 
-        ReceiptVAAPayload memory payload = abi.decode(receiptVM.payload, (ReceiptVAAPayload));
-
-        if (payload.deliveryVAASourceChainId != chainId) {
-            revert WormholeDeliveryVAASourceChainMismatch(chainId, payload.deliveryVAASourceChainId);
-        }
-
-        if (payload.relayer != RelayerAddress.wrap(msg.sender)) {
+        if (payload.relayerAddress != RelayerAddress.wrap(msg.sender)) {
             revert NotAuthorized();
         }
 
-        uint256 amount = fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
-        delete fundsDepositedForRelaying[payload.deliveryVAASequenceNumber];
+        uint256 amount = fundsDepositedForRelaying[payload.deliveryVAAKey.sequence];
+        delete fundsDepositedForRelaying[payload.deliveryVAAKey.sequence];
 
-        emit DeliveryFeeClaimed(payload.deliveryVAASequenceNumber, payload.relayer, amount);
+        emit DeliveryFeeClaimed(payload.deliveryVAAKey.sequence, payload.relayerAddress, amount);
 
         // Process any re-delivery VAAs
         uint256 redeliveryVAACount = _encodedRedeliveryVAA.length;
-        VaaKey memory deliveryVAAKey = VaaKey({
-            sequence: payload.deliveryVAASequenceNumber,
-            chainId: WormholeChainId.unwrap(payload.deliveryVAASourceChainId),
-            emitterAddress: targetChainBRNTransactionAllocatorAddress
-        });
         for (uint256 i; i != redeliveryVAACount;) {
-            amount += _checkRedeliveryVAAClaim(
-                deliveryVAAKey,
-                WormholeChainId.wrap(receiptVM.emitterChainId),
-                _encodedRedeliveryVAA[i],
-                payload.relayer
-            );
+            amount += _checkRedeliveryVAAClaim(payload.deliveryVAAKey, _encodedRedeliveryVAA[i], payload.relayerAddress);
 
             unchecked {
                 ++i;
@@ -279,7 +267,6 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
 
     function _checkRedeliveryVAAClaim(
         VaaKey memory _deliveryInstructionVAAKey,
-        WormholeChainId _destinationChainId,
         bytes calldata _encodedRedeliveryVAA,
         RelayerAddress _relayer
     ) internal returns (uint256) {
@@ -298,12 +285,6 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
 
         if (!_compareVaaKey(_deliveryInstructionVAAKey, redeliveryPayload.deliveryVaaKey)) {
             revert WormholeRedeliveryVAAKeyMismatch(_deliveryInstructionVAAKey, redeliveryPayload.deliveryVaaKey);
-        }
-
-        if (WormholeChainId.wrap(redeliveryPayload.targetChain) != _destinationChainId) {
-            revert WormholeRedeliveryVAATargetChainMismatch(
-                _destinationChainId, WormholeChainId.wrap(redeliveryPayload.targetChain)
-            );
         }
 
         uint256 amount = fundsDepositedForRelaying[redeliveryVM.sequence];
