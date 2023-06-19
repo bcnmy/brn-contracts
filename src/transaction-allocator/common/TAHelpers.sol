@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/utils/Address.sol";
 
 import "./interfaces/ITAHelpers.sol";
 import "./TAConstants.sol";
@@ -19,6 +20,7 @@ import "forge-std/console2.sol";
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+    using Address for address payable;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
@@ -262,23 +264,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////////// Misc //////////////////////////////
     function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
         if (_token == NATIVE_TOKEN) {
-            uint256 balance = address(this).balance;
-            if (balance < _amount) {
-                revert InsufficientBalance(_token, balance, _amount);
-            }
-
-            (bool status,) = payable(_to).call{value: _amount}("");
-            if (!status) {
-                revert NativeTransferFailed(_to, _amount);
-            }
+            payable(_to).sendValue(_amount);
         } else {
-            IERC20 token = IERC20(TokenAddress.unwrap(_token));
-            uint256 balance = token.balanceOf(address(this));
-            if (balance < _amount) {
-                revert InsufficientBalance(_token, balance, _amount);
-            }
-
-            token.safeTransfer(_to, _amount);
+            IERC20(TokenAddress.unwrap(_token)).safeTransfer(_to, _amount);
         }
     }
 }

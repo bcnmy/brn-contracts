@@ -3,7 +3,6 @@
 pragma solidity 0.8.19;
 
 import "test/base/TATestBase.sol";
-import "ta-common/TAConstants.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 
@@ -232,6 +231,23 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
         vm.stopPrank();
     }
 
+    function testCannotRegisterWithInvalidLatestState() external {
+        // Corrupt the CDF
+        latestRelayerState.cdf[0] = 0;
+
+        _startPrankRA(relayerMainAddress[1]);
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
+        vm.expectRevert(InvalidLatestRelayerState.selector);
+        ta.register(
+            latestRelayerState,
+            initialRelayerStake[relayerMainAddress[1]],
+            relayerAccountAddresses[relayerMainAddress[1]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
+        vm.stopPrank();
+    }
+
     function testCannotUnregisterAllRelayers() external {
         // Deregister the foundation relayer
         _prankRA(relayerMainAddress[0]);
@@ -253,6 +269,34 @@ contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors
             delegatorPoolPremiumShare
         );
         vm.stopPrank();
+    }
+
+    function testCannotUnregisterWithInvalidCdf() external {
+        // Register
+        _startPrankRA(relayerMainAddress[1]);
+        RelayerState memory currentState = latestRelayerState;
+        bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
+        ta.register(
+            latestRelayerState,
+            initialRelayerStake[relayerMainAddress[1]],
+            relayerAccountAddresses[relayerMainAddress[1]],
+            endpoint,
+            delegatorPoolPremiumShare
+        );
+        _appendRelayerToLatestState(relayerMainAddress[1]);
+        vm.stopPrank();
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        // Corrupt the CDF
+        latestRelayerState.cdf[0] = 0;
+
+        // Unregister
+        _prankRA(relayerMainAddress[1]);
+        vm.expectRevert(InvalidLatestRelayerState.selector);
+        ta.unregister(latestRelayerState, _findRelayerIndex(relayerMainAddress[1]));
     }
 
     function testCannotUnregisterAnotherRelayer() external {

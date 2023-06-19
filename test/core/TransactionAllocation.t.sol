@@ -85,6 +85,12 @@ contract TransactionAllocationTest is
         assertEq(ta.totalTransactionsSubmitted(), submissionCount);
     }
 
+    function testCannotCallApplicationDirectly() external {
+        vm.expectRevert(IApplicationBase.ExternalCallsNotAllowed.selector);
+        (bool status,) = address(ta).call(txns[0]);
+        status;
+    }
+
     function testCannotExecuteTransactionWithInvalidCdf() external {
         // Corrupt the CDF
         RelayerState memory corruptedState = latestRelayerState;
@@ -191,16 +197,23 @@ contract TransactionAllocationTest is
         }
     }
 
-    function testCannotExecuteTransactionFromSelectedButNonAllotedRelayer() external {
+    function testCannotExecuteTransactionFromSelectedButNotAllotedRelayer() external {
         (RelayerAddress[] memory selectedRelayers,) = ta.allocateRelayers(latestRelayerState);
         bool testRun = false;
 
+        bytes[] memory allotedTransactions;
+
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations,) =
+            (bytes[] memory _allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerIndex) =
                 _allocateTransactions(relayerAddress, txns, latestRelayerState);
 
+            if (_allotedTransactions.length == 0) {
+                continue;
+            }
+
             if (allotedTransactions.length == 0) {
+                allotedTransactions = _allotedTransactions;
                 continue;
             }
 
@@ -210,13 +223,13 @@ contract TransactionAllocationTest is
 
             testRun = true;
 
-            _startPrankRAA(relayerAccountAddresses[selectedRelayers[0]][0]);
-            vm.expectRevert(RelayerIndexDoesNotPointToSelectedCdfInterval.selector);
+            _startPrankRAA(relayerAccountAddresses[relayerAddress][0]);
+            vm.expectRevert(abi.encodeWithSelector(TransactionExecutionFailed.selector, 0));
             ta.execute(
                 ITATransactionAllocation.ExecuteParams({
                     reqs: allotedTransactions,
                     forwardedNativeAmounts: new uint256[](allotedTransactions.length),
-                    relayerIndex: _findRelayerIndex(selectedRelayers[0]),
+                    relayerIndex: selectedRelayerIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,

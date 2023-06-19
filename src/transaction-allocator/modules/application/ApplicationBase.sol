@@ -8,7 +8,9 @@ import "ta-relayer-management/TARelayerManagementStorage.sol";
 
 abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
     function _verifyTransaction(bytes32 _txHash) internal view {
-        if (msg.sender != address(this)) revert ExternalCallsNotAllowed();
+        if (msg.sender != address(this)) {
+            revert ExternalCallsNotAllowed();
+        }
 
         (, uint256 relayerGenerationIterationBitmap, uint256 relayersPerWindow) = _getCalldataParams();
 
@@ -61,9 +63,6 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
     {
         (RelayerAddress[] memory relayersAllocated, uint256[] memory relayerStakePrefixSumIndex) =
             ITATransactionAllocation(address(this)).allocateRelayers(_currentState);
-        if (relayersAllocated.length != getRMStorage().relayersPerWindow) {
-            revert RelayerAllocationResultLengthMismatch(getRMStorage().relayersPerWindow, relayersAllocated.length);
-        }
 
         // Filter the transactions
         uint256 length = _requests.length;
