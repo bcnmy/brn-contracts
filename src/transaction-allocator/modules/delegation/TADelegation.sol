@@ -202,36 +202,45 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
     function _delegationRewardsEarned(
         RelayerAddress _relayerAddress,
-        TokenAddress _tokenAddres,
+        TokenAddress _tokenAddress,
         DelegatorAddress _delegatorAddress
     ) internal view returns (uint256) {
         TADStorage storage ds = getTADStorage();
 
-        FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
+        FixedPointType currentValue = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddress]
+            * _delegationSharePrice(_relayerAddress, _tokenAddress, 0);
         FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].fp();
-        FixedPointType rewards = shares_ * _delegationSharePrice(_relayerAddress, _tokenAddres, 0) - delegation_;
 
-        return rewards.u256();
+        if (currentValue >= delegation_) {
+            return (currentValue - delegation_).u256();
+        }
+        return 0;
     }
 
     function claimableDelegationRewards(
         RelayerAddress _relayerAddress,
-        TokenAddress _tokenAddres,
+        TokenAddress _tokenAddress,
         DelegatorAddress _delegatorAddress
     ) external view returns (uint256) {
         TADStorage storage ds = getTADStorage();
 
-        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewards();
+        uint256 protocolDelegationRewards;
 
-        (, uint256 protocolDelegationRewards,) =
-            _getPendingProtocolRewardsData(_relayerAddress, updatedTotalUnpaidProtocolRewards);
+        if (TokenAddress.unwrap(_tokenAddress) == address(getRMStorage().bondToken)) {
+            uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewards();
 
-        FixedPointType shares_ = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddres];
+            (, protocolDelegationRewards,) =
+                _getPendingProtocolRewardsData(_relayerAddress, updatedTotalUnpaidProtocolRewards);
+        }
+
+        FixedPointType currentValue = ds.shares[_relayerAddress][_delegatorAddress][_tokenAddress]
+            * _delegationSharePrice(_relayerAddress, _tokenAddress, protocolDelegationRewards);
         FixedPointType delegation_ = ds.delegation[_relayerAddress][_delegatorAddress].fp();
-        FixedPointType rewards =
-            shares_ * _delegationSharePrice(_relayerAddress, _tokenAddres, protocolDelegationRewards) - delegation_;
 
-        return rewards.u256();
+        if (currentValue >= delegation_) {
+            return (currentValue - delegation_).u256();
+        }
+        return 0;
     }
 
     function addDelegationRewards(RelayerAddress _relayerAddress, uint256 _tokenIndex, uint256 _amount)

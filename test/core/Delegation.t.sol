@@ -44,9 +44,6 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
             bico.approve(address(ta), type(uint256).max);
         }
 
-        // Accrue protocol rewards for all relayers
-        vm.warp(block.timestamp + 100);
-
         // Constants
         bondTokenAddress = TokenAddress.wrap(address(bico));
         ridx = 9;

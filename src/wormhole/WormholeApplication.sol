@@ -8,8 +8,6 @@ import "./interfaces/IWormholeApplication.sol";
 import "./WormholeApplicationStorage.sol";
 import "ta-base-application/ApplicationBase.sol";
 
-import "forge-std/console2.sol";
-
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;
     uint256 constant SIGNATURE_SIZE = 66;

@@ -15,8 +15,6 @@ import "src/library/arrays/U32ArrayHelper.sol";
 import "src/library/arrays/RAArrayHelper.sol";
 import "src/library/arrays/U16ArrayHelper.sol";
 
-import "forge-std/console2.sol";
-
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
@@ -27,12 +25,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using U32ArrayHelper for uint32[];
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
-
-    modifier measureGas(string memory _name) {
-        uint256 gasStart = gasleft();
-        _;
-        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
-    }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlySelf() {
