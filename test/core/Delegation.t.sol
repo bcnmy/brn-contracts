@@ -145,9 +145,8 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         _updateLatestStateCdf();
     }
 
-    // TODO: Test delayed CDF Updation
-    // TODO: Test reward claim
     // TODO: Test protoocl reward accrual
+
     function testTokenDelegation() external {
         // D0 delegates
         _delegate(r, ridx, d0);
@@ -247,5 +246,105 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
             1.2 ether,
             REWARDS_MAX_ABSOLUTE_ERROR
         );
+    }
+
+    function testWithdrawPostRelayerUnregistration() external {
+        // Delegation
+        _delegate(r, ridx, d0);
+        _increaseRewards(r, bondTokenAddress, 1 ether);
+        _delegate(r, ridx, d1);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+        _delegate(r, ridx, d2);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+
+        // Relayer Unregistration
+        _prankRA(r);
+        ta.unregister(latestRelayerState, ridx);
+        _removeRelayerFromLatestState(r);
+
+        // Undelegation by D0
+        _undelegate(r, d0, true, true);
+
+        // Undelegation by D1
+        _undelegate(r, d1, true, true);
+
+        // Undelegation by D2
+        _undelegate(r, d2, true, true);
+
+        // Check reward values are positive
+        assertTrue(reward[d0][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d0][bondTokenAddress] > 0);
+        assertTrue(reward[d1][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d1][bondTokenAddress] > 0);
+        assertTrue(reward[d2][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d2][bondTokenAddress] > 0);
+
+        // Sum of rewards should be equal to the total rewards added
+        assertApproxEqAbs(
+            reward[d0][NATIVE_TOKEN] + reward[d1][NATIVE_TOKEN] + reward[d2][NATIVE_TOKEN],
+            0.2 ether,
+            REWARDS_MAX_ABSOLUTE_ERROR
+        );
+        assertApproxEqAbs(
+            reward[d0][bondTokenAddress] + reward[d1][bondTokenAddress] + reward[d2][bondTokenAddress],
+            1.2 ether,
+            REWARDS_MAX_ABSOLUTE_ERROR
+        );
+    }
+
+    function testCannotDelegateToUnRegisteredRelayer() external {
+        _prankRA(r);
+        ta.unregister(latestRelayerState, _findRelayerIndex(r));
+        _removeRelayerFromLatestState(r);
+
+        _prankDa(d0);
+        vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
+        ta.delegate(latestRelayerState, _findRelayerIndex(r), delegation[d0]);
+    }
+
+    function testDelegationShouldUpdateCDFWithDelay() external {
+        RelayerState memory currentState = latestRelayerState;
+
+        _delegate(r, ridx, d0);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), true);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), false);
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), false);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), true);
+    }
+
+    function testUnDelegationShouldUpdateCDFWithDelay() external {
+        RelayerState memory currentState = latestRelayerState;
+
+        _delegate(r, ridx, d0);
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        currentState = latestRelayerState;
+
+        _undelegate(r, d0, false, false);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), true);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), false);
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), false);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), true);
     }
 }
