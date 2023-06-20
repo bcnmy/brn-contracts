@@ -22,7 +22,7 @@ abstract contract TATestBase is Test {
     uint256 constant userCount = 10;
     uint256 constant initialMainAccountFunds = 1000000 ether;
     uint256 constant initialRelayerAccountFunds = 1 ether;
-    uint256 constant initialDelegatorFunds = 1 ether;
+    uint256 constant initialDelegatorFunds = 100000 ether;
     uint256 constant initialUserAccountFunds = 1 ether;
 
     TokenAddress[] internal supportedTokens;
@@ -50,6 +50,9 @@ abstract contract TATestBase is Test {
     });
 
     ITransactionAllocatorDebug internal ta;
+    MinimalApplication internal app;
+
+    uint32 nextKeyIndex;
 
     uint256[] internal relayerMainKey;
     RelayerAddress[] internal relayerMainAddress;
@@ -70,6 +73,10 @@ abstract contract TATestBase is Test {
     string endpoint = "test";
     uint256 delegatorPoolPremiumShare = 1000;
 
+    function getNextPrivateKey() internal returns (uint256) {
+        return vm.deriveKey(mnemonic, ++nextKeyIndex);
+    }
+
     function setUp() public virtual {
         deploymentTimestamp = block.timestamp;
 
@@ -77,12 +84,10 @@ abstract contract TATestBase is Test {
         bico = new ERC20("BICO", "BICO");
         vm.label(address(bico), "ERC20(BICO)");
 
-        uint32 keyIndex = 0;
-
         // Generate Relayer Addresses
         for (uint256 i = 0; i < relayerCount; i++) {
             // Generate Main Relayer Addresses
-            relayerMainKey.push(vm.deriveKey(mnemonic, ++keyIndex));
+            relayerMainKey.push(getNextPrivateKey());
             relayerMainAddress.push(RelayerAddress.wrap(vm.addr(relayerMainKey[i])));
             deal(RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
             deal(address(bico), RelayerAddress.unwrap(relayerMainAddress[i]), initialMainAccountFunds);
@@ -90,7 +95,7 @@ abstract contract TATestBase is Test {
 
             // Generate Relayer Account Addresses
             for (uint256 j = 0; j < relayerAccountsPerRelayer; j++) {
-                relayerAccountKeys[relayerMainAddress[i]].push(vm.deriveKey(mnemonic, ++keyIndex));
+                relayerAccountKeys[relayerMainAddress[i]].push(getNextPrivateKey());
                 relayerAccountAddresses[relayerMainAddress[i]].push(
                     RelayerAccountAddress.wrap(vm.addr(relayerAccountKeys[relayerMainAddress[i]][j]))
                 );
@@ -113,7 +118,7 @@ abstract contract TATestBase is Test {
 
         // Generate Delegator Addresses
         for (uint256 i = 0; i < delegatorCount; i++) {
-            delegatorKeys.push(vm.deriveKey(mnemonic, ++keyIndex));
+            delegatorKeys.push(getNextPrivateKey());
             delegatorAddresses.push(DelegatorAddress.wrap(vm.addr(delegatorKeys[i])));
             deal(DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
             deal(address(bico), DelegatorAddress.unwrap(delegatorAddresses[i]), initialDelegatorFunds);
@@ -122,7 +127,7 @@ abstract contract TATestBase is Test {
 
         // Generate User Addresses
         for (uint256 i = 0; i < userCount; i++) {
-            uint256 key = vm.deriveKey(mnemonic, ++keyIndex);
+            uint256 key = getNextPrivateKey();
             userAddresses.push(vm.addr(key));
             userKeys[userAddresses[i]] = key;
             deal(userAddresses[i], initialUserAccountFunds);
@@ -140,13 +145,15 @@ abstract contract TATestBase is Test {
         deployParams.supportedTokens = supportedTokens;
 
         // Approve tokens for foundation relayer registration
-        uint256 deployerPrivateKey = vm.deriveKey(mnemonic, ++keyIndex);
+        uint256 deployerPrivateKey = getNextPrivateKey();
         vm.broadcast(relayerMainKey[0]);
-        bico.approve(computeCreateAddress(vm.addr(deployerPrivateKey), 6), 10000 ether);
+        bico.approve(
+            computeCreateAddress(vm.addr(deployerPrivateKey), vm.getNonce(vm.addr(deployerPrivateKey)) + 6), 10000 ether
+        );
 
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
-        ta = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
+        (ta, app) = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
 
         _appendRelayerToLatestState(relayerMainAddress[0]);
 
@@ -312,17 +319,25 @@ abstract contract TATestBase is Test {
     }
 
     // Assert Utils
-    function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
+    function assertEq(FixedPointType _a, FixedPointType _b) internal {
         assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b));
     }
 
-    function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
+    function assertEq(FixedPointType _a, FixedPointType _b, string memory _label) internal {
+        assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b), _label);
+    }
+
+    function assertEq(RelayerAddress _a, RelayerAddress _b) internal {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
     }
 
     // Timing
     function _moveForwardByWindows(uint256 _windows) internal {
         vm.roll(block.number + _windows * ta.blocksPerWindow());
+    }
+
+    function _moveForwardByWindowsInActiveFork(uint256 _windows) internal {
+        vm.rollFork(block.number + _windows * ta.blocksPerWindow());
     }
 
     function _moveForwardToNextEpoch() internal {
@@ -342,5 +357,5 @@ abstract contract TATestBase is Test {
     }
 
     // Add this to be excluded from coverage
-    function test() external pure {}
+    function test() external pure virtual {}
 }

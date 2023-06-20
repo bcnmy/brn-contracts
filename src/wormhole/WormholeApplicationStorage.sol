@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import "wormhole-contracts/interfaces/relayer/IDelivery.sol";
+import {IWormholeRelayerDelivery} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
+import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
 import "wormhole-contracts/interfaces/IWormhole.sol";
 
 abstract contract WormholeApplicationStorage {
@@ -10,7 +11,7 @@ abstract contract WormholeApplicationStorage {
 
     struct WHStorage {
         IWormhole wormhole;
-        IDelivery delivery;
+        IWormholeRelayerDelivery delivery;
         uint8 receiptVAAConsistencyLevel;
         bool initialized;
     }

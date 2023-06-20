@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/utils/math/SafeCast.sol";
+import "openzeppelin-contracts/utils/Address.sol";
 
 import "./interfaces/ITAHelpers.sol";
 import "./TAConstants.sol";
@@ -14,11 +15,10 @@ import "src/library/arrays/U32ArrayHelper.sol";
 import "src/library/arrays/RAArrayHelper.sol";
 import "src/library/arrays/U16ArrayHelper.sol";
 
-import "forge-std/console2.sol";
-
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using SafeCast for uint256;
+    using Address for address payable;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
@@ -26,10 +26,11 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
 
-    modifier measureGas(string memory _name) {
-        uint256 gasStart = gasleft();
+    modifier noSelfCall() {
+        if (msg.sender == address(this)) {
+            revert NoSelfCall();
+        }
         _;
-        console2.log(string.concat("Gas used for ", _name), gasStart - gasleft());
     }
 
     ////////////////////////////// Verification Helpers //////////////////////////////
@@ -100,7 +101,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         uint256 length = _activeRelayers.length;
         uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum = 0;
+        uint256 totalStakeSum;
 
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
@@ -111,7 +112,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
 
         // Scale the values to fit uint16 and get the CDF
-        uint256 sum = 0;
+        uint256 sum;
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
             sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
@@ -130,7 +131,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
         uint256 length = _activeRelayers.length;
         uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum = 0;
+        uint256 totalStakeSum;
 
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
@@ -141,7 +142,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         }
 
         // Scale the values to fit uint16 and get the CDF
-        uint256 sum = 0;
+        uint256 sum;
         for (uint256 i; i != length;) {
             RelayerAddress relayerAddress = _activeRelayers[i];
             sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
@@ -262,23 +263,9 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////////// Misc //////////////////////////////
     function _transfer(TokenAddress _token, address _to, uint256 _amount) internal {
         if (_token == NATIVE_TOKEN) {
-            uint256 balance = address(this).balance;
-            if (balance < _amount) {
-                revert InsufficientBalance(_token, balance, _amount);
-            }
-
-            (bool status,) = payable(_to).call{value: _amount}("");
-            if (!status) {
-                revert NativeTransferFailed(_to, _amount);
-            }
+            payable(_to).sendValue(_amount);
         } else {
-            IERC20 token = IERC20(TokenAddress.unwrap(_token));
-            uint256 balance = token.balanceOf(address(this));
-            if (balance < _amount) {
-                revert InsufficientBalance(_token, balance, _amount);
-            }
-
-            token.safeTransfer(_to, _amount);
+            IERC20(TokenAddress.unwrap(_token)).safeTransfer(_to, _amount);
         }
     }
 }

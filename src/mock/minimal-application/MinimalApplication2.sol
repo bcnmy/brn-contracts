@@ -5,12 +5,11 @@ pragma solidity 0.8.19;
 import "./interfaces/IMinimalApplication.sol";
 import "ta-base-application/ApplicationBase.sol";
 
-contract MinimalApplication is IMinimalApplication, ApplicationBase {
+contract MinimalApplication2 is IMinimalApplication, ApplicationBase {
     uint256 public count;
 
     function _getTransactionHash(bytes calldata _tx) internal pure virtual override returns (bytes32) {
-        bytes32 param = abi.decode(_tx[4:], (bytes32));
-        return keccak256(abi.encodePacked(param));
+        return keccak256(_tx);
     }
 
     function executeMinimalApplication(bytes32 _data) external payable override {

@@ -6,8 +6,6 @@ import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";
 
 interface ITADebug {
-    function debug_increaseRewards(RelayerAddress _relayerAddress, TokenAddress _pool, uint256 _amount) external;
-
     function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
         external
         view
@@ -27,4 +25,11 @@ interface ITADebug {
     function debug_setTotalStake(uint256 _totalStake) external;
 
     function debug_protocolRewardsSharePrice() external view returns (FixedPointType);
+
+    function debug_setBaseProtoocolRewardRate(uint256 _rate) external;
+
+    function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
+        external
+        view
+        returns (uint256, uint256, FixedPointType);
 }

@@ -3,7 +3,6 @@
 pragma solidity 0.8.19;
 
 import "./ITATransactionAllocationEventsErrors.sol";
-import "ta-common/TATypes.sol";
 import "src/library/FixedPointArithmetic.sol";
 
 interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {

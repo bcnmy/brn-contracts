@@ -17,7 +17,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
     /// @notice allows relayer to execute a tx on behalf of a client
-    function execute(ExecuteParams calldata _params) public payable {
+    function execute(ExecuteParams calldata _params) external payable noSelfCall {
         uint256 length = _params.reqs.length;
         if (length != _params.forwardedNativeAmounts.length) {
             revert ParameterLengthMismatch();
@@ -133,7 +133,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
                 unchecked {
                     ++relayerGenerationIteration;
-                    _relayerGenerationIterationBitmap /= 2;
+                    _relayerGenerationIterationBitmap >>= 1;
                 }
             }
         }
@@ -174,7 +174,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             emit TransactionStatus(i, success, returndata);
 
             if (!success) {
-                revert TransactionExecutionFailed(i);
+                revert TransactionExecutionFailed(i, returndata);
             }
 
             unchecked {
@@ -557,27 +557,33 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     ///////////////////////////////// Getters ///////////////////////////////
-    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view override returns (uint256) {
+    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress)
+        external
+        view
+        override
+        noSelfCall
+        returns (uint256)
+    {
         return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
     }
 
-    function totalTransactionsSubmitted() external view override returns (uint256) {
+    function totalTransactionsSubmitted() external view override noSelfCall returns (uint256) {
         return getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp];
     }
 
-    function epochLengthInSec() external view override returns (uint256) {
+    function epochLengthInSec() external view override noSelfCall returns (uint256) {
         return getTAStorage().epochLengthInSec;
     }
 
-    function epochEndTimestamp() external view override returns (uint256) {
+    function epochEndTimestamp() external view override noSelfCall returns (uint256) {
         return getTAStorage().epochEndTimestamp;
     }
 
-    function livenessZParameter() external view override returns (FixedPointType) {
+    function livenessZParameter() external view override noSelfCall returns (FixedPointType) {
         return getTAStorage().livenessZParameter;
     }
 
-    function stakeThresholdForJailing() external view override returns (uint256) {
+    function stakeThresholdForJailing() external view override noSelfCall returns (uint256) {
         return getTAStorage().stakeThresholdForJailing;
     }
 }

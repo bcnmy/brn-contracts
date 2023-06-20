@@ -3,6 +3,7 @@ forge-std/=lib/forge-std/src/
 openzeppelin-contracts/=lib/openzeppelin-contracts/contracts/
 solidity-bytes-utils/=lib/solidity-bytes-utils/
 wormhole-contracts/=lib/wormhole/ethereum/contracts
+wormhole-contracts-test=lib/wormhole/ethereum/forge-test
 
 ta/=src/transaction-allocator/
 ta-common/=src/transaction-allocator/common/
@@ -10,8 +11,8 @@ ta-proxy/=src/transaction-allocator/proxy/
 ta-delegation/=src/transaction-allocator/modules/delegation/
 ta-relayer-management=src/transaction-allocator/modules/relayer-management/
 ta-transaction-allocation=src/transaction-allocator/modules/transaction-allocation/
-ta-base-application=src/transaction-allocator/modules/application/base-application/
-ta-wormhole-application=src/transaction-allocator/modules/application/wormhole/
+ta-base-application=src/transaction-allocator/modules/application/
+wormhole-application=src/wormhole/
 mock=src/mock/
 
 @openzeppelin/contracts=lib/openzeppelin-contracts/contracts

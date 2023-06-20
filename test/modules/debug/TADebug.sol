@@ -6,26 +6,10 @@ import "./interfaces/ITADebug.sol";
 import "ta-common/TAHelpers.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 
-import "forge-std/console2.sol";
-
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
     using VersionManager for VersionManager.VersionManagerState;
-
-    constructor() {
-        if (block.chainid != 31337) {
-            revert("TADebug: only for testing");
-        }
-    }
-
-    function debug_increaseRewards(RelayerAddress _relayerAddress, TokenAddress _pool, uint256 _amount)
-        external
-        override
-    {
-        TADStorage storage ds = getTADStorage();
-        ds.unclaimedRewards[_relayerAddress][_pool] += _amount;
-    }
 
     function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
         external
@@ -67,6 +51,19 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
 
     function debug_protocolRewardsSharePrice() external view override returns (FixedPointType) {
         return _protocolRewardRelayerSharePrice(_getLatestTotalUnpaidProtocolRewards());
+    }
+
+    function debug_setBaseProtoocolRewardRate(uint256 _rate) external override {
+        getRMStorage().baseRewardRatePerMinimumStakePerSec = _rate;
+    }
+
+    function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
+        external
+        view
+        override
+        returns (uint256, uint256, FixedPointType)
+    {
+        return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
     }
 
     function test1() external {}

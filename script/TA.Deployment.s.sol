@@ -9,14 +9,12 @@ import "ta-proxy/TAProxy.sol";
 import "ta-delegation/TADelegation.sol";
 import "ta-relayer-management/TARelayerManagement.sol";
 import "ta-transaction-allocation/TATransactionAllocation.sol";
-import "ta-wormhole-application/WormholeApplication.sol";
-import "ta-common/TATypes.sol";
+import "wormhole-application/WormholeApplication.sol";
 
 import "test/modules/debug/TADebug.sol";
 import "mock/minimal-application/MinimalApplication.sol";
 import "test/modules/ITransactionAllocatorDebug.sol";
 import "test/modules/testnet-debug/TATestnetDebug.sol";
-import "test/modules/testnet-debug/interfaces/ITATestnetDebug.sol";
 import "src/mock/token/ERC20FreeMint.sol";
 
 contract TADeploymentScript is Script {
@@ -143,7 +141,7 @@ contract TADeploymentScript is Script {
 
     function deployInternalTestSetup(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
         public
-        returns (ITransactionAllocatorDebug)
+        returns (ITransactionAllocatorDebug, MinimalApplication)
     {
         // Deploy Modules
         uint256 moduleCount = 6;
@@ -173,7 +171,7 @@ contract TADeploymentScript is Script {
         vm.stopBroadcast();
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
-        return ITransactionAllocatorDebug(address(proxy));
+        return (ITransactionAllocatorDebug(address(proxy)), MinimalApplication(modules[4]));
     }
 
     function deployTestnet(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
