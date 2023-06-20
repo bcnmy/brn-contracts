@@ -119,12 +119,12 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         ta.undelegate(latestRelayerState, _r);
 
         // Shares should be destroyed
-        _assertEqFp(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
-        _assertEqFp(ta.shares(_r, _d, NATIVE_TOKEN), FP_ZERO);
+        assertEq(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
+        assertEq(ta.shares(_r, _d, NATIVE_TOKEN), FP_ZERO);
 
         // Global counters
-        _assertEqFp(ta.totalShares(r, bondTokenAddress), totalSharesBicoBefore - sharesBicoBefore);
-        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), totalSharesNativeBefore - sharesNativeBefore);
+        assertEq(ta.totalShares(r, bondTokenAddress), totalSharesBicoBefore - sharesBicoBefore);
+        assertEq(ta.totalShares(r, NATIVE_TOKEN), totalSharesNativeBefore - sharesNativeBefore);
         assertEq(ta.totalDelegation(r), totalDelegationBefore - delegation[_d]);
 
         // Check that rewards are credited
@@ -152,12 +152,12 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         _delegate(r, ridx, d0);
 
         // Check Relayer State
-        _assertEqFp(ta.shares(r, d0, bondTokenAddress), uint256(delegation[d0]).fp());
-        _assertEqFp(ta.shares(r, d0, NATIVE_TOKEN), uint256(delegation[d0]).fp());
+        assertEq(ta.shares(r, d0, bondTokenAddress), uint256(delegation[d0]).fp());
+        assertEq(ta.shares(r, d0, NATIVE_TOKEN), uint256(delegation[d0]).fp());
 
         // Check Global Counters
-        _assertEqFp(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp());
-        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0]).fp());
+        assertEq(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp());
+        assertEq(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0]).fp());
         assertEq(ta.totalDelegation(r), uint256(delegation[d0]));
 
         // Add reward for BICO
@@ -169,12 +169,12 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         // Check Relayer State
         FixedPointType expectedBondTokenSharePrice = uint256(delegation[d0] + 0.005 ether).fp().div(delegation[d0]);
         FixedPointType expectedD1BondTokenShares = uint256(delegation[d1]).fp() / expectedBondTokenSharePrice;
-        _assertEqFp(ta.shares(r, d1, bondTokenAddress), expectedD1BondTokenShares);
-        _assertEqFp(ta.shares(r, d1, NATIVE_TOKEN), uint256(delegation[d1]).fp());
+        assertEq(ta.shares(r, d1, bondTokenAddress), expectedD1BondTokenShares);
+        assertEq(ta.shares(r, d1, NATIVE_TOKEN), uint256(delegation[d1]).fp());
 
         // Check Global Counters
-        _assertEqFp(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp() + expectedD1BondTokenShares);
-        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0] + delegation[d1]).fp());
+        assertEq(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp() + expectedD1BondTokenShares);
+        assertEq(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0] + delegation[d1]).fp());
         assertEq(ta.totalDelegation(r), uint256(delegation[d2]));
 
         // Add reward for BICO
@@ -189,19 +189,19 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         expectedBondTokenSharePrice =
             uint256(delegation[d2] + 0.105 ether).fp() / (uint256(delegation[d0]).fp() + expectedD1BondTokenShares);
         FixedPointType expectedD2BondTokenShares = uint256(delegation[d2]).fp() / expectedBondTokenSharePrice;
-        _assertEqFp(ta.shares(r, d2, bondTokenAddress), expectedD2BondTokenShares);
+        assertEq(ta.shares(r, d2, bondTokenAddress), expectedD2BondTokenShares);
 
         FixedPointType expectedNativeTokenSharePrice =
             uint256(delegation[d2] + 0.1 ether).fp() / (uint256(delegation[d0] + delegation[d1]).fp());
         FixedPointType expectedD2NativeTokenShares = uint256(delegation[d2]).fp() / expectedNativeTokenSharePrice;
-        _assertEqFp(ta.shares(r, d2, NATIVE_TOKEN), expectedD2NativeTokenShares);
+        assertEq(ta.shares(r, d2, NATIVE_TOKEN), expectedD2NativeTokenShares);
 
         // Check Global Counters
-        _assertEqFp(
+        assertEq(
             ta.totalShares(r, bondTokenAddress),
             uint256(delegation[d0]).fp() + expectedD1BondTokenShares + expectedD2BondTokenShares
         );
-        _assertEqFp(
+        assertEq(
             ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0] + delegation[d1]).fp() + expectedD2NativeTokenShares
         );
         assertEq(ta.totalDelegation(r), uint256(6000 ether));

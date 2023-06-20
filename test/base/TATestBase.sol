@@ -318,15 +318,15 @@ abstract contract TATestBase is Test {
     }
 
     // Assert Utils
-    function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
+    function assertEq(FixedPointType _a, FixedPointType _b) internal {
         assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b));
     }
 
-    function _assertEqFp(FixedPointType _a, FixedPointType _b, string memory _label) internal {
+    function assertEq(FixedPointType _a, FixedPointType _b, string memory _label) internal {
         assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b), _label);
     }
 
-    function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {
+    function assertEq(RelayerAddress _a, RelayerAddress _b) internal {
         assertEq(RelayerAddress.unwrap(_a), RelayerAddress.unwrap(_b));
     }
 

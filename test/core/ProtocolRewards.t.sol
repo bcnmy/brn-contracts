@@ -43,7 +43,7 @@ contract ProtocolRewardsTest is
         for (uint256 i = 0; i < relayerCount; ++i) {
             totalShares = totalShares + ta.relayerInfo(relayerMainAddress[i]).rewardShares;
         }
-        _assertEqFp(totalShares, ta.totalProtocolRewardShares());
+        assertEq(totalShares, ta.totalProtocolRewardShares());
     }
 
     function testProtocolRewardRates() external {
@@ -76,10 +76,8 @@ contract ProtocolRewardsTest is
 
     function testRelayersShouldHaveCorrectInitialProtocolRewardShares() external {
         // At time t=0, share price = 1. Therefore shares=stake
-        _assertEqFp(
-            ta.relayerInfo(relayerMainAddress[0]).stake.fp(), ta.relayerInfo(relayerMainAddress[0]).rewardShares
-        );
-        _assertEqFp(initialExpectedRelayerShares[0], ta.relayerInfo(relayerMainAddress[0]).rewardShares);
+        assertEq(ta.relayerInfo(relayerMainAddress[0]).stake.fp(), ta.relayerInfo(relayerMainAddress[0]).rewardShares);
+        assertEq(initialExpectedRelayerShares[0], ta.relayerInfo(relayerMainAddress[0]).rewardShares);
 
         // we waited for half an epoch before registering other relayers so that the foundation relayer has accrued some rewards
         // check setUp()
@@ -90,10 +88,10 @@ contract ProtocolRewardsTest is
 
         for (uint256 i = 1; i < relayerCount; ++i) {
             RelayerAddress relayerAddress = relayerMainAddress[i];
-            _assertEqFp(
+            assertEq(
                 ta.relayerInfo(relayerAddress).stake.fp() / newSharePrice, ta.relayerInfo(relayerAddress).rewardShares
             );
-            _assertEqFp(initialExpectedRelayerShares[i], ta.relayerInfo(relayerAddress).rewardShares);
+            assertEq(initialExpectedRelayerShares[i], ta.relayerInfo(relayerAddress).rewardShares);
         }
 
         _checkTotalShares();
@@ -162,7 +160,7 @@ contract ProtocolRewardsTest is
                 REWARDS_MAX_ABSOLUTE_ERROR
             );
             assertEq(ta.relayerClaimableProtocolRewards(relayerAddress), 0);
-            _assertEqFp(ta.relayerInfo(relayerAddress).rewardShares, FP_ZERO);
+            assertEq(ta.relayerInfo(relayerAddress).rewardShares, FP_ZERO);
             _checkTotalShares();
         }
     }
@@ -209,7 +207,7 @@ contract ProtocolRewardsTest is
                 _prankRA(relayerAddress);
                 ta.unregister(latestRelayerState, _findRelayerIndex(relayerAddress));
                 _removeRelayerFromLatestState(relayerAddress);
-                _assertEqFp(ta.relayerInfo(relayerAddress).rewardShares, FP_ZERO);
+                assertEq(ta.relayerInfo(relayerAddress).rewardShares, FP_ZERO);
             }
         }
     }
@@ -287,7 +285,7 @@ contract ProtocolRewardsTest is
         assertEq(
             ta.relayerClaimableProtocolRewards(inactiveRelayer), expectedRelayerRewardsAfter100Sec[inactiveRelayerIndex]
         );
-        _assertEqFp(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
+        assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
         RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
@@ -356,7 +354,7 @@ contract ProtocolRewardsTest is
             preUnregisterDelegatorBalance + expectedDelegatorRewardsAfter100Sec[relayerIndex]
         );
         // Relayer shares should have been removed
-        _assertEqFp(ta.relayerInfo(relayer).rewardShares, FP_ZERO);
+        assertEq(ta.relayerInfo(relayer).rewardShares, FP_ZERO);
         _checkTotalShares();
         // Relayer should have no claimable rewards
         assertEq(ta.relayerClaimableProtocolRewards(relayer), 0);
@@ -417,7 +415,7 @@ contract ProtocolRewardsTest is
 
         // Total Shares should be the same
         _checkTotalShares();
-        _assertEqFp(ta.totalProtocolRewardShares(), initialShares);
+        assertEq(ta.totalProtocolRewardShares(), initialShares);
     }
 
     function testShouldPreventExitingRelayerFromClaimingProtocolRewards() external {
@@ -451,7 +449,7 @@ contract ProtocolRewardsTest is
         assertEq(
             ta.relayerClaimableProtocolRewards(inactiveRelayer), expectedRelayerRewardsAfter100Sec[inactiveRelayerIndex]
         );
-        _assertEqFp(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
+        assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
         RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
@@ -498,7 +496,7 @@ contract ProtocolRewardsTest is
         );
 
         // Shares should have destroyed
-        _assertEqFp(ta.relayerInfo(inactiveRelayer).rewardShares, FP_ZERO);
+        assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, FP_ZERO);
         // Total Shares should have decreased
         _checkTotalShares();
         assertTrue(ta.totalProtocolRewardShares() < initialShares);
@@ -530,7 +528,7 @@ contract ProtocolRewardsTest is
         assertEq(
             ta.relayerClaimableProtocolRewards(inactiveRelayer), expectedRelayerRewardsAfter100Sec[inactiveRelayerIndex]
         );
-        _assertEqFp(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
+        assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
         // Unregister the relayer
         RelayerState memory currentState = latestRelayerState;
@@ -566,7 +564,7 @@ contract ProtocolRewardsTest is
 
         // Total Shares should be the same
         _checkTotalShares();
-        _assertEqFp(ta.totalProtocolRewardShares(), initialShares);
+        assertEq(ta.totalProtocolRewardShares(), initialShares);
 
         // Claim the rewards for other relayers
         for (uint256 i = 0; i < relayerCount; ++i) {
