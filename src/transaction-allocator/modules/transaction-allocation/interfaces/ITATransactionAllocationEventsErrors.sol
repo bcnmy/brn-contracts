@@ -16,7 +16,7 @@ interface ITATransactionAllocationEventsErrors {
     error PrepaymentFailed(bytes reason);
     error GasTokenNotSuported(TokenAddress tokenAddress);
     error InvalidNonce(address sender, uint256 nonce, uint256 expectedNonce);
-    error TransactionExecutionFailed(uint256 index);
+    error TransactionExecutionFailed(uint256 index, bytes returndata);
     error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
     error CannotProcessLivenessCheckForCurrentOrFutureEpoch();
     error RelayerIndexMappingMismatch(uint256 oldIndex, uint256 newIndex);

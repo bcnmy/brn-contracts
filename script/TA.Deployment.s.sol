@@ -141,7 +141,7 @@ contract TADeploymentScript is Script {
 
     function deployInternalTestSetup(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
         public
-        returns (ITransactionAllocatorDebug)
+        returns (ITransactionAllocatorDebug, MinimalApplication)
     {
         // Deploy Modules
         uint256 moduleCount = 6;
@@ -171,7 +171,7 @@ contract TADeploymentScript is Script {
         vm.stopBroadcast();
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
-        return ITransactionAllocatorDebug(address(proxy));
+        return (ITransactionAllocatorDebug(address(proxy)), MinimalApplication(modules[4]));
     }
 
     function deployTestnet(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)

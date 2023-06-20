@@ -50,6 +50,7 @@ abstract contract TATestBase is Test {
     });
 
     ITransactionAllocatorDebug internal ta;
+    MinimalApplication internal app;
 
     uint32 nextKeyIndex;
 
@@ -152,7 +153,7 @@ abstract contract TATestBase is Test {
 
         // Deploy TA, requires --ffi
         TADeploymentScript script = new TADeploymentScript();
-        ta = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
+        (ta, app) = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
 
         _appendRelayerToLatestState(relayerMainAddress[0]);
 

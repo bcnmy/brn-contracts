@@ -80,7 +80,11 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         }
     }
 
-    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount) external override {
+    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
+        external
+        override
+        noSelfCall
+    {
         if (_relayerIndex >= _latestState.relayers.length) {
             revert InvalidRelayerIndex();
         }
@@ -136,7 +140,11 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         });
     }
 
-    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress) external override {
+    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress)
+        external
+        override
+        noSelfCall
+    {
         _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
 
         TADStorage storage ds = getTADStorage();
@@ -221,7 +229,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddress,
         DelegatorAddress _delegatorAddress
-    ) external view returns (uint256) {
+    ) external view noSelfCall returns (uint256) {
         TADStorage storage ds = getTADStorage();
 
         uint256 protocolDelegationRewards;
@@ -247,6 +255,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         external
         payable
         override
+        noSelfCall
     {
         TADStorage storage ds = getTADStorage();
 
@@ -267,7 +276,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     }
 
     ////////////////////////// Getters //////////////////////////
-    function totalDelegation(RelayerAddress _relayerAddress) external view override returns (uint256) {
+    function totalDelegation(RelayerAddress _relayerAddress) external view override noSelfCall returns (uint256) {
         return getTADStorage().totalDelegation[_relayerAddress];
     }
 
@@ -275,6 +284,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         external
         view
         override
+        noSelfCall
         returns (uint256)
     {
         return getTADStorage().delegation[_relayerAddress][_delegatorAddress];
@@ -284,6 +294,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         external
         view
         override
+        noSelfCall
         returns (FixedPointType)
     {
         return getTADStorage().shares[_relayerAddress][_delegatorAddress][_tokenAddress];
@@ -293,6 +304,7 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         external
         view
         override
+        noSelfCall
         returns (FixedPointType)
     {
         return getTADStorage().totalShares[_relayerAddress][_tokenAddress];
@@ -302,16 +314,17 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         external
         view
         override
+        noSelfCall
         returns (uint256)
     {
         return getTADStorage().unclaimedRewards[_relayerAddress][_tokenAddress];
     }
 
-    function supportedPools() external view override returns (TokenAddress[] memory) {
+    function supportedPools() external view override noSelfCall returns (TokenAddress[] memory) {
         return getTADStorage().supportedPools;
     }
 
-    function minimumDelegationAmount() external view override returns (uint256) {
+    function minimumDelegationAmount() external view override noSelfCall returns (uint256) {
         return getTADStorage().minimumDelegationAmount;
     }
 }

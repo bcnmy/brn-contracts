@@ -224,7 +224,13 @@ contract TransactionAllocationTest is
             testRun = true;
 
             _startPrankRAA(relayerAccountAddresses[relayerAddress][0]);
-            vm.expectRevert(abi.encodeWithSelector(TransactionExecutionFailed.selector, 0));
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    TransactionExecutionFailed.selector,
+                    0,
+                    abi.encodeWithSelector(IApplicationBase.RelayerNotAssignedToTransaction.selector)
+                )
+            );
             ta.execute(
                 ITATransactionAllocation.ExecuteParams({
                     reqs: allotedTransactions,

@@ -26,6 +26,13 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
 
+    modifier noSelfCall() {
+        if (msg.sender == address(this)) {
+            revert NoSelfCall();
+        }
+        _;
+    }
+
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlySelf() {
         if (msg.sender != address(this)) {

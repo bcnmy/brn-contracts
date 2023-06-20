@@ -16,6 +16,7 @@ interface ITAHelpers {
     error InvalidLatestRelayerState();
     error InvalidActiveRelayerState();
     error OnlySelf();
+    error NoSelfCall();
 
     event RelayerProtocolRewardMinted(FixedPointType indexed sharesMinted);
     event RelayerProtocolRewardSharesBurnt(
