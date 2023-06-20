@@ -93,14 +93,14 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         getRMStorage().bondToken.safeTransferFrom(msg.sender, address(this), _amount);
         TADStorage storage ds = getTADStorage();
 
-        {
-            DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
-            _mintAllPoolShares(relayerAddress, delegatorAddress, _amount);
+        // Mint Shares for all supported pools
+        DelegatorAddress delegatorAddress = DelegatorAddress.wrap(msg.sender);
+        _mintAllPoolShares(relayerAddress, delegatorAddress, _amount);
 
-            ds.delegation[relayerAddress][delegatorAddress] += _amount;
-            ds.totalDelegation[relayerAddress] += _amount;
-            emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
-        }
+        // Update global counters
+        ds.delegation[relayerAddress][delegatorAddress] += _amount;
+        ds.totalDelegation[relayerAddress] += _amount;
+        emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
 
         // Update the CDF
         _updateCdf_c(_latestState.relayers);

@@ -3,19 +3,29 @@
 pragma solidity 0.8.19;
 
 import "test/base/TATestBase.sol";
-import "ta-common/TAConstants.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
 
-// TODO: Testing mechanism needs to change
-// TODO: Add tests for delegation affecting CDF
 contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
 
-    uint256 ERROR_TOLERANCE = 0.0001e18; // 0.001%
+    uint256 constant REWARDS_MAX_ABSOLUTE_ERROR = 1; // 1 wei
+
+    TokenAddress bondTokenAddress;
+    uint256 ridx;
+    RelayerAddress r;
+    DelegatorAddress d0;
+    DelegatorAddress d1;
+    DelegatorAddress d2;
+
+    mapping(DelegatorAddress => uint256) delegation;
+    mapping(DelegatorAddress => mapping(TokenAddress => uint256)) reward;
 
     function setUp() public override {
+        // Disable protocol rewards accrual
+        deployParams.baseRewardRatePerMinimumStakePerSec = 0;
+
         super.setUp();
 
         supportedTokens.push(TokenAddress.wrap(address(bico)));
@@ -34,181 +44,208 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
             bico.approve(address(ta), type(uint256).max);
         }
 
-        // Test State
-        r0 = relayerMainAddress[0];
+        // Accrue protocol rewards for all relayers
+        vm.warp(block.timestamp + 100);
+
+        // Constants
+        bondTokenAddress = TokenAddress.wrap(address(bico));
+        ridx = 9;
+        r = relayerMainAddress[ridx];
         d0 = delegatorAddresses[0];
         d1 = delegatorAddresses[1];
-        t0 = supportedTokens[0];
-        t1 = supportedTokens[1];
+        d2 = delegatorAddresses[2];
+
+        // Validate test assumptions
+        if (ta.supportedPools().length != 2) {
+            fail("Expected 2 supported pools");
+        }
+        if (ta.supportedPools()[0] != bondTokenAddress) {
+            fail("Expected first supported pool to be BICO");
+        }
+        if (ta.supportedPools()[1] != NATIVE_TOKEN) {
+            fail("Expected second supported pool to be NATIVE_TOKEN");
+        }
+
+        delegation[d0] = 1000 ether;
+        delegation[d1] = 2000 ether;
+        delegation[d2] = 3000 ether;
     }
 
-    // Test State
-    RelayerAddress r0;
-    DelegatorAddress d0;
-    DelegatorAddress d1;
-    TokenAddress t0;
-    TokenAddress t1;
+    function _increaseRewards(RelayerAddress _r, TokenAddress _t, uint256 _amount) internal {
+        uint256 rewardsBefore = ta.unclaimedDelegationRewards(_r, _t);
+        ta.debug_increaseRewards(_r, _t, _amount);
+        assertEq(ta.unclaimedDelegationRewards(_r, _t), rewardsBefore + _amount);
 
-    mapping(RelayerAddress => mapping(DelegatorAddress => uint256)) expDelegation;
-    mapping(RelayerAddress => uint256) expTotalDelegation;
-    mapping(RelayerAddress => mapping(DelegatorAddress => mapping(TokenAddress => uint256))) expRewards;
-
-    uint256 totalDelegation = 0;
-
-    function check() internal {
-        assertEq(ta.delegation(r0, d0), expDelegation[r0][d0], "Delegation R0 D0");
-        assertEq(ta.delegation(r0, d1), expDelegation[r0][d1], "Delegation R0 D1");
-
-        assertEq(ta.totalDelegation(r0), expTotalDelegation[r0], "Total Delegation R0");
-
-        assertApproxEqRel(
-            ta.claimableDelegationRewards(r0, t0, d0), expRewards[r0][d0][t0], ERROR_TOLERANCE, "Rewards R0 T0 D0"
-        );
-        assertApproxEqRel(
-            ta.claimableDelegationRewards(r0, t0, d1), expRewards[r0][d1][t0], ERROR_TOLERANCE, "Rewards R0 T0 D1"
-        );
-        assertApproxEqRel(
-            ta.claimableDelegationRewards(r0, t1, d0), expRewards[r0][d0][t1], ERROR_TOLERANCE, "Rewards R0 T1 D0"
-        );
-        assertApproxEqRel(
-            ta.claimableDelegationRewards(r0, t1, d1), expRewards[r0][d1][t1], ERROR_TOLERANCE, "Rewards R0 T1 D1"
-        );
-    }
-
-    function delegate(RelayerAddress r, DelegatorAddress d, uint256 amount) internal {
-        _prankDa(d);
-        ta.delegate(latestRelayerState, _findRelayerIndex(r), amount);
-
-        expDelegation[r][d] += amount;
-        expTotalDelegation[r] += amount;
-    }
-
-    function undelegate(RelayerAddress r, DelegatorAddress d) internal {
-        _prankDa(d);
-        ta.undelegate(latestRelayerState, r);
-
-        expTotalDelegation[r] -= expDelegation[r][d];
-        expDelegation[r][d] = 0;
-        expRewards[r][d][t0] = 0;
-        expRewards[r][d][t1] = 0;
-    }
-
-    function increaseRewards(RelayerAddress r, TokenAddress t, uint256 amount) internal {
-        ta.debug_increaseRewards(r, t, amount);
-
-        if (t == NATIVE_TOKEN) {
-            deal(address(ta), address(ta).balance + amount);
+        if (_t == NATIVE_TOKEN) {
+            deal(address(ta), address(ta).balance + _amount);
         } else {
-            address token = TokenAddress.unwrap(t);
+            address token = TokenAddress.unwrap(_t);
             IERC20 tokenContract = IERC20(token);
-            deal(token, address(ta), amount + tokenContract.balanceOf(address(ta)));
+            deal(token, address(ta), _amount + tokenContract.balanceOf(address(ta)));
         }
     }
 
-    function testDelegation() external {
-        delegate(r0, d0, 0.01 ether);
-        check();
+    function _delegate(RelayerAddress _r, uint256 _ridx, DelegatorAddress _d) internal {
+        uint256 balanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
+        uint256 delegationBefore = ta.delegation(_r, _d);
+        if (delegation[_d] == 0) {
+            fail("Delegation amount is 0");
+        }
+        _prankDa(_d);
+        ta.delegate(latestRelayerState, _ridx, delegation[_d]);
+        assertEq(bico.balanceOf(DelegatorAddress.unwrap(_d)), balanceBefore - delegation[_d]);
+        assertEq(ta.delegation(_r, _d), delegationBefore + delegation[_d]);
 
-        delegate(r0, d1, 0.02 ether);
-        check();
+        _updateLatestStateCdf();
     }
 
-    function testAccrueDelegationRewards() external {
-        delegate(r0, d0, 0.01 ether);
-        delegate(r0, d1, 0.02 ether);
+    function _undelegate(
+        RelayerAddress _r,
+        DelegatorAddress _d,
+        bool _expectNonZeroNativeDelegationReward,
+        bool _expectNonZeroBicoDeleagationReward
+    ) internal {
+        uint256 nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
+        uint256 bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
+        uint256 totalDelegationBefore = ta.totalDelegation(r);
+        FixedPointType sharesBicoBefore = ta.shares(_r, _d, bondTokenAddress);
+        FixedPointType sharesNativeBefore = ta.shares(_r, _d, NATIVE_TOKEN);
+        FixedPointType totalSharesBicoBefore = ta.totalShares(r, bondTokenAddress);
+        FixedPointType totalSharesNativeBefore = ta.totalShares(r, NATIVE_TOKEN);
+        uint256 claimableRewardsBicoBefore = ta.claimableDelegationRewards(_r, bondTokenAddress, _d);
+        uint256 claimableRewardsNativeBefore = ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d);
 
-        increaseRewards(r0, t0, 0.001 ether);
-        expRewards[r0][d0][t0] += uint256(0.001 ether) * 1 / 3;
-        expRewards[r0][d1][t0] += uint256(0.001 ether) * 2 / 3;
-        check();
+        _prankDa(_d);
+        ta.undelegate(latestRelayerState, _r);
 
-        increaseRewards(r0, t1, 0.002 ether);
-        expRewards[r0][d0][t1] += uint256(0.002 ether) * 1 / 3;
-        expRewards[r0][d1][t1] += uint256(0.002 ether) * 2 / 3;
-        check();
+        // Shares should be destroyed
+        _assertEqFp(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
+        _assertEqFp(ta.shares(_r, _d, NATIVE_TOKEN), FP_ZERO);
 
-        delegate(r0, d0, 0.01 ether);
-        check();
+        // Global counters
+        _assertEqFp(ta.totalShares(r, bondTokenAddress), totalSharesBicoBefore - sharesBicoBefore);
+        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), totalSharesNativeBefore - sharesNativeBefore);
+        assertEq(ta.totalDelegation(r), totalDelegationBefore - delegation[_d]);
 
-        increaseRewards(r0, t0, 0.005 ether);
-        expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
-        expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
+        // Check that rewards are credited
+        assertTrue(DelegatorAddress.unwrap(_d).balance >= nativeBalanceBefore);
+        assertTrue(bico.balanceOf(DelegatorAddress.unwrap(_d)) >= bicoBalanceBefore + delegation[_d]);
+        reward[_d][NATIVE_TOKEN] = DelegatorAddress.unwrap(_d).balance - nativeBalanceBefore;
+        reward[_d][bondTokenAddress] = bico.balanceOf(DelegatorAddress.unwrap(_d)) - bicoBalanceBefore - delegation[_d];
+        assertEq(reward[_d][bondTokenAddress], claimableRewardsBicoBefore);
+        assertEq(reward[_d][NATIVE_TOKEN], claimableRewardsNativeBefore);
+
+        if (_expectNonZeroNativeDelegationReward) {
+            assertTrue(reward[_d][NATIVE_TOKEN] > 0);
+        }
+        if (_expectNonZeroBicoDeleagationReward) {
+            assertTrue(reward[_d][bondTokenAddress] > 0);
+        }
+
+        _updateLatestStateCdf();
     }
 
-    // TODO: Reach a level where abs equality is possible
-    function testClaimDelegationRewards() external {
-        delegate(r0, d0, 0.01 ether);
-        delegate(r0, d1, 0.02 ether);
+    // TODO: Test delayed CDF Updation
+    // TODO: Test reward claim
+    // TODO: Test protoocl reward accrual
+    function testTokenDelegation() external {
+        // D0 delegates
+        _delegate(r, ridx, d0);
 
-        increaseRewards(r0, t0, 0.001 ether);
-        expRewards[r0][d0][t0] += uint256(0.001 ether) * 1 / 3;
-        expRewards[r0][d1][t0] += uint256(0.001 ether) * 2 / 3;
+        // Check Relayer State
+        _assertEqFp(ta.shares(r, d0, bondTokenAddress), uint256(delegation[d0]).fp());
+        _assertEqFp(ta.shares(r, d0, NATIVE_TOKEN), uint256(delegation[d0]).fp());
 
-        increaseRewards(r0, t1, 0.002 ether);
-        expRewards[r0][d0][t1] += uint256(0.002 ether) * 1 / 3;
-        expRewards[r0][d1][t1] += uint256(0.002 ether) * 2 / 3;
+        // Check Global Counters
+        _assertEqFp(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp());
+        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0]).fp());
+        assertEq(ta.totalDelegation(r), uint256(delegation[d0]));
 
-        delegate(r0, d0, 0.01 ether);
+        // Add reward for BICO
+        _increaseRewards(r, bondTokenAddress, 0.005 ether);
 
-        increaseRewards(r0, t0, 0.005 ether);
-        expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
-        expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
+        // D1 delegates
+        _delegate(r, ridx, d1);
 
-        uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
-        uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        undelegate(r0, d0);
-        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
-        assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
+        // Check Relayer State
+        FixedPointType expectedBondTokenSharePrice = uint256(delegation[d0] + 0.005 ether).fp().div(delegation[d0]);
+        FixedPointType expectedD1BondTokenShares = uint256(delegation[d1]).fp() / expectedBondTokenSharePrice;
+        _assertEqFp(ta.shares(r, d1, bondTokenAddress), expectedD1BondTokenShares);
+        _assertEqFp(ta.shares(r, d1, NATIVE_TOKEN), uint256(delegation[d1]).fp());
 
-        uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
-        uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        undelegate(r0, d1);
-        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
-        assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
+        // Check Global Counters
+        _assertEqFp(ta.totalShares(r, bondTokenAddress), uint256(delegation[d0]).fp() + expectedD1BondTokenShares);
+        _assertEqFp(ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0] + delegation[d1]).fp());
+        assertEq(ta.totalDelegation(r), uint256(delegation[d2]));
+
+        // Add reward for BICO
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        // Add reward for Native
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+
+        // D2 delegates
+        _delegate(r, ridx, d2);
+
+        // Check Relayer State
+        expectedBondTokenSharePrice =
+            uint256(delegation[d2] + 0.105 ether).fp() / (uint256(delegation[d0]).fp() + expectedD1BondTokenShares);
+        FixedPointType expectedD2BondTokenShares = uint256(delegation[d2]).fp() / expectedBondTokenSharePrice;
+        _assertEqFp(ta.shares(r, d2, bondTokenAddress), expectedD2BondTokenShares);
+
+        FixedPointType expectedNativeTokenSharePrice =
+            uint256(delegation[d2] + 0.1 ether).fp() / (uint256(delegation[d0] + delegation[d1]).fp());
+        FixedPointType expectedD2NativeTokenShares = uint256(delegation[d2]).fp() / expectedNativeTokenSharePrice;
+        _assertEqFp(ta.shares(r, d2, NATIVE_TOKEN), expectedD2NativeTokenShares);
+
+        // Check Global Counters
+        _assertEqFp(
+            ta.totalShares(r, bondTokenAddress),
+            uint256(delegation[d0]).fp() + expectedD1BondTokenShares + expectedD2BondTokenShares
+        );
+        _assertEqFp(
+            ta.totalShares(r, NATIVE_TOKEN), uint256(delegation[d0] + delegation[d1]).fp() + expectedD2NativeTokenShares
+        );
+        assertEq(ta.totalDelegation(r), uint256(6000 ether));
     }
 
-    function testClaimDelegationRewardsAfterRelayerDeRegistration() external {
-        delegate(r0, d0, 0.01 ether);
-        delegate(r0, d1, 0.02 ether);
+    function testWithdraw() external {
+        // Delegation
+        _delegate(r, ridx, d0);
+        _increaseRewards(r, bondTokenAddress, 1 ether);
+        _delegate(r, ridx, d1);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+        _delegate(r, ridx, d2);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
 
-        increaseRewards(r0, t0, 0.001 ether);
-        expRewards[r0][d0][t0] += uint256(0.001 ether) * 1 / 3;
-        expRewards[r0][d1][t0] += uint256(0.001 ether) * 2 / 3;
+        // Undelegation by D0
+        _undelegate(r, d0, true, true);
 
-        increaseRewards(r0, t1, 0.002 ether);
-        expRewards[r0][d0][t1] += uint256(0.002 ether) * 1 / 3;
-        expRewards[r0][d1][t1] += uint256(0.002 ether) * 2 / 3;
+        // Undelegation by D1
+        _undelegate(r, d1, true, true);
 
-        delegate(r0, d0, 0.01 ether);
+        // Undelegation by D2
+        _undelegate(r, d2, true, true);
 
-        increaseRewards(r0, t0, 0.005 ether);
-        expRewards[r0][d0][t0] += uint256(0.005 ether) * 1 / 2;
-        expRewards[r0][d1][t0] += uint256(0.005 ether) * 1 / 2;
+        // Check reward values are positive
+        assertTrue(reward[d0][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d0][bondTokenAddress] > 0);
+        assertTrue(reward[d1][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d1][bondTokenAddress] > 0);
+        assertTrue(reward[d2][NATIVE_TOKEN] > 0);
+        assertTrue(reward[d2][bondTokenAddress] > 0);
 
-        _prankRA(r0);
-        ta.unregister(latestRelayerState, _findRelayerIndex(r0));
-        _removeRelayerFromLatestState(r0);
-
-        uint256 expD0t0bal = bico.balanceOf(DelegatorAddress.unwrap(d0)) + expRewards[r0][d0][t0];
-        uint256 expD0t1bal = DelegatorAddress.unwrap(d0).balance + expRewards[r0][d0][t1];
-        undelegate(r0, d0);
-        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d0)), expD0t0bal, ERROR_TOLERANCE);
-        assertApproxEqRel(DelegatorAddress.unwrap(d0).balance, expD0t1bal, ERROR_TOLERANCE);
-
-        uint256 expD1t0bal = bico.balanceOf(DelegatorAddress.unwrap(d1)) + expRewards[r0][d1][t0];
-        uint256 expD1t1bal = DelegatorAddress.unwrap(d1).balance + expRewards[r0][d1][t1];
-        undelegate(r0, d1);
-        assertApproxEqRel(bico.balanceOf(DelegatorAddress.unwrap(d1)), expD1t0bal, ERROR_TOLERANCE);
-        assertApproxEqRel(DelegatorAddress.unwrap(d1).balance, expD1t1bal, ERROR_TOLERANCE);
-    }
-
-    function testCannotDelegateToUnRegisteredRelayer() external {
-        _prankRA(r0);
-        ta.unregister(latestRelayerState, _findRelayerIndex(r0));
-        _removeRelayerFromLatestState(r0);
-
-        _prankDa(d0);
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
-        ta.delegate(latestRelayerState, _findRelayerIndex(r0), 0.01 ether);
+        // Sum of rewards should be equal to the total rewards added
+        assertApproxEqAbs(
+            reward[d0][NATIVE_TOKEN] + reward[d1][NATIVE_TOKEN] + reward[d2][NATIVE_TOKEN],
+            0.2 ether,
+            REWARDS_MAX_ABSOLUTE_ERROR
+        );
+        assertApproxEqAbs(
+            reward[d0][bondTokenAddress] + reward[d1][bondTokenAddress] + reward[d2][bondTokenAddress],
+            1.2 ether,
+            REWARDS_MAX_ABSOLUTE_ERROR
+        );
     }
 }

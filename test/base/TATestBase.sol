@@ -22,7 +22,7 @@ abstract contract TATestBase is Test {
     uint256 constant userCount = 10;
     uint256 constant initialMainAccountFunds = 1000000 ether;
     uint256 constant initialRelayerAccountFunds = 1 ether;
-    uint256 constant initialDelegatorFunds = 1 ether;
+    uint256 constant initialDelegatorFunds = 100000 ether;
     uint256 constant initialUserAccountFunds = 1 ether;
 
     TokenAddress[] internal supportedTokens;
@@ -320,6 +320,10 @@ abstract contract TATestBase is Test {
     // Assert Utils
     function _assertEqFp(FixedPointType _a, FixedPointType _b) internal {
         assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b));
+    }
+
+    function _assertEqFp(FixedPointType _a, FixedPointType _b, string memory _label) internal {
+        assertEq(FixedPointType.unwrap(_a), FixedPointType.unwrap(_b), _label);
     }
 
     function _assertEqRa(RelayerAddress _a, RelayerAddress _b) internal {

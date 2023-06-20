@@ -61,5 +61,18 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         return _protocolRewardRelayerSharePrice(_getLatestTotalUnpaidProtocolRewards());
     }
 
+    function debug_setBaseProtoocolRewardRate(uint256 _rate) external override {
+        getRMStorage().baseRewardRatePerMinimumStakePerSec = _rate;
+    }
+
+    function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
+        external
+        view
+        override
+        returns (uint256, uint256, FixedPointType)
+    {
+        return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
+    }
+
     function test1() external {}
 }

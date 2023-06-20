@@ -27,4 +27,11 @@ interface ITADebug {
     function debug_setTotalStake(uint256 _totalStake) external;
 
     function debug_protocolRewardsSharePrice() external view returns (FixedPointType);
+
+    function debug_setBaseProtoocolRewardRate(uint256 _rate) external;
+
+    function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
+        external
+        view
+        returns (uint256, uint256, FixedPointType);
 }
