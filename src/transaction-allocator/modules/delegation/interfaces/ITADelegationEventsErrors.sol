@@ -10,6 +10,8 @@ interface ITADelegationEventsErrors {
     error NoSupportedGasTokens();
     error RelayerIsActiveInPendingState();
     error InvalidRelayerIndex();
+    error InvalidTokenIndex();
+    error NativeAmountMismatch();
 
     event SharesMinted(
         RelayerAddress indexed relayerAddress,

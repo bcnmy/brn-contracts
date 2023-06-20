@@ -6,8 +6,6 @@ import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";
 
 interface ITADebug {
-    function debug_increaseRewards(RelayerAddress _relayerAddress, TokenAddress _pool, uint256 _amount) external;
-
     function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
         external
         view

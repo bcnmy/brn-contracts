@@ -71,10 +71,25 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         delegation[d2] = 3000 ether;
     }
 
+    function _findTokenIndex(TokenAddress _t) internal returns (uint256) {
+        for (uint256 i = 0; i < ta.supportedPools().length; ++i) {
+            if (ta.supportedPools()[i] == _t) {
+                return i;
+            }
+        }
+        fail("could not find token index");
+        return ta.supportedPools().length;
+    }
+
     function _increaseRewards(RelayerAddress _r, TokenAddress _t, uint256 _amount) internal {
         uint256 rewardsBefore = ta.unclaimedDelegationRewards(_r, _t);
-        ta.debug_increaseRewards(_r, _t, _amount);
+        _startPrankRA(relayerMainAddress[0]);
+        if (_t != NATIVE_TOKEN) {
+            IERC20(TokenAddress.unwrap(_t)).approve(address(ta), _amount);
+        }
+        ta.addDelegationRewards{value: _t == NATIVE_TOKEN ? _amount : 0}(_r, _findTokenIndex(_t), _amount);
         assertEq(ta.unclaimedDelegationRewards(_r, _t), rewardsBefore + _amount);
+        vm.stopPrank();
 
         if (_t == NATIVE_TOKEN) {
             deal(address(ta), address(ta).balance + _amount);
@@ -144,8 +159,6 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
 
         _updateLatestStateCdf();
     }
-
-    // TODO: Test protoocl reward accrual
 
     function testTokenDelegation() external {
         // D0 delegates
@@ -346,5 +359,18 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         // CDF hash should be updated now
         assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), false);
         assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), true);
+    }
+
+    function testShouldNotAllowAdditionOfDelegationRewardsToInvalidToken() external {
+        uint256 tokenIndex = ta.supportedPools().length;
+        vm.expectRevert(abi.encodeWithSelector(InvalidTokenIndex.selector));
+        ta.addDelegationRewards(r, tokenIndex, 1 ether);
+    }
+
+    function testShouldNotAllowAdditionOfIncorrectNativeTokenAmount() external {
+        uint256 tokenIndex = _findTokenIndex(NATIVE_TOKEN);
+        vm.expectRevert(abi.encodeWithSelector(NativeAmountMismatch.selector));
+        _prankRA(relayerMainAddress[0]);
+        ta.addDelegationRewards{value: 0.5 ether}(r, tokenIndex, 1 ether);
     }
 }

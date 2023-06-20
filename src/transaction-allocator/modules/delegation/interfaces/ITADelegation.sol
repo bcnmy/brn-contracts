@@ -16,6 +16,10 @@ interface ITADelegation is ITADelegationEventsErrors {
         DelegatorAddress _delegatorAddress
     ) external view returns (uint256);
 
+    function addDelegationRewards(RelayerAddress _relayerAddress, uint256 _tokenIndex, uint256 _amount)
+        external
+        payable;
+
     ////////////////////////// Getters //////////////////////////
     function totalDelegation(RelayerAddress _relayerAddress) external view returns (uint256);
 

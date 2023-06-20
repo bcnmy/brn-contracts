@@ -234,6 +234,29 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
         return rewards.u256();
     }
 
+    function addDelegationRewards(RelayerAddress _relayerAddress, uint256 _tokenIndex, uint256 _amount)
+        external
+        payable
+        override
+    {
+        TADStorage storage ds = getTADStorage();
+
+        if (_tokenIndex >= ds.supportedPools.length) {
+            revert InvalidTokenIndex();
+        }
+        TokenAddress tokenAddress = ds.supportedPools[_tokenIndex];
+
+        // Accept the tokens
+        if (tokenAddress != NATIVE_TOKEN) {
+            IERC20(TokenAddress.unwrap(tokenAddress)).safeTransferFrom(msg.sender, address(this), _amount);
+        } else if (msg.value != _amount) {
+            revert NativeAmountMismatch();
+        }
+
+        // Add to unclaimed rewards
+        _addDelegatorRewards(_relayerAddress, tokenAddress, _amount);
+    }
+
     ////////////////////////// Getters //////////////////////////
     function totalDelegation(RelayerAddress _relayerAddress) external view override returns (uint256) {
         return getTADStorage().totalDelegation[_relayerAddress];

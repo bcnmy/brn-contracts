@@ -11,14 +11,6 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     using RAArrayHelper for RelayerAddress[];
     using VersionManager for VersionManager.VersionManagerState;
 
-    function debug_increaseRewards(RelayerAddress _relayerAddress, TokenAddress _pool, uint256 _amount)
-        external
-        override
-    {
-        TADStorage storage ds = getTADStorage();
-        ds.unclaimedRewards[_relayerAddress][_pool] += _amount;
-    }
-
     function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
         external
         view
