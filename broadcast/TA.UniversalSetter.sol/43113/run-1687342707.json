@@ -1,0 +1,36 @@
+{
+  "transactions": [
+    {
+      "hash": "0x09e05b2bc9a65092ee0badd90702f08f5f5e3ec2a6d11f6365676b5d4798b463",
+      "transactionType": "CALL",
+      "contractName": "TAProxy",
+      "contractAddress": "0xC5C04dEc932138935b6c1A31206e1FB63e2f5527",
+      "function": null,
+      "arguments": null,
+      "rpc": "https://api.avax-test.network/ext/bc/C/rpc",
+      "transaction": {
+        "type": "0x02",
+        "from": "0xda861c9dccff6d1fef7cae71b5b538af25063404",
+        "to": "0xc5c04dec932138935b6c1a31206e1fb63e2f5527",
+        "gas": "0xb5cf",
+        "value": "0x0",
+        "data": "0x86189c24634ef3da1ada1a5b340b906d283ef12f480d23abc23b37026c3bba534aa9f7cc0000000000000000000000000000000000000000000000000000000000000014",
+        "nonce": "0x316",
+        "accessList": []
+      },
+      "additionalContracts": [],
+      "isFixedGasLimit": false
+    }
+  ],
+  "receipts": [],
+  "libraries": [],
+  "pending": [
+    "0x09e05b2bc9a65092ee0badd90702f08f5f5e3ec2a6d11f6365676b5d4798b463"
+  ],
+  "path": "/Users/ankurdubey/Code/biconomy/brn/POC-DRN/broadcast/TA.UniversalSetter.sol/43113/run-latest.json",
+  "returns": {},
+  "timestamp": 1687342707,
+  "chain": 43113,
+  "multi": false,
+  "commit": "8c1eae5"
+}

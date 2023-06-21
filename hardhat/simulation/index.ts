@@ -16,10 +16,10 @@ import { metrics } from './metrics';
   // Initialize the foundation relayer
   relayers.push(
     new Relayer(
-      process.env.FOUNDATION_RELAYER_PRIVATE_KEY!,
+      process.env.ANVIL_DEFAULT_PRIVATE_KEY!,
       (
         await config.transactionAllocator.relayerInfo(
-          new Wallet(process.env.FOUNDATION_RELAYER_PRIVATE_KEY!, config.httpProvider).address
+          new Wallet(process.env.ANVIL_DEFAULT_PRIVATE_KEY!, config.httpProvider).address
         )
       ).stake,
       mempool

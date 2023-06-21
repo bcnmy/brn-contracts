@@ -24,7 +24,7 @@ config.transactionAllocatorWs.on(
   // Default Case
   const defaultHash = '0x8ebc1cb924d705d3d4201a6d0a45bfd5db9e0a7f2203d4ec44da62b0f1233ed9';
   const foundationRelayerAddress = new Wallet(
-    process.env.FOUNDATION_RELAYER_PRIVATE_KEY!,
+    process.env.ANVIL_DEFAULT_PRIVATE_KEY!,
     config.httpProvider
   ).address;
   const relayers = [foundationRelayerAddress];
