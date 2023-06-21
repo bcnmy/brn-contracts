@@ -1,4 +1,6 @@
 # Mumbai (Source Chain)
+WormholeDeliveryProvider: 0x222E53bfA14e8686a165d0b88779535eA7C13eA7
+MockWormholeReceiver: 0x7A7771c89CDfEd3dFb92DEEaFaca4472a14b01Ba 
 
 # Fuji (Destination Chain)
 Token: 0xF9C3e58C6ca8DF57F5BC94c7ecCCABFaE3845068
@@ -10,3 +12,5 @@ TAModules:
   TATransactionAllocation: 0x429B60441fAEF5bE5777E8Ea678b568ADb98EFe5
   TATestnetDebug: 0x1E68611A3ab1C42cC6c51809fe714588Dac6C5d8
   Wormhole Application: 0x7Ed89F5fDC1a90474198532deFFcAD878B0F54a5
+WormholeDeliveryProvider: 0xFc42BfbbA51B448c2A82e0f8d85064486352D0f7
+MockWormholeReceiver: 0xB9B32A13C612eC7E6Ad804f9C052992b0131aA3C 

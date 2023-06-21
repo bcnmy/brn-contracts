@@ -10,4 +10,13 @@ ffi = true
 gas_price = 20000000000
 via_ir = false
 
+[etherscan]
+goerli = { key = "${ETHEREUM_ETHERSCAN_API_KEY}" }
+mumbai = { key = "${POLYGON_ETHERSCAN_API_KEY}" }
+fuji = { key = "${AVALANCHE_ETHERSCAN_API_KEY}" }
+bsc = { key = "${BSC_ETHERSCAN_API_KEY}" }
+optimism = { key = "${OPTIMISM_ETHERSCAN_API_KEY}" }
+arbitrum = { key = "${ARBITRUM_ETHERSCAN_API_KEY}" }
+fantom = { key = "${FANTOM_ETHERSCAN_API_KEY}" }
+
 # See more config options https://github.com/foundry-rs/foundry/tree/master/config
