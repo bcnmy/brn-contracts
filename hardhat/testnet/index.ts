@@ -43,19 +43,19 @@ const initializeWormholeApplication = async () => {
   await relayers[0].init();
 
   // Initialize rest of the relayers
-  // for (let i = 1; i < config.relayerCount; i++) {
-  //   const stake = (await targetChain.transactionAllocator.minimumStakeAmount()).mul(i);
-  //   const relayer = new Relayer(
-  //     Wallet.fromMnemonic(
-  //       process.env.RELAYER_GENERATION_SEED_PHRASE!,
-  //       `m/44'/60'/0'/0/${i}`
-  //     ).privateKey,
-  //     stake,
-  //     mempool
-  //   );
-  //   await relayer.init();
-  //   relayers.push(relayer);
-  // }
+  for (let i = 1; i < config.relayerCount; i++) {
+    const stake = (await targetChain.transactionAllocator.minimumStakeAmount()).mul(i);
+    const relayer = new Relayer(
+      Wallet.fromMnemonic(
+        process.env.RELAYER_GENERATION_SEED_PHRASE!,
+        `m/44'/60'/0'/0/${i}`
+      ).privateKey,
+      stake,
+      mempool
+    );
+    await relayer.init();
+    relayers.push(relayer);
+  }
 
   // Start the relayers
   for (const relayer of relayers) {
