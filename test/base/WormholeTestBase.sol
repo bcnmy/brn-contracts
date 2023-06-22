@@ -168,7 +168,7 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
     function _overrideWormholeRelayerCode(IWormholeRelayer _relayer, IWormhole _wormhole) internal {
         // Deploy a copy of the WormholeRelayer contract with the new Wormhole address
         bytes memory args = abi.encode(_wormhole);
-        bytes memory bytecode = abi.encodePacked(vm.getCode("WormholeRelayerCopy.sol:WormholeRelayerCopy"), args);
+        bytes memory bytecode = abi.encodePacked(vm.getCode("WormholeRelayerMock.sol:WormholeRelayerMock"), args);
         require(bytecode.length > 0, "Invalid Bytecode");
         address deployed;
         assembly {
