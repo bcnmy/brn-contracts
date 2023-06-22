@@ -121,7 +121,7 @@ const config = {
   generationIntervalSec: 10000,
   relayerCount: 3,
   inactiveRelayers: [ethers.constants.AddressZero],
-  executionGasLimit: 50000,
+  executionGasLimit: 100000,
   wormholePollingIntervalMs: 1000,
   wormholeRpc: 'https://wormhole-v2-testnet-api.certus.one',
 };

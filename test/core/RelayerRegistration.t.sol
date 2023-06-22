@@ -4,12 +4,85 @@ pragma solidity 0.8.19;
 
 import "test/base/TATestBase.sol";
 import "ta-relayer-management/interfaces/ITARelayerManagementEventsErrors.sol";
+import "ta-transaction-allocation/interfaces/ITATransactionAllocationEventsErrors.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 
-contract RelayerRegistrationTest is TATestBase, ITARelayerManagementEventsErrors, ITAHelpers {
+contract RelayerRegistrationTest is
+    TATestBase,
+    ITARelayerManagementEventsErrors,
+    ITATransactionAllocationEventsErrors,
+    ITAHelpers
+{
     function testRelayerRegistration() external {
         RelayerState memory currentState = latestRelayerState;
         uint256 totalStake = initialRelayerStake[relayerMainAddress[0]];
+
+        for (uint256 i = 1; i < relayerCount; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+
+            _prankRA(relayerAddress);
+            bico.approve(address(ta), initialRelayerStake[relayerAddress]);
+
+            vm.expectEmit(true, true, true, true);
+            emit RelayerRegistered(
+                relayerAddress,
+                endpoint,
+                relayerAccountAddresses[relayerAddress],
+                initialRelayerStake[relayerAddress],
+                delegatorPoolPremiumShare
+            );
+            _prankRA(relayerAddress);
+            ta.register(
+                latestRelayerState,
+                initialRelayerStake[relayerAddress],
+                relayerAccountAddresses[relayerAddress],
+                endpoint,
+                delegatorPoolPremiumShare
+            );
+            _appendRelayerToLatestState(relayerAddress);
+
+            // Relayer State
+            assertEq(ta.relayerInfo(relayerAddress).stake, initialRelayerStake[relayerAddress]);
+            assertEq(ta.relayerInfo(relayerAddress).endpoint, endpoint);
+            assertEq(ta.relayerInfo(relayerAddress).status == RelayerStatus.Active, true);
+            assertEq(ta.relayerInfo(relayerAddress).delegatorPoolPremiumShare == delegatorPoolPremiumShare, true);
+
+            for (uint256 j = 0; j < relayerAccountAddresses[relayerAddress].length; j++) {
+                assertEq(ta.relayerInfo_isAccount(relayerAddress, relayerAccountAddresses[relayerAddress][j]), true);
+            }
+
+            // Global Counters
+            totalStake += initialRelayerStake[relayerAddress];
+            assertEq(ta.relayerCount(), i + 1);
+            assertEq(ta.totalStake(), totalStake);
+
+            // Check if the CDF Entries are correct
+            _checkCdfInLatestState();
+        }
+
+        assertEq(latestRelayerState.cdf.length, relayerCount);
+        assertEq(latestRelayerState.relayers.length, relayerCount);
+
+        // Verify that at this point of time, CDF hash has not been updated
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), true);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), false);
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+
+        // CDF hash should be updated now
+        assertEq(ta.debug_verifyRelayerStateAtWindow(currentState, ta.debug_currentWindowIndex()), false);
+        assertEq(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()), true);
+    }
+
+    function testSystemShouldFunctionIfNoNonFoundationRelayersRegisterInFirstEpoch() external {
+        RelayerState memory currentState = latestRelayerState;
+        uint256 totalStake = initialRelayerStake[relayerMainAddress[0]];
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
 
         for (uint256 i = 1; i < relayerCount; i++) {
             RelayerAddress relayerAddress = relayerMainAddress[i];

@@ -16,18 +16,18 @@ import { IWormholeApplication__factory } from '../../typechain-types/factories/s
 export class Mempool {
   pool: Set<string> = new Set();
 
-  hashes = ['0x5874f826f629cfd7a177bd8ecadb0b0e0532ada382b5c0bc6a7f7df2468197a2'];
+  hashes = [];
 
   public async init() {
-    // await this.generateTransaction();
-    // setInterval(async () => {
-    //   await this.generateTransaction();
-    // }, config.generationIntervalSec * 1000);
-    this.processMockWormholeReceiverSourceTransactionReceipts(
-      await Promise.all(
-        this.hashes.map(async (hash) => config.sourceChain.httpProvider.getTransactionReceipt(hash))
-      )
-    );
+    await this.generateTransaction();
+    setInterval(async () => {
+      await this.generateTransaction();
+    }, config.generationIntervalSec * 1000);
+    // this.processMockWormholeReceiverSourceTransactionReceipts(
+    //   await Promise.all(
+    //     this.hashes.map(async (hash) => config.sourceChain.httpProvider.getTransactionReceipt(hash))
+    //   )
+    // );
   }
 
   private async generateTransaction() {
