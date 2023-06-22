@@ -9,7 +9,7 @@ import "wormhole-application/BRNWormholeDeliveryProvider.sol";
 import "src/mock/wormhole/MockWormholeReceiver.sol";
 import "src/library/AddressUtils.sol";
 
-// TODO: Add code to verify deployment
+// TODO: Add code to verify deployment paramters (not etherscan)
 contract WormholeDeployer is Script {
     using AddressUtils for address;
 

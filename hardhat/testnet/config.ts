@@ -20,7 +20,7 @@ const addresses = {
   },
   43113: {
     Token: '0xF9C3e58C6ca8DF57F5BC94c7ecCCABFaE3845068',
-    TAProxy: '0xC5C04dEc932138935b6c1A31206e1FB63e2f5527',
+    TAProxy: '0x8a4ac83708C95534cfdC3F00833FFdAB3e8ba997',
     WormholeDeliveryProvider: '0xFc42BfbbA51B448c2A82e0f8d85064486352D0f7',
     MockWormholeReceiver: '0xB9B32A13C612eC7E6Ad804f9C052992b0131aA3C',
     WormholeCore: '0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C',

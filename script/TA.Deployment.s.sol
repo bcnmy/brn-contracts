@@ -17,8 +17,13 @@ import "test/modules/ITransactionAllocatorDebug.sol";
 import "test/modules/testnet-debug/TATestnetDebug.sol";
 import "src/mock/token/ERC20FreeMint.sol";
 
+// TODO: create2/create3 + refactoring
+
 contract TADeploymentScript is Script {
     error EmptyDeploymentConfigPath();
+
+    IWormhole public wormhole = IWormhole(0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C);
+    IWormholeRelayer public wormholeRelayer = IWormholeRelayer(0xA3cF45939bD6260bcFe3D66bc73d60f19e49a8BB);
 
     function run() external returns (ITransactionAllocator) {
         // Load Deployment Config
@@ -211,6 +216,8 @@ contract TADeploymentScript is Script {
         vm.stopBroadcast();
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
+        _wormholeModuleSetup(_deployerPrivateKey, proxy, IWormhole(wormhole), IWormholeRelayer(wormholeRelayer));
+
         return ITransactionAllocatorDebug(address(proxy));
     }
 
@@ -224,6 +231,16 @@ contract TADeploymentScript is Script {
         token.mint(vm.addr(_foundationRelayerPrivateKey), _params.minimumStakeAmount);
         token.approve(_expectedTransactionAllocatorAddress, _params.minimumStakeAmount);
         vm.stopBroadcast();
+    }
+
+    function _wormholeModuleSetup(
+        uint256 _deployerPrivateKey,
+        TAProxy _app,
+        IWormhole _wormholeCore,
+        IWormholeRelayer _wormholeRelayer
+    ) internal {
+        vm.broadcast(_deployerPrivateKey);
+        IWormholeApplication(address(_app)).initializeWormholeApplication(_wormholeCore, _wormholeRelayer);
     }
 
     function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory selectors) {
