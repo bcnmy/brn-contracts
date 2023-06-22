@@ -31,14 +31,14 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     // State Related to the oracles.
     mapping(WormholeChainId chainId => GasPrice) public gasPrice;
     mapping(WormholeChainId chainId => WeiPrice) public nativeCurrencyPrice;
-    mapping(WormholeChainId chainId => Gas) public deliveyrGasOverhead;
+    mapping(WormholeChainId chainId => Gas) public deliveryGasOverhead;
     mapping(WormholeChainId chainId => Wei) public maximumBudget;
     mapping(WormholeChainId chainId => bool) private isWormholeChainSupported;
     mapping(WormholeChainId chainId => bytes32) public brnRelayerProviderAddress;
     mapping(WormholeChainId chainId => AssetConversion) public assetConversionBuffer;
 
     // State for BRN Accounting
-    mapping(WormholeChainId chainId => bytes32) brnTransactionAllocatorAddress;
+    mapping(WormholeChainId chainId => bytes32) public brnTransactionAllocatorAddress;
     mapping(uint256 deliveryVAASequenceNumber => uint256 nativeTokenAmount) public fundsDepositedForRelaying;
 
     constructor(IWormhole _wormhole, IWormholeRelayer _relayer, address _owner) Ownable(_owner) {
@@ -134,7 +134,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
 
     //Returns the delivery overhead fee required to deliver a message to the target chain, denominated in this chain's wei.
     function quoteDeliveryOverhead(WormholeChainId targetChain) public view returns (Wei nativePriceQuote) {
-        Gas overhead = deliveyrGasOverhead[targetChain];
+        Gas overhead = deliveryGasOverhead[targetChain];
         Wei targetFees = overhead.toWei(gasPrice[targetChain]);
         Wei result = assetConversion(targetChain, targetFees, chainId);
         require(result.unwrap() <= type(uint128).max, "Overflow");
@@ -323,7 +323,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     }
 
     function setDeliverGasOverhead(WormholeChainId targetChain, Gas deliverGasOverhead_) external override onlyOwner {
-        deliveyrGasOverhead[targetChain] = deliverGasOverhead_;
+        deliveryGasOverhead[targetChain] = deliverGasOverhead_;
     }
 
     function setMaximumBudget(WormholeChainId targetChain, Wei maximumBudget_) external override onlyOwner {

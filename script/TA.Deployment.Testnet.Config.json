@@ -1,7 +1,7 @@
 {
-  "blocksPerWindow": 2,
+  "blocksPerWindow": 20,
   "epochLengthInSec": 4500,
-  "relayersPerWindow": 4,
+  "relayersPerWindow": 2,
   "jailTimeInSec": 100,
   "withdrawDelayInSec": 50,
   "absencePenaltyPercentage": 200,
@@ -11,10 +11,13 @@
   "baseRewardRatePerMinimumStakePerSec": 1003000000000,
   "relayerStateUpdateDelayInWindows": 1,
   "livenessZParameter": 4000000000000000000000000,
-  "bondToken": "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-  "supportedTokens": ["0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"],
-  "foundationRelayerAddress": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-  "foundationRelayerAccountAddresses": ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8"],
+  "bondToken": "0xF9C3e58C6ca8DF57F5BC94c7ecCCABFaE3845068",
+  "supportedTokens": [
+    "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "0xF9C3e58C6ca8DF57F5BC94c7ecCCABFaE3845068"
+  ],
+  "foundationRelayerAddress": "0x5Fb1684D707Eb68d18808aaAECbc3A4B2ba50DAD",
+  "foundationRelayerAccountAddresses": ["0x5Fb1684D707Eb68d18808aaAECbc3A4B2ba50DAD"],
   "foundationRelayerStake": 10000000000000000000000,
   "foundationRelayerEndpoint": "https://api.abc.com",
   "foundationDelegatorPoolPremiumShare": 0

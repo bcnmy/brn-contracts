@@ -11,5 +11,13 @@ contract ERC20FreeMint is ERC20 {
         _mint(to, amount);
     }
 
+    function batchMint(address[] calldata to, uint256[] calldata amount) external {
+        require(to.length == amount.length, "ERC20FreeMint: length mismatch");
+
+        for (uint256 i = 0; i < to.length; i++) {
+            _mint(to[i], amount[i]);
+        }
+    }
+
     function test() external {}
 }

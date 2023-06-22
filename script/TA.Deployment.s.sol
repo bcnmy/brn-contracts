@@ -17,8 +17,13 @@ import "test/modules/ITransactionAllocatorDebug.sol";
 import "test/modules/testnet-debug/TATestnetDebug.sol";
 import "src/mock/token/ERC20FreeMint.sol";
 
+// TODO: create2/create3 + refactoring
+
 contract TADeploymentScript is Script {
     error EmptyDeploymentConfigPath();
+
+    IWormhole public wormhole = IWormhole(0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C);
+    IWormholeRelayer public wormholeRelayer = IWormholeRelayer(0xA3cF45939bD6260bcFe3D66bc73d60f19e49a8BB);
 
     function run() external returns (ITransactionAllocator) {
         // Load Deployment Config
@@ -178,9 +183,6 @@ contract TADeploymentScript is Script {
         public
         returns (ITransactionAllocatorDebug)
     {
-        // Deploy Token
-        _params.bondTokenAddress = _deployTestToken(_deployerPrivateKey);
-
         // Foundation Relayer Setup
         address deployer = vm.addr(_deployerPrivateKey);
         _foundationRelayerSetup(
@@ -208,21 +210,15 @@ contract TADeploymentScript is Script {
         modules[3] = address(new TATestnetDebug());
         selectors[3] = _generateSelectors("TATestnetDebug");
 
-        modules[4] = address(new MinimalApplication());
-        selectors[4] = _generateSelectors("MinimalApplication");
+        modules[4] = address(new WormholeApplication());
+        selectors[4] = _generateSelectors("WormholeApplication");
 
         vm.stopBroadcast();
         TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
-        return ITransactionAllocatorDebug(address(proxy));
-    }
+        _wormholeModuleSetup(_deployerPrivateKey, proxy, IWormhole(wormhole), IWormholeRelayer(wormholeRelayer));
 
-    function _deployTestToken(uint256 _deployerPrivateKey) internal returns (TokenAddress) {
-        vm.startBroadcast(_deployerPrivateKey);
-        ERC20FreeMint token = new ERC20FreeMint("Bond Token", "BOND");
-        console2.log("Bond Token address: ", address(token));
-        vm.stopBroadcast();
-        return TokenAddress.wrap(address(token));
+        return ITransactionAllocatorDebug(address(proxy));
     }
 
     function _foundationRelayerSetup(
@@ -235,6 +231,16 @@ contract TADeploymentScript is Script {
         token.mint(vm.addr(_foundationRelayerPrivateKey), _params.minimumStakeAmount);
         token.approve(_expectedTransactionAllocatorAddress, _params.minimumStakeAmount);
         vm.stopBroadcast();
+    }
+
+    function _wormholeModuleSetup(
+        uint256 _deployerPrivateKey,
+        TAProxy _app,
+        IWormhole _wormholeCore,
+        IWormholeRelayer _wormholeRelayer
+    ) internal {
+        vm.broadcast(_deployerPrivateKey);
+        IWormholeApplication(address(_app)).initializeWormholeApplication(_wormholeCore, _wormholeRelayer);
     }
 
     function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory selectors) {

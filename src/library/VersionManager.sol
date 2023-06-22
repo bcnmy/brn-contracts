@@ -14,6 +14,7 @@ library VersionManager {
 
     function initialize(VersionManagerState storage _v, bytes32 _currentHash) internal {
         _v.slot1 = _currentHash;
+        _v.slot2 = _currentHash;
     }
 
     function activeStateHash(VersionManagerState storage _v, uint256 _currentTime) internal view returns (bytes32) {
