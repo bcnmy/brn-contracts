@@ -31,12 +31,12 @@ const addresses = {
 const providers = {
   80001: {
     rpc: process.env.MUMBAI_RPC_URL!,
-    httpProvider: new ethers.providers.JsonRpcBatchProvider(process.env.MUMBAI_RPC_URL!),
+    httpProvider: new ethers.providers.JsonRpcProvider(process.env.MUMBAI_RPC_URL!),
     wsProvider: new ethers.providers.WebSocketProvider(process.env.MUMBAI_WS_URL!),
   },
   43113: {
     rpc: process.env.FUJI_RPC_URL!,
-    httpProvider: new ethers.providers.JsonRpcBatchProvider(process.env.FUJI_RPC_URL!),
+    httpProvider: new ethers.providers.JsonRpcProvider(process.env.FUJI_RPC_URL!),
     wsProvider: new ethers.providers.WebSocketProvider(process.env.FUJI_WS_URL!),
   },
 };
@@ -117,8 +117,8 @@ const config = {
       providers[targetChain].httpProvider
     ),
   },
-  transactionsPerGenerationInterval: 1,
-  generationIntervalSec: 10000,
+  transactionsPerGenerationInterval: 2,
+  generationIntervalSec: 10,
   relayerCount: 3,
   inactiveRelayers: [ethers.constants.AddressZero],
   executionGasLimit: 100000,

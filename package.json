@@ -40,6 +40,7 @@
     "@improbable-eng/grpc-web-node-http-transport": "^0.15.0",
     "@nomiclabs/hardhat-ethers": "^2.2.2",
     "async-lock": "^1.4.0",
+    "crypto": "^1.0.1",
     "csv-writer": "^1.6.0",
     "dotenv": "^16.1.0",
     "js-priority-queue": "^0.1.5",

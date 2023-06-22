@@ -38,6 +38,7 @@ export class Relayer {
 
   public async init() {
     this.windowLength = (await transactionAllocator.blocksPerWindow()).toNumber();
+    console.log(`Relayer ${this.wallet.address}: Window Length: ${this.windowLength}`);
     this.nonceManager = await NonceManagerFactory.getNonceManager(this.wallet);
 
     // Fund Relayer
@@ -193,12 +194,13 @@ export class Relayer {
     // Submit transactions
     console.log(`Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`);
     try {
-      const value = parseEther('0.4');
+      const values = new Array(txnAllocated.length).fill(parseEther('0.02'));
+      const value = values.reduce((a, b) => a.add(b), BigNumber.from(0));
       await logTransaction(
         transactionAllocator.connect(this.wallet).execute(
           {
             reqs: txnAllocated,
-            forwardedNativeAmounts: [value],
+            forwardedNativeAmounts: values,
             relayerIndex,
             relayerGenerationIterationBitmap: relayerGenerationIterations,
             activeState: currentState,
@@ -209,7 +211,6 @@ export class Relayer {
             ),
           },
           {
-            // gasLimit: 1000000,
             nonce: await this.nonceManager!.getNextNonce(),
             value,
           }

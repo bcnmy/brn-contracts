@@ -1,10 +1,9 @@
-import { solidityKeccak256 } from 'ethers/lib/utils';
+import { AbiCoder, solidityKeccak256 } from 'ethers/lib/utils';
 import { config } from './config';
 import { NonceManagerFactory } from './nonce-manager';
 import { logTransaction } from './utils';
-import { ContractReceipt, constants } from 'ethers';
+import { ContractReceipt } from 'ethers';
 import {
-  parseSequenceFromLogEth,
   getSignedVAA,
   ChainId,
   getEmitterAddressEth,
@@ -12,6 +11,7 @@ import {
 } from '@certusone/wormhole-sdk';
 import { NodeHttpTransport } from '@improbable-eng/grpc-web-node-http-transport';
 import { IWormholeApplication__factory } from '../../typechain-types/factories/src/wormhole/interfaces';
+import { randomInt } from 'crypto';
 
 export class Mempool {
   pool: Set<string> = new Set();
@@ -47,7 +47,7 @@ export class Mempool {
             .connect(txGenerator)
             .sendPayload(
               targetWormholeChainId,
-              solidityKeccak256(['uint256'], [Math.floor(Math.random() * 1000000)]),
+              new AbiCoder().encode(['uint256'], [randomInt(100000)]),
               config.executionGasLimit,
               0,
               targetReceiver.address,

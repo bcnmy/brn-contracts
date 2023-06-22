@@ -1,7 +1,7 @@
 {
-  "blocksPerWindow": 2,
+  "blocksPerWindow": 20,
   "epochLengthInSec": 4500,
-  "relayersPerWindow": 4,
+  "relayersPerWindow": 2,
   "jailTimeInSec": 100,
   "withdrawDelayInSec": 50,
   "absencePenaltyPercentage": 200,

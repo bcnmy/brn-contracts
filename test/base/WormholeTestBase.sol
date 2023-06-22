@@ -179,6 +179,26 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
         vm.etch(address(_relayer), deployed.code);
     }
 
+    function _overrideMockWormholeReceiver(
+        MockWormholeReceiver _receiver,
+        IWormholeRelayer _relayer,
+        IWormhole _wormhole,
+        IBRNWormholeDeliveryProvider _deliveryProvider,
+        WormholeChainId _chainId
+    ) internal {
+        // Deploy a copy of the WormholeRelayer contract with the new Wormhole address
+        bytes memory args = abi.encode(_wormhole, _deliveryProvider, _relayer, _chainId);
+        bytes memory bytecode = abi.encodePacked(vm.getCode("MockWormholeReceiver.sol:MockWormholeReceiver"), args);
+        require(bytecode.length > 0, "Invalid Bytecode");
+        address deployed;
+        assembly {
+            deployed := create(0, add(bytecode, 0x20), mload(bytecode))
+        }
+
+        // Override the bytecode of the existing WormholeRelayer contract
+        vm.etch(address(_receiver), deployed.code);
+    }
+
     function _signWormholeVM(IWormhole.VM memory _vm, WormholeChainId _emitterChain) internal returns (bytes memory) {
         _vm.emitterChainId = WormholeChainId.unwrap(_emitterChain);
         _vm.version = wormholeVMVersion;
