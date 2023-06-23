@@ -21,7 +21,10 @@ transactionAllocatorWs.on(
   'NewRelayerState',
   (latestHash: string, latestRelayerState: RelayerStateStruct) => {
     console.log(`State Tracker: Received NewRelayerState event with hash: ${latestHash}`);
-    hashToRelayerState[latestHash] = latestRelayerState;
+    hashToRelayerState[latestHash] = {
+      cdf: latestRelayerState.cdf,
+      relayers: latestRelayerState.relayers,
+    };
 
     // Write hashToRelayerState to a file
     fs.writeFileSync(hashToRelayerStatePath, JSON.stringify(hashToRelayerState));

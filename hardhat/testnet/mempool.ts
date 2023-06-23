@@ -19,10 +19,13 @@ export class Mempool {
   hashes = [];
 
   public async init() {
+    // Generate new VAA transactions
     await this.generateTransaction();
     setInterval(async () => {
       await this.generateTransaction();
     }, config.generationIntervalSec * 1000);
+
+    // Process Existing VAAs
     // this.processMockWormholeReceiverSourceTransactionReceipts(
     //   await Promise.all(
     //     this.hashes.map(async (hash) => config.sourceChain.httpProvider.getTransactionReceipt(hash))

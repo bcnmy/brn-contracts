@@ -220,6 +220,7 @@ export class Relayer {
       // Delete transactions from mempool
       console.log(`Relayer ${this.wallet.address}: Deleting transactions from mempool`);
     } catch (e) {
+      console.log(e);
       process.exit(1);
     }
 
