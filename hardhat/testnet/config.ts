@@ -93,7 +93,7 @@ const config = {
     wormholeCoreAddress: addresses[targetChain].WormholeCore,
     wormholeRelayerAddress: addresses[targetChain].WormholeRelayer,
     fundingWallet: new ethers.Wallet(process.env.PRIVATE_KEY!, providers[targetChain].httpProvider),
-    fundingAmount: ethers.utils.parseEther('0.01'),
+    fundingAmount: ethers.utils.parseEther('0.5'),
     taDeploymentBlock: 23333519,
     ...providers[targetChain],
     bondToken: ERC20FreeMint__factory.connect(
