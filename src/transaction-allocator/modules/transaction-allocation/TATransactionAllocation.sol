@@ -6,6 +6,8 @@ import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "ta-common/TAHelpers.sol";
 
+import "forge-std/console2.sol";
+
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     using SafeCast for uint256;
     using FixedPointTypeHelper for FixedPointType;
@@ -263,7 +265,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 epochEndTimestamp;
         uint256 updatedUnpaidProtocolRewards;
         uint256 stakeThresholdForJailing;
-        FixedPointType totalTransactionsInEpoch;
+        uint256 totalTransactionsInEpoch;
+        FixedPointType zScoreSquared;
         FixedPointType updatedSharePrice;
         // State
         uint256 activeRelayersJailedCount;
@@ -286,12 +289,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         state.epochEndTimestamp = ta.epochEndTimestamp;
         state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
         state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
-        state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp].fp();
+        state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp];
+        state.zScoreSquared = ta.livenessZParameter;
+        state.zScoreSquared = state.zScoreSquared * state.zScoreSquared;
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
         delete ta.totalTransactionsSubmitted[state.epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
-        if (state.totalTransactionsInEpoch == FP_ZERO) {
+        if (state.totalTransactionsInEpoch == 0) {
             emit NoTransactionsSubmittedInEpoch();
             return;
         }
@@ -321,7 +326,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ) internal {
         if (
             _verifyRelayerLiveness(
-                _activeRelayerState, _relayerIndex, _state.epochEndTimestamp, _state.totalTransactionsInEpoch
+                _activeRelayerState,
+                _relayerIndex,
+                _state.epochEndTimestamp,
+                _state.totalTransactionsInEpoch,
+                _state.zScoreSquared
             )
         ) {
             return;
@@ -499,10 +508,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     function calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
-        FixedPointType _totalTransactions,
+        uint256 _totalTransactions,
         FixedPointType _zScore
-    ) public pure override returns (FixedPointType) {
-        if (_totalTransactions == FP_ZERO) {
+    ) external pure override returns (FixedPointType) {
+        if (_totalTransactions == 0) {
             return FP_ZERO;
         }
 
@@ -510,10 +519,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             revert NoRelayersRegistered();
         }
 
-        FixedPointType p = _relayerStake.fp() / _totalStake.fp();
-        FixedPointType s = ((p * (FP_ONE - p)) * _totalTransactions).sqrt();
+        FixedPointType p = _relayerStake.fp().div(_totalStake);
+        FixedPointType s = ((p * (FP_ONE - p)) * _totalTransactions.fp()).sqrt();
         FixedPointType d = _zScore * s;
-        FixedPointType e = p * _totalTransactions;
+        FixedPointType e = p * _totalTransactions.fp();
         unchecked {
             if (e > d) {
                 return e - d;
@@ -527,29 +536,49 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerState calldata _activeState,
         uint256 _relayerIndex,
         uint256 _epochEndTimestamp,
-        FixedPointType _totalTransactionsInEpoch
+        uint256 _totalTransactionsInEpoch,
+        FixedPointType _zScoreSquared
     ) internal returns (bool) {
         TAStorage storage ts = getTAStorage();
-        FixedPointType minimumTransactions;
-        {
-            uint256 relayerStakeNormalized = _activeState.cdf[_relayerIndex];
-
-            if (_relayerIndex != 0) {
-                relayerStakeNormalized -= _activeState.cdf[_relayerIndex - 1];
-            }
-
-            minimumTransactions = calculateMinimumTranasctionsForLiveness(
-                relayerStakeNormalized,
-                _activeState.cdf[_activeState.cdf.length - 1],
-                _totalTransactionsInEpoch,
-                ts.livenessZParameter
-            );
-        }
 
         RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
         uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
         delete ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
-        return transactionsProcessedByRelayer.fp() >= minimumTransactions;
+
+        uint256 relayerStakeNormalized = _activeState.cdf[_relayerIndex];
+
+        if (_relayerIndex != 0) {
+            relayerStakeNormalized -= _activeState.cdf[_relayerIndex - 1];
+        }
+
+        return _checkRelayerLiveness(
+            relayerStakeNormalized,
+            _activeState.cdf[_activeState.cdf.length - 1],
+            transactionsProcessedByRelayer,
+            _totalTransactionsInEpoch,
+            _zScoreSquared
+        );
+    }
+
+    function _checkRelayerLiveness(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        uint256 _tranasctionsDoneByRelayer,
+        uint256 _totalTransactions,
+        FixedPointType _zScoreSquared
+    ) internal pure returns (bool) {
+        FixedPointType p = _relayerStake.fp().div(_totalStake);
+        FixedPointType e = p.mul(_totalTransactions);
+        FixedPointType _tranasctionsDoneByRelayerFp = _tranasctionsDoneByRelayer.fp();
+        if (e <= _tranasctionsDoneByRelayerFp) {
+            return true;
+        }
+
+        FixedPointType lhs = _zScoreSquared * e * (FP_ONE - p);
+        FixedPointType rhs = e - _tranasctionsDoneByRelayerFp;
+        rhs = rhs * rhs;
+
+        return lhs >= rhs;
     }
 
     function _calculatePenalty(uint256 _stake) internal view returns (uint256) {

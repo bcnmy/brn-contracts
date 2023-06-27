@@ -145,7 +145,7 @@ export class Metrics {
           await config.transactionAllocator.calculateMinimumTranasctionsForLiveness(
             relayerStake,
             totalStake,
-            totalTransactions.mul(BigNumber.from(10).pow(24)),
+            totalTransactions,
             z
           )
         ).div(BigNumber.from(10).pow(24));

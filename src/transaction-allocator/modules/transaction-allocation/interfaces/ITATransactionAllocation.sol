@@ -26,7 +26,7 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
     function calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
-        FixedPointType _totalTransactions,
+        uint256 _totalTransactions,
         FixedPointType _zScore
     ) external view returns (FixedPointType);
 
