@@ -43,7 +43,7 @@ jobs:
 
       - name: Run Forge tests
         run: |
-          FOUNDRY_PROFILE=test forge test --ffi
+          FOUNDRY_PROFILE=test forge test -vvv --ffi
         id: test
         env:
           FUJI_RPC_URL: https://api.avax-test.network/ext/bc/C/rpc

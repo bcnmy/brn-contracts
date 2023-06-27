@@ -37,14 +37,12 @@ contract RelayerLivenessAndJailingTest is
     }
 
     function testMinimumTransactionForLivenessCalculation() external {
-        FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(
-            10 ** 18, 2 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter()
-        );
+        FixedPointType minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, 50, ta.livenessZParameter());
         assertEq(minTransactions.u256(), 13);
 
-        minTransactions = ta.calculateMinimumTranasctionsForLiveness(
-            10 ** 18, 5 * 10 ** 18, uint256(50).fp(), ta.livenessZParameter()
-        );
+        minTransactions =
+            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, 50, ta.livenessZParameter());
         assertEq(minTransactions.u256(), 0);
     }
 
