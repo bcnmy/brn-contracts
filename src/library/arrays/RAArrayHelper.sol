@@ -12,6 +12,7 @@ library RAArrayHelper {
     /// @dev Copies the array into memory and appends the value
     /// @param _array The array to append to
     /// @param _value The value to append
+    /// @return The new array
     function cd_append(RelayerAddress[] calldata _array, RelayerAddress _value)
         internal
         pure
@@ -36,6 +37,7 @@ library RAArrayHelper {
     /// @dev Copies the array into memory and removes the value at the index, substituting the last value
     /// @param _array The array to remove from
     /// @param _index The index to remove
+    /// @return The new array
     function cd_remove(RelayerAddress[] calldata _array, uint256 _index)
         internal
         pure
@@ -66,6 +68,7 @@ library RAArrayHelper {
     /// @param _array The array to update
     /// @param _index The index to update
     /// @param _value The value to update
+    /// @return The new array
     function cd_update(RelayerAddress[] calldata _array, uint256 _index, RelayerAddress _value)
         internal
         pure
@@ -82,12 +85,14 @@ library RAArrayHelper {
 
     /// @dev Calculate the hash of the array by packing the values and hashing them through keccak256
     /// @param _array The array to hash
+    /// @return The hash of the array
     function cd_hash(RelayerAddress[] calldata _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }
 
     /// @dev Calculate the hash of the array by packing the values and hashing them through keccak256
     /// @param _array The array to hash
+    /// @return The hash of the array
     function m_hash(RelayerAddress[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }

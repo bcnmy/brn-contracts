@@ -10,6 +10,7 @@ library U16ArrayHelper {
     /// @dev Copies the array into memory and appends the value
     /// @param _array The array to append to
     /// @param _value The value to append
+    /// @return The new array
     function cd_append(uint16[] calldata _array, uint16 _value) internal pure returns (uint16[] memory) {
         uint256 length = _array.length;
         uint16[] memory newArray = new uint16[](
@@ -30,6 +31,7 @@ library U16ArrayHelper {
     /// @dev Copies the array into memory and removes the value at the index, substituting the last value
     /// @param _array The array to remove from
     /// @param _index The index to remove
+    /// @return The new array
     function cd_remove(uint16[] calldata _array, uint256 _index) internal pure returns (uint16[] memory) {
         uint256 newLength = _array.length - 1;
         if (_index > newLength) {
@@ -56,6 +58,7 @@ library U16ArrayHelper {
     /// @param _array The array to update
     /// @param _index The index to update
     /// @param _value The value to update
+    /// @return The new array
     function cd_update(uint16[] calldata _array, uint256 _index, uint16 _value)
         internal
         pure
@@ -72,6 +75,7 @@ library U16ArrayHelper {
 
     /// @dev Calculate the hash of the array by packing the values and hashing them through keccak256
     /// @param _array The array to hash
+    /// @return The hash of the array
     function cd_hash(uint16[] calldata _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }
@@ -80,6 +84,7 @@ library U16ArrayHelper {
     ///      The array must be sorted
     /// @param _array The array to find in
     /// @param _target The target value
+    /// @return The index of the first element greater than or equal to _target
     function cd_lowerBound(uint16[] calldata _array, uint16 _target) internal pure returns (uint256) {
         uint256 low;
         uint256 high = _array.length;
@@ -98,6 +103,7 @@ library U16ArrayHelper {
 
     /// @dev Calculate the hash of the array by packing the values and hashing them through keccak256
     /// @param _array The array to hash
+    /// @return The hash of the array
     function m_hash(uint16[] memory _array) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked((_array)));
     }
