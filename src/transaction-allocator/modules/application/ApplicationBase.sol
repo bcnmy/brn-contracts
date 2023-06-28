@@ -86,7 +86,7 @@ abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorag
             }
         }
 
-        // Reduce the array sizes if needed
+        // Reduce the array size if needed
         uint256 extraLength = _requests.length - j;
         assembly {
             mstore(txnAllocated, sub(mload(txnAllocated), extraLength))
