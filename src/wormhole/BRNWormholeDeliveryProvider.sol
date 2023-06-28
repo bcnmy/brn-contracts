@@ -7,10 +7,10 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/access/Ownable.sol";
 
 import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
+import {toWormholeFormat} from "wormhole-contracts/libraries/relayer/Utils.sol";
 import "wormhole-contracts/relayer/wormholeRelayer/WormholeRelayerSerde.sol";
 import "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
 
-import "src/library/AddressUtils.sol";
 import "./interfaces/IBRNWormholeDeliveryProvider.sol";
 
 contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
@@ -20,7 +20,6 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiPriceLib for WeiPrice;
     using TargetNativeLib for TargetNative;
     using LocalNativeLib for LocalNative;
-    using AddressUtils for address;
 
     /////////////////////// State ///////////////////////
     IWormhole public immutable wormhole;
@@ -44,7 +43,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     constructor(IWormhole _wormhole, IWormholeRelayer _relayer, address _owner) Ownable(_owner) {
         wormhole = _wormhole;
         relayer = _relayer;
-        wormholeRelayerAddress = address(_relayer).toBytes32();
+        wormholeRelayerAddress = toWormholeFormat(address(_relayer));
         chainId = WormholeChainId.wrap(_wormhole.chainId());
     }
 

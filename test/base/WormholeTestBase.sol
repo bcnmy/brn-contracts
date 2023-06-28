@@ -3,14 +3,13 @@
 pragma solidity 0.8.19;
 
 import {SigningWormholeSimulator} from "wormhole-contracts-test/relayer/WormholeSimulator.sol";
+import {toWormholeFormat} from "wormhole-contracts/libraries/relayer/Utils.sol";
 
 import "./TATestBase.sol";
 import "wormhole-application/BRNWormholeDeliveryProvider.sol";
 import "src/mock/wormhole/MockWormholeReceiver.sol";
 
 abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
-    using AddressUtils for address;
-
     uint256 constant sourceChainForkBlock = 23134119;
     uint256 constant targetChainForkBlock = 36895494;
     uint8 constant wormholeVMVersion = 1;
@@ -135,8 +134,10 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
         deliveryProviderSource.setDeliverGasOverhead(targetChain, Gas.wrap(100_000));
         deliveryProviderSource.setMaximumBudget(targetChain, Wei.wrap(10_000_000 * 1 ether));
         deliveryProviderSource.setIsWormholeChainSupported(targetChain, true);
-        deliveryProviderSource.setBrnRelayerProviderAddress(targetChain, address(deliveryProviderTarget).toBytes32());
-        deliveryProviderSource.setBrnTransactionAllocatorAddress(targetChain, address(ta).toBytes32());
+        deliveryProviderSource.setBrnRelayerProviderAddress(
+            targetChain, toWormholeFormat(address(deliveryProviderTarget))
+        );
+        deliveryProviderSource.setBrnTransactionAllocatorAddress(targetChain, toWormholeFormat(address(ta)));
         deliveryProviderSource.setAssetConversionBuffer(
             targetChain, IBRNWormholeDeliveryProvider.AssetConversion({denominator: 100, buffer: 10})
         );
@@ -154,7 +155,9 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
         deliveryProviderTarget.setDeliverGasOverhead(sourceChain, Gas.wrap(100_000));
         deliveryProviderTarget.setMaximumBudget(sourceChain, Wei.wrap(10_000_000 * 1 ether));
         deliveryProviderTarget.setIsWormholeChainSupported(sourceChain, true);
-        deliveryProviderTarget.setBrnRelayerProviderAddress(sourceChain, address(deliveryProviderSource).toBytes32());
+        deliveryProviderTarget.setBrnRelayerProviderAddress(
+            sourceChain, toWormholeFormat(address(deliveryProviderSource))
+        );
         deliveryProviderTarget.setAssetConversionBuffer(
             sourceChain, IBRNWormholeDeliveryProvider.AssetConversion({denominator: 100, buffer: 10})
         );
