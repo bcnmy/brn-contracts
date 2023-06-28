@@ -5,8 +5,7 @@ pragma solidity 0.8.19;
 import "./interfaces/ITATransactionAllocation.sol";
 import "./TATransactionAllocationStorage.sol";
 import "ta-common/TAHelpers.sol";
-
-import "forge-std/console2.sol";
+import "src/library/arrays/U32ArrayHelper.sol";
 
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
     using SafeCast for uint256;

@@ -8,6 +8,7 @@ import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
 import "ta-common/TAHelpers.sol";
+import "src/library/arrays/U32ArrayHelper.sol";
 
 contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;

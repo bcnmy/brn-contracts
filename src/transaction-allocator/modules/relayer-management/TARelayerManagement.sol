@@ -9,6 +9,7 @@ import "./TARelayerManagementStorage.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 import "ta-common/TAHelpers.sol";
 import "src/library/VersionManager.sol";
+import "src/library/arrays/U32ArrayHelper.sol";
 
 contract TARelayerManagement is
     ITARelayerManagement,

@@ -413,8 +413,8 @@ DA:229,338
 DA:232,338
 DA:233,338
 DA:234,338
-FN:238,TAHelpers._splitRewards
-FNDA:221,TAHelpers._splitRewards
+FN:238,TAHelpers._calculateProtocolRewardSplit
+FNDA:221,TAHelpers._calculateProtocolRewardSplit
 DA:243,221
 DA:244,221
 FN:247,TAHelpers._getPendingProtocolRewardsData
