@@ -5,12 +5,12 @@ pragma solidity 0.8.19;
 import "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./TADelegationStorage.sol";
 import "./interfaces/ITADelegation.sol";
+import "./TADelegationGetters.sol";
 import "ta-common/TAHelpers.sol";
 import "src/library/arrays/U32ArrayHelper.sol";
 
-contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
+contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
     using U16ArrayHelper for uint16[];
@@ -274,58 +274,5 @@ contract TADelegation is TADelegationStorage, TAHelpers, ITADelegation {
 
         // Add to unclaimed rewards
         _addDelegatorRewards(_relayerAddress, tokenAddress, _amount);
-    }
-
-    ////////////////////////// Getters //////////////////////////
-    function totalDelegation(RelayerAddress _relayerAddress) external view override noSelfCall returns (uint256) {
-        return getTADStorage().totalDelegation[_relayerAddress];
-    }
-
-    function delegation(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (uint256)
-    {
-        return getTADStorage().delegation[_relayerAddress][_delegatorAddress];
-    }
-
-    function shares(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress, TokenAddress _tokenAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (FixedPointType)
-    {
-        return getTADStorage().shares[_relayerAddress][_delegatorAddress][_tokenAddress];
-    }
-
-    function totalShares(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (FixedPointType)
-    {
-        return getTADStorage().totalShares[_relayerAddress][_tokenAddress];
-    }
-
-    function unclaimedDelegationRewards(RelayerAddress _relayerAddress, TokenAddress _tokenAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (uint256)
-    {
-        return getTADStorage().unclaimedRewards[_relayerAddress][_tokenAddress];
-    }
-
-    function supportedPools() external view override noSelfCall returns (TokenAddress[] memory) {
-        return getTADStorage().supportedPools;
-    }
-
-    function minimumDelegationAmount() external view override noSelfCall returns (uint256) {
-        return getTADStorage().minimumDelegationAmount;
     }
 }

@@ -3,9 +3,10 @@
 pragma solidity 0.8.19;
 
 import "src/mock/minimal-application/MinimalApplication2.sol";
+import "src/utils/Guards.sol";
 import "test/base/TATestBase.sol";
 
-contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors {
+contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors, Guards {
     bytes[] txns;
     mapping(bytes4 selector => bool) testExecuted;
     mapping(bytes4 selector => bool) selectorExcludedFromTests;

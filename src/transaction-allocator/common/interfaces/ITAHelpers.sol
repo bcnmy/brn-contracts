@@ -15,7 +15,6 @@ interface ITAHelpers {
     error InvalidLatestRelayerState();
     error InvalidActiveRelayerState();
     error OnlySelf();
-    error NoSelfCall();
 
     event DelegatorRewardsAdded(RelayerAddress indexed _relayer, TokenAddress indexed _token, uint256 indexed _amount);
     event NewRelayerState(bytes32 indexed relayerStateHash, RelayerState relayerState);

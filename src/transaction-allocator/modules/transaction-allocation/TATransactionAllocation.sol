@@ -3,11 +3,11 @@
 pragma solidity 0.8.19;
 
 import "./interfaces/ITATransactionAllocation.sol";
-import "./TATransactionAllocationStorage.sol";
 import "ta-common/TAHelpers.sol";
 import "src/library/arrays/U32ArrayHelper.sol";
+import {TATransactionAllocationGetters} from "./TATransactionAllocationGetters.sol";
 
-contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationStorage {
+contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationGetters {
     using SafeCast for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
@@ -582,36 +582,5 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     function _calculatePenalty(uint256 _stake) internal view returns (uint256) {
         return (_stake * getRMStorage().absencePenaltyPercentage) / (100 * PERCENTAGE_MULTIPLIER);
-    }
-
-    ///////////////////////////////// Getters ///////////////////////////////
-    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (uint256)
-    {
-        return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
-    }
-
-    function totalTransactionsSubmitted() external view override noSelfCall returns (uint256) {
-        return getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp];
-    }
-
-    function epochLengthInSec() external view override noSelfCall returns (uint256) {
-        return getTAStorage().epochLengthInSec;
-    }
-
-    function epochEndTimestamp() external view override noSelfCall returns (uint256) {
-        return getTAStorage().epochEndTimestamp;
-    }
-
-    function livenessZParameter() external view override noSelfCall returns (FixedPointType) {
-        return getTAStorage().livenessZParameter;
-    }
-
-    function stakeThresholdForJailing() external view override noSelfCall returns (uint256) {
-        return getTAStorage().stakeThresholdForJailing;
     }
 }

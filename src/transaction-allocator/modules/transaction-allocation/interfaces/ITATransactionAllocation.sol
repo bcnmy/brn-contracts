@@ -2,10 +2,12 @@
 
 pragma solidity 0.8.19;
 
-import "./ITATransactionAllocationEventsErrors.sol";
-import "src/library/FixedPointArithmetic.sol";
+import {ITATransactionAllocationEventsErrors} from "./ITATransactionAllocationEventsErrors.sol";
+import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
+import {ITATransactionAllocationGetters} from "./ITATransactionAllocationGetters.sol";
+import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
 
-interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
+interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITATransactionAllocationGetters {
     struct ExecuteParams {
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;
@@ -29,12 +31,4 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
         uint256 _totalTransactions,
         FixedPointType _zScore
     ) external view returns (FixedPointType);
-
-    ////////////////////////// Getters //////////////////////////
-    function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
-    function totalTransactionsSubmitted() external view returns (uint256);
-    function epochLengthInSec() external view returns (uint256);
-    function epochEndTimestamp() external view returns (uint256);
-    function livenessZParameter() external view returns (FixedPointType);
-    function stakeThresholdForJailing() external view returns (uint256);
 }

@@ -2,12 +2,11 @@
 
 pragma solidity 0.8.19;
 
-import "./ITARelayerManagementEventsErrors.sol";
-import "src/library/FixedPointArithmetic.sol";
+import {RelayerAddress, RelayerAccountAddress, RelayerState} from "ta-common/TATypes.sol";
+import {ITARelayerManagementEventsErrors} from "./ITARelayerManagementEventsErrors.sol";
+import {ITARelayerManagementGetters} from "./ITARelayerManagementGetters.sol";
 
-interface ITARelayerManagement is ITARelayerManagementEventsErrors {
-    function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
-
+interface ITARelayerManagement is ITARelayerManagementEventsErrors, ITARelayerManagementGetters {
     ////////////////////////// Relayer Registration //////////////////////////
     function register(
         RelayerState calldata _latestState,
@@ -37,53 +36,4 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors {
     function claimProtocolReward() external;
 
     function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress) external view returns (uint256);
-
-    function protocolRewardRate() external view returns (uint256);
-
-    ////////////////////// Getters //////////////////////
-    function relayerCount() external view returns (uint256);
-
-    function totalStake() external view returns (uint256);
-
-    struct RelayerInfoView {
-        uint256 stake;
-        string endpoint;
-        uint256 delegatorPoolPremiumShare;
-        RelayerStatus status;
-        uint256 minExitTimestamp;
-        uint256 unpaidProtocolRewards;
-        FixedPointType rewardShares;
-    }
-
-    function relayerInfo(RelayerAddress) external view returns (RelayerInfoView memory);
-
-    function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
-
-    function isGasTokenSupported(TokenAddress) external view returns (bool);
-
-    function relayersPerWindow() external view returns (uint256);
-
-    function blocksPerWindow() external view returns (uint256);
-
-    function bondTokenAddress() external view returns (TokenAddress);
-
-    function jailTimeInSec() external view returns (uint256);
-
-    function withdrawDelayInSec() external view returns (uint256);
-
-    function absencePenaltyPercentage() external view returns (uint256);
-
-    function minimumStakeAmount() external view returns (uint256);
-
-    function relayerStateUpdateDelayInWindows() external view returns (uint256);
-
-    function relayerStateHash() external view returns (bytes32, bytes32);
-
-    function totalUnpaidProtocolRewards() external view returns (uint256);
-
-    function lastUnpaidRewardUpdatedTimestamp() external view returns (uint256);
-
-    function totalProtocolRewardShares() external view returns (FixedPointType);
-
-    function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 }

@@ -4,19 +4,17 @@ pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
+import {CDF_PRECISION_MULTIPLIER} from "ta-common/TAConstants.sol";
 import "./interfaces/ITARelayerManagement.sol";
 import "./TARelayerManagementStorage.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
-import "ta-common/TAHelpers.sol";
 import "src/library/VersionManager.sol";
 import "src/library/arrays/U32ArrayHelper.sol";
+import {TARelayerManagementGetters} from "./TARelayerManagementGetters.sol";
+import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
 
-contract TARelayerManagement is
-    ITARelayerManagement,
-    TARelayerManagementStorage,
-    TAHelpers,
-    TATransactionAllocationStorage
-{
+contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationStorage, TARelayerManagementGetters {
     using SafeERC20 for IERC20;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
@@ -345,120 +343,5 @@ contract TARelayerManagement is
         (uint256 relayerReward,,) = _getPendingProtocolRewardsData(_relayerAddress, updatedTotalUnpaidProtocolRewards);
 
         return relayerReward + node.unpaidProtocolRewards;
-    }
-
-    function protocolRewardRate() external view override noSelfCall returns (uint256) {
-        return _protocolRewardRate();
-    }
-
-    ////////////////////////// Getters //////////////////////////
-    function relayerCount() external view override noSelfCall returns (uint256) {
-        return getRMStorage().relayerCount;
-    }
-
-    function totalStake() external view override noSelfCall returns (uint256) {
-        return getRMStorage().totalStake;
-    }
-
-    function relayerInfo(RelayerAddress _relayerAddress)
-        external
-        view
-        override
-        noSelfCall
-        returns (RelayerInfoView memory)
-    {
-        RMStorage storage rms = getRMStorage();
-        RelayerInfo storage node = rms.relayerInfo[_relayerAddress];
-
-        return RelayerInfoView({
-            stake: node.stake,
-            endpoint: node.endpoint,
-            delegatorPoolPremiumShare: node.delegatorPoolPremiumShare,
-            status: node.status,
-            minExitTimestamp: node.minExitTimestamp,
-            unpaidProtocolRewards: node.unpaidProtocolRewards,
-            rewardShares: node.rewardShares
-        });
-    }
-
-    function relayerInfo_isAccount(RelayerAddress _relayerAddress, RelayerAccountAddress _account)
-        external
-        view
-        override
-        noSelfCall
-        returns (bool)
-    {
-        return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
-    }
-
-    function isGasTokenSupported(TokenAddress _token) external view override noSelfCall returns (bool) {
-        return getRMStorage().isGasTokenSupported[_token];
-    }
-
-    function relayersPerWindow() external view override noSelfCall returns (uint256) {
-        return getRMStorage().relayersPerWindow;
-    }
-
-    function blocksPerWindow() external view override noSelfCall returns (uint256) {
-        return getRMStorage().blocksPerWindow;
-    }
-
-    function bondTokenAddress() external view override noSelfCall returns (TokenAddress) {
-        return TokenAddress.wrap(address(getRMStorage().bondToken));
-    }
-
-    function getLatestCdfArray(RelayerAddress[] calldata _latestActiveRelayers)
-        external
-        view
-        override
-        noSelfCall
-        returns (uint16[] memory)
-    {
-        uint16[] memory cdfArray = _generateCdfArray_c(_latestActiveRelayers);
-        _verifyExternalStateForRelayerStateUpdation(cdfArray.m_hash(), _latestActiveRelayers.cd_hash());
-
-        return cdfArray;
-    }
-
-    function jailTimeInSec() external view override noSelfCall returns (uint256) {
-        return getRMStorage().jailTimeInSec;
-    }
-
-    function withdrawDelayInSec() external view override noSelfCall returns (uint256) {
-        return getRMStorage().withdrawDelayInSec;
-    }
-
-    function absencePenaltyPercentage() external view override noSelfCall returns (uint256) {
-        return getRMStorage().absencePenaltyPercentage;
-    }
-
-    function minimumStakeAmount() external view override noSelfCall returns (uint256) {
-        return getRMStorage().minimumStakeAmount;
-    }
-
-    function relayerStateUpdateDelayInWindows() external view override noSelfCall returns (uint256) {
-        return getRMStorage().relayerStateUpdateDelayInWindows;
-    }
-
-    function relayerStateHash() external view noSelfCall returns (bytes32 activeStateHash, bytes32 latestStateHash) {
-        RMStorage storage rms = getRMStorage();
-        activeStateHash = rms.relayerStateVersionManager.activeStateHash(_windowIndex(block.number));
-        latestStateHash = rms.relayerStateVersionManager.latestStateHash();
-    }
-
-    function totalUnpaidProtocolRewards() external view override noSelfCall returns (uint256) {
-        return getRMStorage().totalUnpaidProtocolRewards;
-    }
-
-    function lastUnpaidRewardUpdatedTimestamp() external view override noSelfCall returns (uint256) {
-        return getRMStorage().lastUnpaidRewardUpdatedTimestamp;
-    }
-
-    function totalProtocolRewardShares() external view override noSelfCall returns (FixedPointType) {
-        return getRMStorage().totalProtocolRewardShares;
-    }
-
-    function baseRewardRatePerMinimumStakePerSec() external view override noSelfCall returns (uint256) {
-        return getRMStorage().baseRewardRatePerMinimumStakePerSec;
     }
 }
