@@ -61,11 +61,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         if (block.timestamp >= epochEndTimestamp_) {
             // Run liveness checks for last epoch
-            _processLivenessCheck(_params.activeState, _params.latestState, _params.activeStateToPendingStateMap);
+            _processLivenessCheck(_params.activeState, _params.latestState, _params.activeStateToLatestStateMap);
 
             // Process any pending Updates
             uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
-            getRMStorage().relayerStateVersionManager.setPendingStateForActivation(updateWindowIndex);
+            getRMStorage().relayerStateVersionManager.setLatestStateForActivation(updateWindowIndex);
 
             // Update the epoch end time
             epochEndTimestamp_ = block.timestamp + ts.epochLengthInSec;
@@ -281,7 +281,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     function _processLivenessCheck(
         RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
-        uint256[] calldata _activeStateToPendingStateMap
+        uint256[] calldata _activeStateToLatestStateMap
     ) internal {
         ProcessLivenessCheckMemoryState memory state;
 
@@ -304,7 +304,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 activeRelayerCount = _activeRelayerState.relayers.length;
         for (uint256 i; i != activeRelayerCount;) {
             _processLivenessCheckForRelayer(
-                _activeRelayerState, _pendingRelayerState, _activeStateToPendingStateMap, i, state
+                _activeRelayerState, _pendingRelayerState, _activeStateToLatestStateMap, i, state
             );
 
             unchecked {
@@ -320,7 +320,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     function _processLivenessCheckForRelayer(
         RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
-        uint256[] calldata _activeStateToPendingStateMap,
+        uint256[] calldata _activeStateToLatestStateMap,
         uint256 _relayerIndex,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
@@ -346,7 +346,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         } else {
             _penalizeAndJailRelayer(
                 _pendingRelayerState,
-                _activeStateToPendingStateMap,
+                _activeStateToLatestStateMap,
                 relayerAddress,
                 relayerInfo,
                 stake,
@@ -392,7 +392,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     function _penalizeAndJailRelayer(
         RelayerState calldata _pendingRelayerState,
-        uint256[] calldata _activeStateToPendingStateMap,
+        uint256[] calldata _activeStateToLatestStateMap,
         RelayerAddress _relayerAddress,
         RelayerInfo storage _relayerInfo,
         uint256 _stake,
@@ -446,7 +446,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
 
             _removeRelayerFromRelayerList(
-                _state.newRelayerList, _relayerAddress, _activeStateToPendingStateMap[_relayerIndex]
+                _state.newRelayerList, _relayerAddress, _activeStateToLatestStateMap[_relayerIndex]
             );
             unchecked {
                 ++_state.activeRelayersJailedCount;
@@ -457,7 +457,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
     }
 
-    function _postLivenessCheck(RelayerState calldata _pendingState, ProcessLivenessCheckMemoryState memory _state)
+    function _postLivenessCheck(RelayerState calldata _latestState, ProcessLivenessCheckMemoryState memory _state)
         internal
     {
         RMStorage storage rms = getRMStorage();
@@ -480,9 +480,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // Schedule CDF Update if Necessary
         if (_state.totalActiveRelayerPenalty != 0 || _state.activeRelayersJailedCount != 0) {
-            _verifyExternalStateForRelayerStateUpdation(_pendingState.cdf.cd_hash(), _pendingState.relayers.cd_hash());
+            _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
             if (_state.activeRelayersJailedCount == 0) {
-                _updateCdf_c(_pendingState.relayers);
+                _updateCdf_c(_latestState.relayers);
             } else {
                 _updateCdf_m(_state.newRelayerList);
             }

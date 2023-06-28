@@ -53,8 +53,8 @@ BRDA:24,1,0,-
 BRDA:24,1,1,-
 DA:25,0
 DA:28,0
-FN:31,VersionManager.pendingStateHash
-FNDA:0,VersionManager.pendingStateHash
+FN:31,VersionManager.latestStateHash
+FNDA:0,VersionManager.latestStateHash
 DA:32,0
 FN:35,VersionManager.verifyHashAgainstActiveState
 FNDA:0,VersionManager.verifyHashAgainstActiveState
@@ -62,8 +62,8 @@ DA:40,0
 FN:43,VersionManager.verifyHashAgainstLatestState
 FNDA:0,VersionManager.verifyHashAgainstLatestState
 DA:44,0
-FN:47,VersionManager.setPendingState
-FNDA:0,VersionManager.setPendingState
+FN:47,VersionManager.setLatestState
+FNDA:0,VersionManager.setLatestState
 DA:48,0
 BRDA:48,2,0,-
 BRDA:48,2,1,-
@@ -71,8 +71,8 @@ DA:49,0
 DA:51,0
 DA:52,0
 DA:54,0
-FN:57,VersionManager.setPendingStateForActivation
-FNDA:0,VersionManager.setPendingStateForActivation
+FN:57,VersionManager.setLatestStateForActivation
+FNDA:0,VersionManager.setLatestStateForActivation
 DA:58,0
 BRDA:58,3,0,-
 BRDA:58,3,1,-

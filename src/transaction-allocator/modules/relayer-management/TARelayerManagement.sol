@@ -439,10 +439,10 @@ contract TARelayerManagement is
         return getRMStorage().relayerStateUpdateDelayInWindows;
     }
 
-    function relayerStateHash() external view noSelfCall returns (bytes32 activeStateHash, bytes32 pendingStateHash) {
+    function relayerStateHash() external view noSelfCall returns (bytes32 activeStateHash, bytes32 latestStateHash) {
         RMStorage storage rms = getRMStorage();
         activeStateHash = rms.relayerStateVersionManager.activeStateHash(_windowIndex(block.number));
-        pendingStateHash = rms.relayerStateVersionManager.pendingStateHash();
+        latestStateHash = rms.relayerStateVersionManager.latestStateHash();
     }
 
     function totalUnpaidProtocolRewards() external view override noSelfCall returns (uint256) {

@@ -87,7 +87,7 @@ export class Relayer {
     );
   }
 
-  private getActiveStateToPendingStateMap(
+  private getActiveStateToLatestStateMap(
     activeState: RelayerStateStruct,
     latestState: RelayerStateStruct
   ): number[] {
@@ -187,7 +187,7 @@ export class Relayer {
             relayerGenerationIterationBitmap: relayerGenerationIterations,
             activeState: currentState,
             latestState: latestState,
-            activeStateToPendingStateMap: this.getActiveStateToPendingStateMap(
+            activeStateToLatestStateMap: this.getActiveStateToLatestStateMap(
               currentState,
               latestState
             ),

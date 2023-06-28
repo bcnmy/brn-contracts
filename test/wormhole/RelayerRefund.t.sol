@@ -62,7 +62,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(latestRelayerState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
             })
         );
 

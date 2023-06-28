@@ -56,7 +56,7 @@ contract WormholeMessageDeliveryTest is WormholeTestBase {
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(latestRelayerState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
             })
         );
 
@@ -112,7 +112,7 @@ contract WormholeMessageDeliveryTest is WormholeTestBase {
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(latestRelayerState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
             })
         );
 

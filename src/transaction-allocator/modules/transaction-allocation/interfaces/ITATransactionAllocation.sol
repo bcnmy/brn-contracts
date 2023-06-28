@@ -13,7 +13,7 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors {
         uint256 relayerGenerationIterationBitmap;
         RelayerState activeState;
         RelayerState latestState;
-        uint256[] activeStateToPendingStateMap;
+        uint256[] activeStateToLatestStateMap;
     }
 
     function execute(ExecuteParams calldata _data) external payable;

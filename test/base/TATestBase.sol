@@ -177,12 +177,12 @@ abstract contract TATestBase is Test {
                 relayerGenerationIterationBitmap: 0,
                 activeState: _activeState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(_activeState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(_activeState)
             })
         );
     }
 
-    function _generateActiveStateToPendingStateMap(RelayerState memory _activeState)
+    function _generateActiveStateToLatestStateMap(RelayerState memory _activeState)
         internal
         view
         returns (uint256[] memory map)
