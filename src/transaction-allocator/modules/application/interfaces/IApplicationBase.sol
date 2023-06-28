@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
-
+/// @title IApplicationBase
+/// @dev Interface for the ApplicationBase contract, which can be inherted by all applications wishing to use BRN's services.
 interface IApplicationBase {
     error ExternalCallsNotAllowed();
     error RelayerNotAssignedToTransaction();
-    error RelayerAllocationResultLengthMismatch(uint256 expectedLength, uint256 actualLength);
-    error AlreadyInitialized();
 }
