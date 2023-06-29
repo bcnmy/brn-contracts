@@ -7,8 +7,17 @@ import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "forge-std/Test.sol";
 import "script/TA.Deployment.s.sol";
 import "src/library/FixedPointArithmetic.sol";
+import "ta-common/TATypes.sol";
+import "ta-proxy/interfaces/ITAProxy.sol";
+import "ta/interfaces/ITransactionAllocator.sol";
+
+import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
+import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 
 contract DeploymentTest is Test {
+    using Uint256WrapperHelper for uint256;
+    using FixedPointTypeHelper for FixedPointType;
+
     string constant mnemonic = "test test test test test test test test test test test junk";
 
     TADeploymentScript script;
@@ -18,6 +27,14 @@ contract DeploymentTest is Test {
     RelayerAddress foundationRelayerAddress;
     RelayerAccountAddress[] foundationRelayerAccountAddresses;
     ERC20 bico;
+
+    Module[] modules = [
+        Module.TADelegation,
+        Module.TARelayerManagement,
+        Module.TATransactionAllocation,
+        Module.TADebug,
+        Module.MinimalApplication
+    ];
 
     function setUp() external {
         script = new TADeploymentScript();
@@ -50,7 +67,7 @@ contract DeploymentTest is Test {
             minimumDelegationAmount: 100000000000000000,
             baseRewardRatePerMinimumStakePerSec: 1003000000000,
             relayerStateUpdateDelayInWindows: 1,
-            livenessZParameter: 3300000000000000000000000,
+            livenessZParameter: uint256(33).fp().div(10),
             bondTokenAddress: TokenAddress.wrap(address(bico)),
             supportedTokens: supportedTokens,
             foundationRelayerAddress: foundationRelayerAddress,
@@ -60,7 +77,18 @@ contract DeploymentTest is Test {
             foundationDelegatorPoolPremiumShare: 0
         });
 
-        ITransactionAllocator ta = script.deploy(deployerPrivateKey, params);
+        // ITransactionAllocator ta = script.deploy(deployerPrivateKey, params);
+
+        TADeploymentScript.DeploymentResult memory result = script.deploy(
+            params,
+            modules,
+            WormholeConfig({wormhole: IWormhole(address(0)), relayer: IWormholeRelayer(address(0))}),
+            false,
+            false,
+            deployerPrivateKey,
+            foundationRelayerKey
+        );
+        ITransactionAllocator ta = ITransactionAllocator(address(result.proxy));
 
         assertEq(ta.blocksPerWindow(), params.blocksPerWindow);
         assertEq(ta.epochLengthInSec(), params.epochLengthInSec);
@@ -72,7 +100,7 @@ contract DeploymentTest is Test {
         assertEq(ta.minimumDelegationAmount(), params.minimumDelegationAmount);
         assertEq(ta.baseRewardRatePerMinimumStakePerSec(), params.baseRewardRatePerMinimumStakePerSec);
         assertEq(ta.relayerStateUpdateDelayInWindows(), params.relayerStateUpdateDelayInWindows);
-        assertEq(ta.livenessZParameter() == FixedPointType.wrap(params.livenessZParameter), true);
+        assertEq(ta.livenessZParameter() == params.livenessZParameter, true);
         assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);
         assertEq(ta.supportedPools()[0] == params.supportedTokens[0], true);
         for (uint256 i = 0; i < params.supportedTokens.length; i++) {

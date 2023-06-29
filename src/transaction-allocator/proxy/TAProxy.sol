@@ -78,7 +78,7 @@ contract TAProxy is
         rms.baseRewardRatePerMinimumStakePerSec = _params.baseRewardRatePerMinimumStakePerSec;
         tds.minimumDelegationAmount = _params.minimumDelegationAmount;
         rms.relayerStateUpdateDelayInWindows = _params.relayerStateUpdateDelayInWindows;
-        tas.livenessZParameter = FixedPointType.wrap(_params.livenessZParameter);
+        tas.livenessZParameter = _params.livenessZParameter;
         tas.stakeThresholdForJailing = _params.stakeThresholdForJailing;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;

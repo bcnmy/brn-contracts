@@ -2,256 +2,171 @@
 
 pragma solidity 0.8.19;
 
-import "forge-std/Script.sol";
+import {TAProxy} from "ta-proxy/TAProxy.sol";
+import {TADelegation} from "ta-delegation/TADelegation.sol";
+import {TARelayerManagement} from "ta-relayer-management/TARelayerManagement.sol";
+import {TATransactionAllocation} from "ta-transaction-allocation/TATransactionAllocation.sol";
+import {WormholeApplication} from "wormhole-application/WormholeApplication.sol";
+import {TADebug} from "test/modules/debug/TADebug.sol";
+import {MinimalApplication} from "mock/minimal-application/MinimalApplication.sol";
+import {TATestnetDebug} from "test/modules/testnet-debug/TATestnetDebug.sol";
+import {ERC20FreeMint} from "src/mock/token/ERC20FreeMint.sol";
+import {TADeploymentConfig, Module, WormholeConfig} from "./TA.DeploymentConfig.sol";
+import {TokenAddress, RelayerAddress} from "ta-common/TATypes.sol";
 
-import "ta/interfaces/ITransactionAllocator.sol";
-import "ta-proxy/TAProxy.sol";
-import "ta-delegation/TADelegation.sol";
-import "ta-relayer-management/TARelayerManagement.sol";
-import "ta-transaction-allocation/TATransactionAllocation.sol";
-import "wormhole-application/WormholeApplication.sol";
+// TODO: create2/create3
 
-import "test/modules/debug/TADebug.sol";
-import "mock/minimal-application/MinimalApplication.sol";
-import "test/modules/ITransactionAllocatorDebug.sol";
-import "test/modules/testnet-debug/TATestnetDebug.sol";
-import "src/mock/token/ERC20FreeMint.sol";
-
-// TODO: create2/create3 + refactoring
-
-contract TADeploymentScript is Script {
-    error EmptyDeploymentConfigPath();
-
-    IWormhole public wormhole = IWormhole(0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C);
-    IWormholeRelayer public wormholeRelayer = IWormholeRelayer(0xA3cF45939bD6260bcFe3D66bc73d60f19e49a8BB);
-
-    function run() external returns (ITransactionAllocator) {
-        // Load Deployment Config
-        string memory deployConfigPath = vm.envString("TRANSACTION_ALLOCATOR_DEPLOYMENT_CONFIG_JSON");
-        if (keccak256(abi.encode(deployConfigPath)) == keccak256(abi.encode(""))) {
-            revert EmptyDeploymentConfigPath();
-        }
-        string memory deploymentConfigStr = vm.readFile(deployConfigPath);
-        console2.log("Deployment Config Path: ", deployConfigPath);
-
-        address[] memory supportedTokenAddresses = vm.parseJsonAddressArray(deploymentConfigStr, ".supportedTokens");
-        TokenAddress[] memory supportedTokens = new TokenAddress[](supportedTokenAddresses.length);
-        for (uint256 i; i != supportedTokenAddresses.length;) {
-            supportedTokens[i] = TokenAddress.wrap(supportedTokenAddresses[i]);
-            unchecked {
-                ++i;
-            }
-        }
-
-        address[] memory foundationRelayerAccountAddresses_ =
-            vm.parseJsonAddressArray(deploymentConfigStr, ".foundationRelayerAccountAddresses");
-        RelayerAccountAddress[] memory foundationRelayerAccountAddresses =
-            new RelayerAccountAddress[](foundationRelayerAccountAddresses_.length);
-        for (uint256 i; i != foundationRelayerAccountAddresses_.length;) {
-            foundationRelayerAccountAddresses[i] = RelayerAccountAddress.wrap(foundationRelayerAccountAddresses_[i]);
-            unchecked {
-                ++i;
-            }
-        }
-
-        ITAProxy.InitializerParams memory params = ITAProxy.InitializerParams({
-            blocksPerWindow: vm.parseJsonUint(deploymentConfigStr, ".blocksPerWindow"),
-            epochLengthInSec: vm.parseJsonUint(deploymentConfigStr, ".epochLengthInSec"),
-            relayersPerWindow: vm.parseJsonUint(deploymentConfigStr, ".relayersPerWindow"),
-            jailTimeInSec: vm.parseJsonUint(deploymentConfigStr, ".jailTimeInSec"),
-            withdrawDelayInSec: vm.parseJsonUint(deploymentConfigStr, ".withdrawDelayInSec"),
-            absencePenaltyPercentage: vm.parseJsonUint(deploymentConfigStr, ".absencePenaltyPercentage"),
-            minimumStakeAmount: vm.parseJsonUint(deploymentConfigStr, ".minimumStakeAmount"),
-            minimumDelegationAmount: vm.parseJsonUint(deploymentConfigStr, ".minimumDelegationAmount"),
-            baseRewardRatePerMinimumStakePerSec: vm.parseJsonUint(
-                deploymentConfigStr, ".baseRewardRatePerMinimumStakePerSec"
-                ),
-            relayerStateUpdateDelayInWindows: vm.parseJsonUint(deploymentConfigStr, ".relayerStateUpdateDelayInWindows"),
-            livenessZParameter: vm.parseJsonUint(deploymentConfigStr, ".livenessZParameter"),
-            stakeThresholdForJailing: vm.parseJsonUint(deploymentConfigStr, ".stakeThresholdForJailing"),
-            bondTokenAddress: TokenAddress.wrap(vm.parseJsonAddress(deploymentConfigStr, ".bondToken")),
-            supportedTokens: supportedTokens,
-            foundationRelayerAddress: RelayerAddress.wrap(
-                vm.parseJsonAddress(deploymentConfigStr, ".foundationRelayerAddress")
-                ),
-            foundationRelayerAccountAddresses: foundationRelayerAccountAddresses,
-            foundationRelayerStake: vm.parseJsonUint(deploymentConfigStr, ".foundationRelayerStake"),
-            foundationRelayerEndpoint: vm.parseJsonString(deploymentConfigStr, ".foundationRelayerEndpoint"),
-            foundationDelegatorPoolPremiumShare: vm.parseJsonUint(
-                deploymentConfigStr, ".foundationDelegatorPoolPremiumShare"
-                )
-        });
-
-        // Deploy
-        uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
-        if (keccak256(abi.encode(vm.envString("DEPLOYMENT_MODE"))) == keccak256(abi.encode("MAINNET"))) {
-            return deploy(deployerPrivateKey, params);
-        } else if (keccak256(abi.encode(vm.envString("DEPLOYMENT_MODE"))) == keccak256(abi.encode("TESTNET_DEBUG"))) {
-            return deployTestnet(deployerPrivateKey, params);
-        }
-        return ITransactionAllocator(address(0));
+contract TADeploymentScript is TADeploymentConfig {
+    struct DeploymentResult {
+        TAProxy proxy;
+        address bondToken;
+        TADelegation delegation;
+        TARelayerManagement relayerManagement;
+        TATransactionAllocation transactionAllocation;
+        TADebug debug;
+        TATestnetDebug testnetDebug;
+        WormholeApplication wormholeApplication;
+        MinimalApplication minimalApplication;
     }
 
-    //TODO: Create2/Create3
-    function _deploy(
-        uint256 _deployerPrivateKey,
-        ITAProxy.InitializerParams memory _params,
-        address[] memory modules,
-        bytes4[][] memory selectors
-    ) internal returns (TAProxy) {
-        address deployerAddr = vm.addr(_deployerPrivateKey);
-        console2.log("Deploying Transaction Allocator contracts...");
-        console2.log("Chain ID: ", block.chainid);
-        console2.log("Deployer Address: ", deployerAddr);
-        console2.log("Deployer Funds: ", deployerAddr.balance);
+    address[] public modules;
+    bytes4[][] public selectors;
+    DeploymentResult public result;
 
-        vm.startBroadcast(_deployerPrivateKey);
+    function run() external returns (DeploymentResult memory) {
+        TAProxy.InitializerParams storage params = deploymentConfig[block.chainid];
+        Module[] storage modulesToDeploy = modulesToDeploy[block.chainid];
 
-        // Deploy Proxy
-        TAProxy proxy = new TAProxy(modules, selectors, _params);
-        console2.log("Proxy address: ", address(proxy));
-        console2.log("Transaction Allocator contracts deployed successfully.");
-
-        vm.stopBroadcast();
-
-        return proxy;
-    }
-
-    function deploy(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
-        public
-        returns (ITransactionAllocator)
-    {
-        // Deploy Modules
-        uint256 moduleCount = 3;
-        address[] memory modules = new address[](moduleCount);
-        bytes4[][] memory selectors = new bytes4[][](moduleCount);
-
-        vm.startBroadcast(_deployerPrivateKey);
-
-        modules[0] = address(new TADelegation());
-        selectors[0] = _generateSelectors("TADelegation");
-
-        modules[1] = address(new TARelayerManagement());
-        selectors[1] = _generateSelectors("TARelayerManagement");
-
-        modules[2] = address(new TATransactionAllocation());
-        selectors[2] = _generateSelectors("TATransactionAllocation");
-
-        vm.stopBroadcast();
-
-        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
-
-        return ITransactionAllocator(address(proxy));
-    }
-
-    function deployInternalTestSetup(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
-        public
-        returns (ITransactionAllocatorDebug, MinimalApplication)
-    {
-        // Deploy Modules
-        uint256 moduleCount = 6;
-        address[] memory modules = new address[](moduleCount);
-        bytes4[][] memory selectors = new bytes4[][](moduleCount);
-
-        vm.startBroadcast(_deployerPrivateKey);
-
-        modules[0] = address(new TADelegation());
-        selectors[0] = _generateSelectors("TADelegation");
-
-        modules[1] = address(new TARelayerManagement());
-        selectors[1] = _generateSelectors("TARelayerManagement");
-
-        modules[2] = address(new TATransactionAllocation());
-        selectors[2] = _generateSelectors("TATransactionAllocation");
-
-        modules[3] = address(new TADebug());
-        selectors[3] = _generateSelectors("TADebug");
-
-        modules[4] = address(new MinimalApplication());
-        selectors[4] = _generateSelectors("MinimalApplication");
-
-        modules[5] = address(new WormholeApplication());
-        selectors[5] = _generateSelectors("WormholeApplication");
-
-        vm.stopBroadcast();
-        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
-
-        return (ITransactionAllocatorDebug(address(proxy)), MinimalApplication(modules[4]));
-    }
-
-    function deployTestnet(uint256 _deployerPrivateKey, ITAProxy.InitializerParams memory _params)
-        public
-        returns (ITransactionAllocatorDebug)
-    {
-        // Foundation Relayer Setup
-        address deployer = vm.addr(_deployerPrivateKey);
-        _foundationRelayerSetup(
-            vm.envUint("FOUNDATION_RELAYER_PRIVATE_KEY"),
-            _params,
-            computeCreateAddress(deployer, vm.getNonce(deployer) + 5)
+        return deploy(
+            params,
+            modulesToDeploy,
+            wormholeConfig[block.chainid],
+            shouldDeployBondToken[block.chainid],
+            shouldConfigureWormhole[block.chainid],
+            DEPLOYER_PRIVATE_KEY,
+            FOUNDATION_RELAYER_PRIVATE_KEY
         );
+    }
 
-        // Deploy Modules
+    function deploy(
+        TAProxy.InitializerParams memory _params,
+        Module[] memory _modulesToDeploy,
+        WormholeConfig memory _wormholeConfig,
+        bool _shouldDeployBondToken,
+        bool _shouldConfigureWormhole,
+        uint256 _deployerPrivateKey,
+        uint256 _foundationRelayerPrivateKey
+    ) public returns (DeploymentResult memory) {
         vm.startBroadcast(_deployerPrivateKey);
 
-        uint256 moduleCount = 5;
-        address[] memory modules = new address[](moduleCount);
-        bytes4[][] memory selectors = new bytes4[][](moduleCount);
+        // Deploy Bond Token if needed
+        if (_shouldDeployBondToken) {
+            result.bondToken = address(new ERC20FreeMint("Bond Token", "BOND"));
+            _params.bondTokenAddress = TokenAddress.wrap(result.bondToken);
+        } else {
+            result.bondToken = TokenAddress.unwrap(_params.bondTokenAddress);
+        }
 
-        modules[0] = address(new TADelegation());
-        selectors[0] = _generateSelectors("TADelegation");
-
-        modules[1] = address(new TARelayerManagement());
-        selectors[1] = _generateSelectors("TARelayerManagement");
-
-        modules[2] = address(new TATransactionAllocation());
-        selectors[2] = _generateSelectors("TATransactionAllocation");
-
-        modules[3] = address(new TATestnetDebug());
-        selectors[3] = _generateSelectors("TATestnetDebug");
-
-        modules[4] = address(new WormholeApplication());
-        selectors[4] = _generateSelectors("WormholeApplication");
+        // Deploy Modules
+        for (uint256 i = 0; i < _modulesToDeploy.length; i++) {
+            _deployModule(_modulesToDeploy[i]);
+        }
 
         vm.stopBroadcast();
-        TAProxy proxy = _deploy(_deployerPrivateKey, _params, modules, selectors);
 
-        _wormholeModuleSetup(_deployerPrivateKey, proxy, IWormhole(wormhole), IWormholeRelayer(wormholeRelayer));
-
-        return ITransactionAllocatorDebug(address(proxy));
-    }
-
-    function _foundationRelayerSetup(
-        uint256 _foundationRelayerPrivateKey,
-        ITAProxy.InitializerParams memory _params,
-        address _expectedTransactionAllocatorAddress
-    ) internal {
+        // Setup the Foundation Relayer
         vm.startBroadcast(_foundationRelayerPrivateKey);
-        ERC20FreeMint token = ERC20FreeMint(TokenAddress.unwrap(_params.bondTokenAddress));
-        token.mint(vm.addr(_foundationRelayerPrivateKey), _params.minimumStakeAmount);
-        token.approve(_expectedTransactionAllocatorAddress, _params.minimumStakeAmount);
+
+        address expectedTAProxyAddr =
+            computeCreateAddress(vm.addr(_deployerPrivateKey), vm.getNonce(vm.addr(_deployerPrivateKey)));
+
+        {
+            address foundationRelayerAddr = vm.addr(_foundationRelayerPrivateKey);
+
+            ERC20FreeMint token = ERC20FreeMint(TokenAddress.unwrap(_params.bondTokenAddress));
+            uint256 foundationRelayerBalance = token.balanceOf(foundationRelayerAddr);
+            if (foundationRelayerBalance < _params.foundationRelayerStake) {
+                token.mint(foundationRelayerAddr, _params.foundationRelayerStake - foundationRelayerBalance);
+            }
+            uint256 allowance = token.allowance(foundationRelayerAddr, expectedTAProxyAddr);
+            if (allowance < _params.foundationRelayerStake) {
+                token.approve(expectedTAProxyAddr, _params.foundationRelayerStake);
+            }
+        }
+
         vm.stopBroadcast();
+
+        // Deploy TAProxy
+        vm.startBroadcast(_deployerPrivateKey);
+
+        TAProxy proxy = new TAProxy(modules, selectors, _params);
+        result.proxy = proxy;
+        if (address(proxy) != expectedTAProxyAddr) {
+            revert("TAProxy address mismatch");
+        }
+
+        // Setup Wormhole Application if needed
+        if (_shouldConfigureWormhole) {
+            WormholeApplication(address(proxy)).initializeWormholeApplication(
+                _wormholeConfig.wormhole, _wormholeConfig.relayer
+            );
+        }
+        vm.stopBroadcast();
+
+        return result;
     }
 
-    function _wormholeModuleSetup(
-        uint256 _deployerPrivateKey,
-        TAProxy _app,
-        IWormhole _wormholeCore,
-        IWormholeRelayer _wormholeRelayer
-    ) internal {
-        vm.broadcast(_deployerPrivateKey);
-        IWormholeApplication(address(_app)).initializeWormholeApplication(_wormholeCore, _wormholeRelayer);
+    function _deployModule(Module _moduleId) internal {
+        address moduleAddr;
+        bytes4[] memory moduleSelectors;
+
+        if (_moduleId == Module.TADelegation) {
+            moduleAddr = address(new TADelegation());
+            moduleSelectors = _generateSelectors("TADelegation");
+            result.delegation = TADelegation(moduleAddr);
+        }
+        if (_moduleId == Module.TARelayerManagement) {
+            moduleAddr = address(new TARelayerManagement());
+            moduleSelectors = _generateSelectors("TARelayerManagement");
+            result.relayerManagement = TARelayerManagement(moduleAddr);
+        }
+        if (_moduleId == Module.TATransactionAllocation) {
+            moduleAddr = address(new TATransactionAllocation());
+            moduleSelectors = _generateSelectors("TATransactionAllocation");
+            result.transactionAllocation = TATransactionAllocation(moduleAddr);
+        }
+        if (_moduleId == Module.TADebug) {
+            moduleAddr = address(new TADebug());
+            moduleSelectors = _generateSelectors("TADebug");
+            result.debug = TADebug(moduleAddr);
+        }
+        if (_moduleId == Module.TATestnetDebug) {
+            moduleAddr = address(new TATestnetDebug());
+            moduleSelectors = _generateSelectors("TATestnetDebug");
+            result.testnetDebug = TATestnetDebug(moduleAddr);
+        }
+        if (_moduleId == Module.WormholeApplication) {
+            moduleAddr = address(new WormholeApplication());
+            moduleSelectors = _generateSelectors("WormholeApplication");
+            result.wormholeApplication = WormholeApplication(moduleAddr);
+        }
+        if (_moduleId == Module.MinimalApplication) {
+            moduleAddr = address(new MinimalApplication());
+            moduleSelectors = _generateSelectors("MinimalApplication");
+            result.minimalApplication = MinimalApplication(moduleAddr);
+        }
+
+        modules.push(moduleAddr);
+        selectors.push(moduleSelectors);
     }
 
-    function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory selectors) {
+    function _generateSelectors(string memory _contractName) internal returns (bytes4[] memory) {
         string[] memory cmd = new string[](4);
         cmd[0] = "npx";
         cmd[1] = "ts-node";
         cmd[2] = "hardhat/scripts/generateSelectors.ts";
         cmd[3] = _contractName;
         bytes memory res = vm.ffi(cmd);
-        selectors = abi.decode(res, (bytes4[]));
+        return abi.decode(res, (bytes4[]));
     }
-
-    function test() external {}
 }

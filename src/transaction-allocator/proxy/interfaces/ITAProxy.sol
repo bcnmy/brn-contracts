@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
+import {TokenAddress, RelayerAddress, RelayerAccountAddress} from "ta-common/TATypes.sol";
+import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
 interface ITAProxy {
     error ParameterLengthMismatch();
@@ -21,7 +22,7 @@ interface ITAProxy {
         uint256 minimumDelegationAmount;
         uint256 baseRewardRatePerMinimumStakePerSec;
         uint256 relayerStateUpdateDelayInWindows;
-        uint256 livenessZParameter;
+        FixedPointType livenessZParameter;
         uint256 stakeThresholdForJailing;
         TokenAddress bondTokenAddress;
         TokenAddress[] supportedTokens;
