@@ -286,8 +286,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         TAStorage storage ta = getTAStorage();
         state.epochEndTimestamp = ta.epochEndTimestamp;
-        state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
-        state.updatedSharePrice = _protocolRewardRelayerSharePrice(state.updatedUnpaidProtocolRewards);
         state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp];
         state.zScoreSquared = ta.livenessZParameter;
         state.zScoreSquared = state.zScoreSquared * state.zScoreSquared;
@@ -339,6 +337,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerInfo storage relayerInfo = getRMStorage().relayerInfo[relayerAddress];
         uint256 stake = relayerInfo.stake;
         uint256 penalty = _calculatePenalty(stake);
+
+        // Initialize protocol reward state cache if not already done
+        // TODO: Test this thoroughly
+        if (_state.updatedSharePrice == FP_ZERO) {
+            _state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
+            _state.updatedSharePrice = _protocolRewardRelayerSharePrice(_state.updatedUnpaidProtocolRewards);
+        }
 
         if (stake - penalty >= _state.stakeThresholdForJailing) {
             _penalizeRelayer(relayerAddress, relayerInfo, stake, penalty, _state);
@@ -473,7 +478,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         uint256 newUnpaidRewards = _state.updatedUnpaidProtocolRewards - _state.totalProtocolRewardsPaid;
-        if (newUnpaidRewards != rms.totalUnpaidProtocolRewards) {
+        if (newUnpaidRewards > 0 && newUnpaidRewards != rms.totalUnpaidProtocolRewards) {
             rms.totalUnpaidProtocolRewards = newUnpaidRewards;
         }
 
