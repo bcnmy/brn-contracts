@@ -31,16 +31,20 @@ abstract contract TADeploymentConfig is Script {
     using Uint256WrapperHelper for uint256;
 
     uint256 public LOCAL_SIMULATION_CHAIN_ID = vm.envUint("SIMULATION_CHAIN_ID");
-    uint256 public FOUNDATION_RELAYER_PRIVATE_KEY = vm.envUint("FOUNDATION_RELAYER_PRIVATE_KEY");
+    uint256 public TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY = vm.envUint("TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY");
+    uint256 public ANVIL_DEFAULT_PRIVATE_KEY = vm.envUint("ANVIL_DEFAULT_PRIVATE_KEY");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    RelayerAddress public FOUNDATION_RELAYER_ADDRESS = RelayerAddress.wrap(vm.addr(FOUNDATION_RELAYER_PRIVATE_KEY));
+    RelayerAddress public FOUNDATION_RELAYER_ADDRESS =
+        RelayerAddress.wrap(vm.addr(TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY));
     address public DEPLOYER_ADDRESS = vm.addr(DEPLOYER_PRIVATE_KEY);
+    address public ANVIL_DEFAULT_ADDRESS = vm.addr(ANVIL_DEFAULT_PRIVATE_KEY);
 
     mapping(uint256 chainId => ITAProxy.InitializerParams) deploymentConfig;
     mapping(uint256 chainId => WormholeConfig) wormholeConfig;
     mapping(uint256 chainId => Module[]) modulesToDeploy;
     mapping(uint256 chainId => bool) shouldDeployBondToken;
     mapping(uint256 chainId => bool) shouldConfigureWormhole;
+    mapping(address => uint256) public addressToPrivateKey;
 
     constructor() {
         ////////////// Local Simulation //////////////
@@ -59,10 +63,8 @@ abstract contract TADeploymentConfig is Script {
             livenessZParameter: uint256(4).fp(),
             bondTokenAddress: TokenAddress.wrap(address(0)),
             supportedTokens: _toDyn([NATIVE_TOKEN]),
-            foundationRelayerAddress: FOUNDATION_RELAYER_ADDRESS,
-            foundationRelayerAccountAddresses: _toDyn(
-                [RelayerAccountAddress.wrap(RelayerAddress.unwrap(FOUNDATION_RELAYER_ADDRESS))]
-                ),
+            foundationRelayerAddress: RelayerAddress.wrap(ANVIL_DEFAULT_ADDRESS),
+            foundationRelayerAccountAddresses: _toDyn([RelayerAccountAddress.wrap(ANVIL_DEFAULT_ADDRESS)]),
             foundationRelayerStake: 10000 ether,
             foundationRelayerEndpoint: "https://api.abc.com",
             foundationDelegatorPoolPremiumShare: 0
@@ -115,6 +117,9 @@ abstract contract TADeploymentConfig is Script {
 
         vm.label(RelayerAddress.unwrap(FOUNDATION_RELAYER_ADDRESS), "foundationRelayer");
         vm.label(DEPLOYER_ADDRESS, "deployer");
+
+        addressToPrivateKey[RelayerAddress.unwrap(FOUNDATION_RELAYER_ADDRESS)] = TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY;
+        addressToPrivateKey[ANVIL_DEFAULT_ADDRESS] = ANVIL_DEFAULT_PRIVATE_KEY;
     }
 
     function _toDyn(TokenAddress[1] memory _arr) private pure returns (TokenAddress[] memory arr) {

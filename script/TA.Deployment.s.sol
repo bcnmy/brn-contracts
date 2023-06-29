@@ -44,7 +44,7 @@ contract TADeploymentScript is TADeploymentConfig {
             shouldDeployBondToken[block.chainid],
             shouldConfigureWormhole[block.chainid],
             DEPLOYER_PRIVATE_KEY,
-            FOUNDATION_RELAYER_PRIVATE_KEY
+            addressToPrivateKey[RelayerAddress.unwrap(params.foundationRelayerAddress)]
         );
     }
 

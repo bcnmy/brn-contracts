@@ -33,7 +33,7 @@ transactionAllocatorWs.on(
 
 // Default Case
 const foundationRelayerAddress = new Wallet(
-  process.env.FOUNDATION_RELAYER_PRIVATE_KEY!,
+  process.env.TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY!,
   httpProvider
 ).address;
 const relayers = [foundationRelayerAddress];

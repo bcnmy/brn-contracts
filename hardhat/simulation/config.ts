@@ -8,10 +8,10 @@ dotenv.config();
 const BOND_TOKEN_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 const TA_ADDRESS = '0x0165878A594ca255338adfa4d48449f69242Eb8F';
 
-const httpProvider = new ethers.providers.JsonRpcBatchProvider(process.env.RPC_URL!);
-const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL!);
-const httpWallet = new ethers.Wallet(process.env.PRIVATE_KEY!, httpProvider);
-const wsWallet = new ethers.Wallet(process.env.PRIVATE_KEY!, wsProvider);
+const httpProvider = new ethers.providers.JsonRpcBatchProvider(process.env.SIMULATION_RPC_URL!);
+const wsProvider = new ethers.providers.WebSocketProvider(process.env.SIMULATION_WS_URL!);
+const httpWallet = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!, httpProvider);
+const wsWallet = new ethers.Wallet(process.env.DEPLOYER_PRIVATE_KEY!, wsProvider);
 
 const config = {
   httpProvider,
