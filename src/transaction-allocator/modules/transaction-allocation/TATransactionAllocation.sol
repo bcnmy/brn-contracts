@@ -713,7 +713,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         //      ┌──────┐
         // => z╲│e(1-p)  ≥ e - t
         //
-        // => e ≤ t ∧ z²e(1-p) ≥ (e-t)²
+        // => e > t ∧ z²e(1-p) ≥ (e-t)²
 
         // We skip the check if e ≤ t
         FixedPointType p = _relayerStake.fp().div(_totalStake);
