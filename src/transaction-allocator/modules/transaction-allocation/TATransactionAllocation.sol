@@ -604,11 +604,19 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _totalTransactions,
         FixedPointType _zScore
     ) external pure override returns (FixedPointType) {
-        // The condition for liveness is:
-        //   Probability (p) = _relayerStake / _totalStake
-        //   Standard Deviation (s) = √(p * (1 - p) * _totalTransactions)
-        //   Expected Number of Transactions (e) = p * _totalTransactions
-        //   Minimum Number of Transactions = Max(e - z * s, 0)
+        // Let t = _transactionsDoneByRelayer
+        //     T = _totalTransactions
+        //
+        //                  _relayerStake
+        // Probability: p = ─────────────
+        //                   _totalStake
+        //
+        // Expected Number of Transactions: e = pT
+        //
+        //                          ┌─────────┐   ┌──────┐
+        // Standard Deviation: s = ╲│p(1 - p)T = ╲│(1-p)e
+        //                                                 ┌─────┐
+        // Minimum Number of Transactions = e - zs = e - z╲│(1-p)e
 
         if (_totalTransactions == 0) {
             return FP_ZERO;
@@ -669,40 +677,55 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev An optimized version of verifying whether _transactionsDoneByRelayer >= calculatedMinimumTranasctionsForLiveness()
     /// @param _relayerStake The stake of the relayer.
     /// @param _totalStake The total stake of all relayers.
-    /// @param _tranasctionsDoneByRelayer The number of transactions done by the relayer.
+    /// @param _transactionsDoneByRelayer The number of transactions done by the relayer.
     /// @param _totalTransactions The total number of transactions done by all relayers.
     /// @param _zScoreSquared The zScore parameter squared value.
     /// @return True if the relayer passes the liveness check for the current epoch, else false.
     function _checkRelayerLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
-        uint256 _tranasctionsDoneByRelayer,
+        uint256 _transactionsDoneByRelayer,
         uint256 _totalTransactions,
         FixedPointType _zScoreSquared
     ) internal pure returns (bool) {
-        // Calculating square roots is expensive, so we modfiy the inequality to avoid it.
+        // Calculating square roots is expensive, so we modify the inequality to avoid it.
         //
-        // Let t = _tranasctionsDoneByRelayer, T = _totalTransactions, p = _relayerStake / _totalStake
+        // Let t = _transactionsDoneByRelayer
+        //     T = _totalTransactions
+        //
+        //                  _relayerStake
+        // Probability: p = ─────────────
+        //                   _totalStake
+        //
         // The original condition is:
-        //   Expected Number of Transactions (e) = pT
-        //   Standard Deviation (s) = √(p(1 - p)T) = √((1-p)e)
-        //   Minimum Number of Transactions = e - z * s = e - z√((1-p)e)
-        //   Therefore, t >= e - z√((1-p)e)
-        //           or  z√((1-p)e) >= e - t
+        //
+        // Expected Number of Transactions: e = pT
+        //
+        //                          ┌─────────┐   ┌──────┐
+        // Standard Deviation: s = ╲│p(1 - p)T = ╲│(1-p)e
+        //                                                 ┌─────┐
+        // Minimum Number of Transactions = e - zs = e - z╲│(1-p)e
+        //
+        // Therefore,
+        //              ┌──────┐
+        // => t ≥ e - z╲│(1-p)e
+        //
+        //      ┌──────┐
+        // => z╲│e(1-p)  ≥ e - t
+        //
+        // => e ≤ t ∧ z²e(1-p) ≥ (e-t)²
 
-        // Optimized condition:
-        // We skip the check if e - t <= 0
+        // We skip the check if e ≤ t
         FixedPointType p = _relayerStake.fp().div(_totalStake);
         FixedPointType e = p.mul(_totalTransactions);
-        FixedPointType _tranasctionsDoneByRelayerFp = _tranasctionsDoneByRelayer.fp();
-        if (e <= _tranasctionsDoneByRelayerFp) {
+        FixedPointType _transactionsDoneByRelayerFp = _transactionsDoneByRelayer.fp();
+        if (e <= _transactionsDoneByRelayerFp) {
             return true;
         }
 
-        // Square both sides of the inequality to avoid calculating the square root
-        // z^2 * (1-p)e >= (e - t)^2
+        // Proceed with the check if e > t
         FixedPointType lhs = _zScoreSquared * e * (FP_ONE - p);
-        FixedPointType rhs = e - _tranasctionsDoneByRelayerFp;
+        FixedPointType rhs = e - _transactionsDoneByRelayerFp;
         rhs = rhs * rhs;
 
         return lhs >= rhs;
