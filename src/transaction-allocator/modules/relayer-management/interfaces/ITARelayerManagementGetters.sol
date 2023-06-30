@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import {RelayerAddress, RelayerAccountAddress, TokenAddress, RelayerStatus} from "ta-common/TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
+/// @title ITARelayerManagementGetters
 interface ITARelayerManagementGetters {
     function relayerCount() external view returns (uint256);
 
@@ -23,8 +24,6 @@ interface ITARelayerManagementGetters {
     function relayerInfo(RelayerAddress) external view returns (RelayerInfoView memory);
 
     function relayerInfo_isAccount(RelayerAddress, RelayerAccountAddress) external view returns (bool);
-
-    function isGasTokenSupported(TokenAddress) external view returns (bool);
 
     function relayersPerWindow() external view returns (uint256);
 

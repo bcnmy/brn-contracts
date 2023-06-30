@@ -2,8 +2,9 @@
 
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
+import {RelayerAddress, RelayerAccountAddress, TokenAddress} from "ta-common/TATypes.sol";
 
+/// @title ITARelayerManagementEventsErrors
 interface ITARelayerManagementEventsErrors {
     error NoAccountsProvided();
     error InsufficientStake(uint256 stake, uint256 minimumStake);

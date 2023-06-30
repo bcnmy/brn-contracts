@@ -2,18 +2,86 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20, IERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
 import {CDF_PRECISION_MULTIPLIER} from "ta-common/TAConstants.sol";
-import "./interfaces/ITARelayerManagement.sol";
-import "./TARelayerManagementStorage.sol";
-import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
-import "src/library/VersionManager.sol";
-import "src/library/arrays/U32ArrayHelper.sol";
+import {RelayerAddress, RelayerAccountAddress, RelayerState, RelayerStatus, TokenAddress} from "ta-common/TATypes.sol";
+import {ITARelayerManagement} from "./interfaces/ITARelayerManagement.sol";
 import {TARelayerManagementGetters} from "./TARelayerManagementGetters.sol";
+import {TATransactionAllocationStorage} from "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+import {VersionManager} from "src/library/VersionManager.sol";
+import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
 import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
 import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {
+    Uint256WrapperHelper, FixedPointTypeHelper, FixedPointType, FP_ZERO
+} from "src/library/FixedPointArithmetic.sol";
 
+/// @title TARelayerManagement
+/// @dev This contract manages the relayers and their state.
+///
+/// The relayer state transition diagram
+///
+///                                                                  ┌─────────────────────────────┐
+///                                                                  │                             │
+///                                                                  │                             │
+///                                               Register           │                             │           Withdraw
+///                              ┌───────────────────────────────────┤       Uninitialized         ◄─────────────────────────────────┐
+///                              │                                   │                             │                                 │
+///                              │                                   │                             │                                 │
+///                              │                                   │                             │                                 │
+///                              │                                   └──────────────▲──────────────┘                                 │
+///                              │                                                  │                                                │
+///                              │                                                  │                                                │
+///                              │                                                  │                                                │
+///                              │                                                  │                                                │
+///                              │                                                  │                                                │
+///                              │                                                  │                                                │       ┌───────────────────►┐
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │ Unjail and Exit                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                              │                                                  │                                                │       │                    │
+///                ┌─────────────▼───────────────┐                                  │                                 ┌──────────────┴───────┴──────┐             │
+///                │                             │                                  │                                 │                             │             │
+///                │                             │                                  │                                 │                             │             │
+///                │                             │        Unregister                │                                 │                             │             │
+///    ┌───────────►           Active            ├──────────────────────────────────┼────────────────────────────────►│           Exiting           │◄────────────┘
+///    │           │                             │                                  │                                 │                             │            Penalisation
+///    │           │                             │                                  │                                 │                             │
+///    │           │                             │                                  │                                 │                             │
+///    │           └─────────────┬──┬──────▲─────┘                                  │                                 └──────────────┬──────────────┘
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///    │                         │  │      │                                        │                                                │
+///     ◄────────────────────────┘  │      │Unjail and Re-enter                     │                                                │
+/// Penalisation                    │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      │                                        │                                                │
+///                                 │      └─────────────────────────┬──────────────┴──────────────┐                                 │
+///                                 │                                │                             │                                 │
+///                                 │                                │                             │                                 │
+///                                 │                                │                             │                                 │
+///                                 └───────────────────────────────►│           Jailed            │◄────────────────────────────────┘
+///                                        Penalisation              │                             │                  Penalisation
+///                                                                  │                             │
+///                                                                  │                             │
+///                                                                  └─────────────────────────────┘
+///                                                                                                                                         Made with https://asciiflow.com/#/
+///
 contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationStorage, TARelayerManagementGetters {
     using SafeERC20 for IERC20;
     using Uint256WrapperHelper for uint256;
@@ -24,6 +92,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     using RAArrayHelper for RelayerAddress[];
 
     ////////////////////////// Relayer Registration //////////////////////////
+
+    /// @inheritdoc ITARelayerManagement
     function register(
         RelayerState calldata _latestState,
         uint256 _stake,
@@ -44,6 +114,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
     }
 
+    /// @inheritdoc ITARelayerManagement
     function registerFoundationRelayer(
         RelayerAddress _foundationRelayerAddress,
         uint256 _stake,
@@ -68,6 +139,12 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(cdf.m_hash(), relayers.m_hash())));
     }
 
+    /// @notice Updates teh state for registering a relayer
+    /// @param _relayerAddress The address of the relayer to register.
+    /// @param _stake The amount of tokens to stake in the bond token (bico).
+    /// @param _accounts The accounts to register for the relayer.
+    /// @param _endpoint The rpc endpoint of the relayer.
+    /// @param _delegatorPoolPremiumShare The percentage of the delegator pool rewards to be shared with the relayer.
     function _register(
         RelayerAddress _relayerAddress,
         uint256 _stake,
@@ -108,7 +185,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         rms.totalProtocolRewardShares = rms.totalProtocolRewardShares + node.rewardShares;
     }
 
-    /// @notice a relayer un unregister, which removes it from the relayer list and a delay for withdrawal is imposed on funds
+    /// @inheritdoc ITARelayerManagement
     function unregister(RelayerState calldata _latestState, uint256 _relayerIndex)
         external
         override
@@ -170,6 +247,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         emit RelayerUnRegistered(relayerAddress);
     }
 
+    /// @inheritdoc ITARelayerManagement
     function withdraw(RelayerAccountAddress[] calldata _relayerAccountsToRemove) external override noSelfCall {
         RMStorage storage rms = getRMStorage();
 
@@ -211,6 +289,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         }
     }
 
+    /// @inheritdoc ITARelayerManagement
     function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external override noSelfCall {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
@@ -251,6 +330,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     }
 
     ////////////////////////// Relayer Configuration //////////////////////////
+
+    /// @inheritdoc ITARelayerManagement
     function setRelayerAccountsStatus(RelayerAccountAddress[] calldata _accounts, bool[] calldata _status)
         external
         override
@@ -299,6 +380,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     }
 
     ////////////////////////// Protocol Rewards //////////////////////////
+
+    /// @inheritdoc ITARelayerManagement
     function claimProtocolReward() external override noSelfCall onlyActiveRelayer(RelayerAddress.wrap(msg.sender)) {
         uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
@@ -325,6 +408,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         }
     }
 
+    /// @inheritdoc ITARelayerManagement
     function relayerClaimableProtocolRewards(RelayerAddress _relayerAddress)
         external
         view

@@ -13,6 +13,7 @@ import {TARelayerManagementStorage} from "./TARelayerManagementStorage.sol";
 import {ITARelayerManagementGetters} from "./interfaces/ITARelayerManagementGetters.sol";
 import {TAHelpers} from "ta-common/TAHelpers.sol";
 
+/// @title TARelayerManagementGetters
 abstract contract TARelayerManagementGetters is
     Guards,
     TARelayerManagementStorage,
@@ -60,10 +61,6 @@ abstract contract TARelayerManagementGetters is
         returns (bool)
     {
         return getRMStorage().relayerInfo[_relayerAddress].isAccount[_account];
-    }
-
-    function isGasTokenSupported(TokenAddress _token) external view override noSelfCall returns (bool) {
-        return getRMStorage().isGasTokenSupported[_token];
     }
 
     function relayersPerWindow() external view override noSelfCall returns (uint256) {

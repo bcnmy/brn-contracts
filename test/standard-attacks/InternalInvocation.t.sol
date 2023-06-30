@@ -105,7 +105,6 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
             abi.encodeCall(
                 ta.relayerInfo_isAccount, (relayerMainAddress[0], relayerAccountAddresses[relayerMainAddress[0]][0])
             ),
-            abi.encodeCall(ta.isGasTokenSupported, (TokenAddress.wrap(address(bico)))),
             abi.encodeCall(ta.relayersPerWindow, ()),
             abi.encodeCall(ta.blocksPerWindow, ()),
             abi.encodeCall(ta.bondTokenAddress, ()),

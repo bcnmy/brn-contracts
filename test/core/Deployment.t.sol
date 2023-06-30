@@ -103,9 +103,6 @@ contract DeploymentTest is Test {
         assertEq(ta.livenessZParameter() == params.livenessZParameter, true);
         assertEq(ta.bondTokenAddress() == params.bondTokenAddress, true);
         assertEq(ta.supportedPools()[0] == params.supportedTokens[0], true);
-        for (uint256 i = 0; i < params.supportedTokens.length; i++) {
-            assertEq(ta.isGasTokenSupported(params.supportedTokens[i]), true);
-        }
 
         assertEq(ta.relayerInfo(foundationRelayerAddress).stake, params.foundationRelayerStake);
         assertEq(ta.relayerInfo(foundationRelayerAddress).endpoint, params.foundationRelayerEndpoint);
