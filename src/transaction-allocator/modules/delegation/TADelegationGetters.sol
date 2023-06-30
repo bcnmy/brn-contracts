@@ -8,6 +8,7 @@ import {ITADelegationGetters} from "./interfaces/ITADelegationGetters.sol";
 import {TADelegationStorage} from "./TADelegationStorage.sol";
 import {Guards} from "src/utils/Guards.sol";
 
+/// @title TADelegationGetters
 abstract contract TADelegationGetters is TADelegationStorage, ITADelegationGetters, Guards {
     function totalDelegation(RelayerAddress _relayerAddress) external view override noSelfCall returns (uint256) {
         return getTADStorage().totalDelegation[_relayerAddress];

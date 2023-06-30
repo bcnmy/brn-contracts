@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import {RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
+/// @title ITADelegationGetters
 interface ITADelegationGetters {
     function totalDelegation(RelayerAddress _relayerAddress) external view returns (uint256);
 

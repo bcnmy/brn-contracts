@@ -2,14 +2,39 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./interfaces/ITADelegation.sol";
-import "./TADelegationGetters.sol";
-import "ta-common/TAHelpers.sol";
-import "src/library/arrays/U32ArrayHelper.sol";
+import {ITADelegation} from "./interfaces/ITADelegation.sol";
+import {TADelegationGetters} from "./TADelegationGetters.sol";
+import {TAHelpers} from "ta-common/TAHelpers.sol";
+import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
+import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {
+    FixedPointType,
+    FixedPointTypeHelper,
+    Uint256WrapperHelper,
+    FP_ZERO,
+    FP_ONE
+} from "src/library/FixedPointArithmetic.sol";
+import {RelayerState, RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {NATIVE_TOKEN} from "ta-common/TAConstants.sol";
 
+/// @title TADelegation
+/// @dev Module for delegating tokens to relayers.
+/// BICO holders can delegate their tokens to a relayer signaling support to the relayer activity.
+/// Delegation increases the total effective staked amount of a relayer, which in turn increases the probability
+/// of that particular relayer being selected to relay transactions.
+/// Premiums and rewards of the relayers are shared with delegators according to the rules established in the economics of the BRN
+///
+/// The delegators earn rewards for each token in storage.supportedPools.
+/// The accounting for each (relayer, token_pool) is done separately.
+/// Each (relayer, token_pool) has a separate share price, determined as:
+///    share_price{i} = (total_delegation_in_bico_to_relayer + unclaimed_rewards{i}) / total_shares_minted{i} for total_shares_minted{i} != 0
+///                     1 for total_shares_minted{i} == 0
+/// for the ith token in storage.supportedPools. Notice that total_delegation_in_bico_to_relayer is common for all supported tokens.
+/// When a delegator delegates to a relayer, it receives shares for all tokens in storage.supportedPools, for that relayer.
 contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
@@ -18,6 +43,11 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
 
+    /// @dev Mints delegation pool shares at the current share price for that relayer's pool
+    /// @param _relayerAddress The relayer address to delegate to
+    /// @param _delegatorAddress The delegator address
+    /// @param _delegatedAmount The amount of bond tokens (bico) to delegate
+    /// @param _pool The token for which shares are being minted
     function _mintPoolShares(
         RelayerAddress _relayerAddress,
         DelegatorAddress _delegatorAddress,
@@ -36,34 +66,10 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         emit SharesMinted(_relayerAddress, _delegatorAddress, _pool, _delegatedAmount, sharesMinted, sharePrice_);
     }
 
-    function _updateRelayerProtocolRewards(RelayerAddress _relayer) internal {
-        if (!_isActiveRelayer(_relayer)) {
-            return;
-        }
-
-        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
-        (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn) =
-            _getPendingProtocolRewardsData(_relayer, updatedTotalUnpaidProtocolRewards);
-
-        // Process delegator rewards
-        RMStorage storage rs = getRMStorage();
-        RelayerInfo storage relayerInfo = rs.relayerInfo[_relayer];
-
-        if (delegatorRewards > 0) {
-            _addDelegatorRewards(_relayer, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
-        }
-
-        // Process relayer rewards
-        if (relayerRewards > 0) {
-            relayerInfo.unpaidProtocolRewards += relayerRewards;
-            emit RelayerProtocolRewardsGenerated(_relayer, relayerRewards);
-        }
-
-        rs.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerRewards - delegatorRewards;
-        rs.totalProtocolRewardShares = rs.totalProtocolRewardShares - sharesToBurn;
-        relayerInfo.rewardShares = relayerInfo.rewardShares - sharesToBurn;
-    }
-
+    /// @dev Mints delegation pool shares at the current share price in each supported pool for the delegator
+    /// @param _relayerAddress The relayer address to delegate to
+    /// @param _delegator The delegator address
+    /// @param _amount The amount of bond tokens (bico) to delegate
     function _mintAllPoolShares(RelayerAddress _relayerAddress, DelegatorAddress _delegator, uint256 _amount)
         internal
     {
@@ -81,6 +87,41 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         }
     }
 
+    /// @dev Delegator are entitled to share of the protocol rewards generated for the relayer.
+    ///      This function calcualtes the protocol rewards generated for the relayer since the last time it was calcualted,
+    ///      splits the rewards b/w the relayer and the delegators based on the relayer's premium sharing configuration
+    /// @param _relayer The relayer address for which the accounting is being updated
+    function _updateRelayerProtocolRewards(RelayerAddress _relayer) internal {
+        // Non-active relayer do not generate protocol rewards
+        if (!_isActiveRelayer(_relayer)) {
+            return;
+        }
+
+        uint256 updatedTotalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
+        (uint256 relayerRewards, uint256 delegatorRewards, FixedPointType sharesToBurn) =
+            _getPendingProtocolRewardsData(_relayer, updatedTotalUnpaidProtocolRewards);
+
+        // Process delegator rewards
+        RMStorage storage rs = getRMStorage();
+        RelayerInfo storage relayerInfo = rs.relayerInfo[_relayer];
+
+        if (delegatorRewards > 0) {
+            _addDelegatorRewards(_relayer, TokenAddress.wrap(address(rs.bondToken)), delegatorRewards);
+        }
+
+        // Store the relayer's rewards in the relayer's state to claim later
+        if (relayerRewards > 0) {
+            relayerInfo.unpaidProtocolRewards += relayerRewards;
+            emit RelayerProtocolRewardsGenerated(_relayer, relayerRewards);
+        }
+
+        // Update global accounting
+        rs.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerRewards - delegatorRewards;
+        rs.totalProtocolRewardShares = rs.totalProtocolRewardShares - sharesToBurn;
+        relayerInfo.rewardShares = relayerInfo.rewardShares - sharesToBurn;
+    }
+
+    /// @inheritdoc ITADelegation
     function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
         external
         override
@@ -107,7 +148,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         ds.totalDelegation[relayerAddress] += _amount;
         emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
 
-        // Update the CDF
+        // Schedule the CDF update
         _updateCdf_c(_latestState.relayers);
     }
 
@@ -116,6 +157,13 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         uint256 amount;
     }
 
+    /// @dev Calculate and return the rewards earned by the delegator for the given relayer and pool, including the original delegation amount
+    /// @param _relayerAddress The relayer address
+    /// @param _pool The token for which rewards are being calculated
+    /// @param _delegatorAddress The delegator address
+    /// @param _bondToken The bond token address
+    /// @param _delegation The amount of bond tokens (bico) delegated
+    /// @return The amount of rewards earned by the delegator. If _pool==_bondToken, include the original delegation amount
     function _processRewards(
         RelayerAddress _relayerAddress,
         TokenAddress _pool,
@@ -131,6 +179,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             ds.unclaimedRewards[_relayerAddress][_pool] -= rewardsEarned_;
         }
 
+        // Update global counters
         ds.totalShares[_relayerAddress][_pool] =
             ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
         ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
@@ -141,6 +190,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         });
     }
 
+    /// @inheritdoc ITADelegation
     function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress)
         external
         override
@@ -191,6 +241,10 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         }
     }
 
+    /// @dev The price of for the given relayer and pool
+    /// @param _relayerAddress The relayer address
+    /// @param _tokenAddress The token (pool) address
+    /// @param _extraUnclaimedRewards Rewards to considered in the share price calculation which are not stored in the contract (yet)
     function _delegationSharePrice(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddress,
@@ -209,6 +263,10 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         ).fp() / totalShares_;
     }
 
+    /// @dev Calculate the rewards earned by the delegator for the given relayer and pool
+    /// @param _relayerAddress The relayer address
+    /// @param _tokenAddress The token (pool) address
+    /// @param _delegatorAddress The delegator address
     function _delegationRewardsEarned(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddress,
@@ -226,6 +284,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         return 0;
     }
 
+    /// @inheritdoc ITADelegation
     function claimableDelegationRewards(
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddress,
@@ -252,6 +311,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         return 0;
     }
 
+    /// @inheritdoc ITADelegation
     function addDelegationRewards(RelayerAddress _relayerAddress, uint256 _tokenIndex, uint256 _amount)
         external
         payable

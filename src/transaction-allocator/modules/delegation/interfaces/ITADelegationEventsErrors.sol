@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "ta-common/TATypes.sol";
 import "src/library/FixedPointArithmetic.sol";
 
+/// @title ITADelegationEventsErrors
 interface ITADelegationEventsErrors {
     error PoolNotSupported(RelayerAddress relayerAddress, TokenAddress tokenAddress);
     error NoSupportedGasTokens();
