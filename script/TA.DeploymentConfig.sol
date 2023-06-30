@@ -30,14 +30,13 @@ struct WormholeConfig {
 abstract contract TADeploymentConfig is Script {
     using Uint256WrapperHelper for uint256;
 
-    uint256 public LOCAL_SIMULATION_CHAIN_ID = vm.envUint("SIMULATION_CHAIN_ID");
-    uint256 public TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY = vm.envUint("TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY");
-    uint256 public ANVIL_DEFAULT_PRIVATE_KEY = vm.envUint("ANVIL_DEFAULT_PRIVATE_KEY");
-    uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    RelayerAddress public FOUNDATION_RELAYER_ADDRESS =
-        RelayerAddress.wrap(vm.addr(TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY));
-    address public DEPLOYER_ADDRESS = vm.addr(DEPLOYER_PRIVATE_KEY);
-    address public ANVIL_DEFAULT_ADDRESS = vm.addr(ANVIL_DEFAULT_PRIVATE_KEY);
+    uint256 public LOCAL_SIMULATION_CHAIN_ID;
+    uint256 public TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY;
+    uint256 public ANVIL_DEFAULT_PRIVATE_KEY;
+    uint256 public DEPLOYER_PRIVATE_KEY;
+    RelayerAddress public FOUNDATION_RELAYER_ADDRESS;
+    address public DEPLOYER_ADDRESS;
+    address public ANVIL_DEFAULT_ADDRESS;
 
     mapping(uint256 chainId => ITAProxy.InitializerParams) deploymentConfig;
     mapping(uint256 chainId => WormholeConfig) wormholeConfig;
@@ -46,7 +45,15 @@ abstract contract TADeploymentConfig is Script {
     mapping(uint256 chainId => bool) shouldConfigureWormhole;
     mapping(address => uint256) public addressToPrivateKey;
 
-    constructor() {
+    function _setUpConfiguration() internal {
+        LOCAL_SIMULATION_CHAIN_ID = vm.envUint("SIMULATION_CHAIN_ID");
+        TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY = vm.envUint("TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY");
+        ANVIL_DEFAULT_PRIVATE_KEY = vm.envUint("ANVIL_DEFAULT_PRIVATE_KEY");
+        DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+        FOUNDATION_RELAYER_ADDRESS = RelayerAddress.wrap(vm.addr(TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY));
+        DEPLOYER_ADDRESS = vm.addr(DEPLOYER_PRIVATE_KEY);
+        ANVIL_DEFAULT_ADDRESS = vm.addr(ANVIL_DEFAULT_PRIVATE_KEY);
+
         ////////////// Local Simulation //////////////
         deploymentConfig[LOCAL_SIMULATION_CHAIN_ID] = ITAProxy.InitializerParams({
             blocksPerWindow: 2,

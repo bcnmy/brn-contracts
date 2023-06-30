@@ -34,6 +34,8 @@ contract TADeploymentScript is TADeploymentConfig {
     DeploymentResult public result;
 
     function run() external returns (DeploymentResult memory) {
+        _setUpConfiguration();
+
         TAProxy.InitializerParams storage params = deploymentConfig[block.chainid];
         Module[] storage modulesToDeploy = modulesToDeploy[block.chainid];
 
