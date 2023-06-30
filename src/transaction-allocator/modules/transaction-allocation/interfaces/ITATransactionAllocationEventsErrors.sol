@@ -2,8 +2,9 @@
 
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
+import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
 
+/// @title ITATransactionAllocationEventsErrors
 interface ITATransactionAllocationEventsErrors {
     error NoRelayersRegistered();
     error InsufficientRelayersRegistered();

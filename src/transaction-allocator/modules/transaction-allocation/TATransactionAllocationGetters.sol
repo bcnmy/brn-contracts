@@ -8,6 +8,7 @@ import {Guards} from "src/utils/Guards.sol";
 import {RelayerAddress} from "ta-common/TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
+/// @title TATransactionAllocationGetters
 abstract contract TATransactionAllocationGetters is
     ITATransactionAllocationGetters,
     TATransactionAllocationStorage,

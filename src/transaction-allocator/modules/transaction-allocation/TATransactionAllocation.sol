@@ -2,11 +2,39 @@
 
 pragma solidity 0.8.19;
 
-import "./interfaces/ITATransactionAllocation.sol";
-import "ta-common/TAHelpers.sol";
-import "src/library/arrays/U32ArrayHelper.sol";
-import {TATransactionAllocationGetters} from "./TATransactionAllocationGetters.sol";
+import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 
+import {ITATransactionAllocation} from "./interfaces/ITATransactionAllocation.sol";
+import {TATransactionAllocationGetters} from "./TATransactionAllocationGetters.sol";
+import {TAHelpers} from "ta-common/TAHelpers.sol";
+import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
+import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {
+    FixedPointTypeHelper,
+    FixedPointType,
+    Uint256WrapperHelper,
+    FP_ZERO,
+    FP_ONE
+} from "src/library/FixedPointArithmetic.sol";
+import {VersionManager} from "src/library/VersionManager.sol";
+import {RelayerAddress, TokenAddress, RelayerAccountAddress, RelayerState, RelayerStatus} from "ta-common/TATypes.sol";
+import {PERCENTAGE_MULTIPLIER} from "ta-common/TAConstants.sol";
+
+/// @title TATransactionAllocation
+/// @dev This contract is responsible for allocating transactions to relayers and their execution.
+///      A window is defined as a contigous set of blocks. The window size is defined by blocksPerWindow.
+///      An epoch is defined as a period of time in which liveness is measured. The epoch length is defined by epochLengthInSec.
+///
+///      1. Transaction Allocation and Execution:
+///      Each window, relayersPerWindow relayers are selected in a pseudo-random manner to submit transactions.
+///      The execute function verifies that the calling relayer is selected in the current window, then executes the transactions.
+///      Each transaction delegates to a transaction specific module, which verifies if that particular transaction was assigned to the relayer.
+///
+///      2. State Updation:
+///      In the fist transaction of each epoch, the liveness of each relayer is verified.
+///      Any relayers that fail the liveness check are penalized, and if their stake falls below a threshold, they are jailed.
+///      Once the liveness check is complete, the pending state is scheduled for activation in the next window.
 contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATransactionAllocationGetters {
     using SafeCast for uint256;
     using FixedPointTypeHelper for FixedPointType;
@@ -17,7 +45,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     using RAArrayHelper for RelayerAddress[];
 
     ///////////////////////////////// Transaction Execution ///////////////////////////////
-    /// @notice allows relayer to execute a tx on behalf of a client
+
+    /// @inheritdoc ITATransactionAllocation
     function execute(ExecuteParams calldata _params) external payable noSelfCall {
         uint256 length = _params.reqs.length;
         if (length != _params.forwardedNativeAmounts.length) {
@@ -89,6 +118,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // }
     }
 
+    /// @dev Verifies that the relayer has been selected for the current window.
+    /// @param _relayer The relayer address.
+    /// @param _activeState The active realyer state, against which the relayer selection is verified.
+    /// @param _relayerIndex The index of the relayer in the active state.
+    /// @param _relayerGenerationIterationBitmap The bitmap of relayer generation iterations for which the relayer has been selected.
+    /// @param _blockNumber The block number at which the verification logic needs to be run.
     function _verifyRelayerSelection(
         address _relayer,
         RelayerState calldata _activeState,
@@ -103,12 +138,16 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RMStorage storage ds = getRMStorage();
 
         {
+            // If the ith bit of _relayerGenerationIterationBitmap is set, then the relayer has been selected as the ith relayer
+            // where 0 <= i < relayersPerWindow.
+            // This also means that the relayer is allowed to submit all transactions which satisfy the following condition:
+            //   hash(txn) % relayersPerWindow == i
+
             // Verify Each Iteration against _cdfIndex in _cdf
             uint16 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
             uint256 relayersPerWindow = ds.relayersPerWindow;
 
-            // I wonder if an efficient implementation of __builtin_ctzl exists in solidity.
             while (_relayerGenerationIterationBitmap != 0) {
                 if (_relayerGenerationIterationBitmap & 1 == 1) {
                     if (relayerGenerationIteration >= relayersPerWindow) {
@@ -147,6 +186,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
     }
 
+    /// @dev Generates a pseudo random number used for selecting a relayer.
+    /// @param _blockNumber The block number at which the random number needs to be generated.
+    /// @param _iter The ith iteration corresponds to the ith relayer being generated
+    /// @param _max The modulo value for the random number generation.
     function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint16 _max)
         internal
         view
@@ -158,6 +201,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return (seed % _max + 1).toUint16();
     }
 
+    /// @dev Executes the transactions, appending necessary data to the calldata for each.
+    /// @param _reqs The array of transactions to execute.
+    /// @param _forwardedNativeAmounts The array of forwarded native amounts for each transaction.
+    /// @param _relayerCount The number of relayers that have been selected for the current window.
+    /// @param _relayerAddress The address of the relayer that has been selected for the current window.
+    /// @param _relayerGenerationIterationBitmap The bitmap of relayer generation iterations for which the relayer has been selected.
     function _executeTransactions(
         bytes[] calldata _reqs,
         uint256[] calldata _forwardedNativeAmounts,
@@ -184,6 +233,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
     }
 
+    /// @dev Executes a single transaction, appending necessary data to the calldata .
+    /// @param _req The transactions to execute.
+    /// @param _value The native amount to forward to the transaction.
+    /// @param _relayerGenerationIterationBitmap The bitmap of relayer generation iterations for which the relayer has been selected.
+    /// @param _relayerCount The number of relayers that have been selected for the current window.
+    /// @param _relayerAddress The address of the relayer that has been selected for the current window.
+    /// @return status The status of the transaction.
+    /// @return returndata The return data of the transaction.
     function _executeTransaction(
         bytes calldata _req,
         uint256 _value,
@@ -198,6 +255,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         );
     }
 
+    /// @dev Verifies that sum(_forwardedNativeAmounts) == msg.value
+    /// @param _forwardedNativeAmounts The array of forwarded native amounts for each transaction.
     function _verifySufficientValueAttached(uint256[] calldata _forwardedNativeAmounts) internal view {
         uint256 totalExpectedValue;
         uint256 length = _forwardedNativeAmounts.length;
@@ -214,12 +273,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     /////////////////////////////// Allocation Helpers ///////////////////////////////
 
-    /// @notice Given a block number, the function generates a list of pseudo-random relayers
-    ///         for the window of which the block in a part of. The generated list of relayers
-    ///         is pseudo-random but deterministic
-    /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
-    ///                          there can be duplicates
-    /// @return cdfIndex list of indices of the selected relayers in the cdf, used for verification
+    /// @inheritdoc ITATransactionAllocation
     function allocateRelayers(RelayerState calldata _activeState)
         external
         view
@@ -260,14 +314,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
     ///////////////////////////////// Liveness ///////////////////////////////
     struct ProcessLivenessCheckMemoryState {
-        // Cache
+        // Cache to prevent multiple SLOADs
         uint256 epochEndTimestamp;
         uint256 updatedUnpaidProtocolRewards;
         uint256 stakeThresholdForJailing;
         uint256 totalTransactionsInEpoch;
         FixedPointType zScoreSquared;
         FixedPointType updatedSharePrice;
-        // State
+        // Intermediate state, written to storage at the end of the function
         uint256 activeRelayersJailedCount;
         uint256 totalPenalty;
         uint256 totalActiveRelayerPenalty;
@@ -277,6 +331,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerAddress[] newRelayerList;
     }
 
+    /// @dev Processes the liveness check for the current epoch for all active relayers.
+    /// @param _activeRelayerState The active relayer state.
+    /// @param _pendingRelayerState The pending relayer state.
+    /// @param _activeStateToLatestStateMap The map of active state index to latest state index.
     function _processLivenessCheck(
         RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
@@ -314,6 +372,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit LivenessCheckProcessed(state.epochEndTimestamp);
     }
 
+    /// @dev Processes the liveness check for the current epoch for a single relayer.
+    /// @param _activeRelayerState The active relayer state.
+    /// @param _pendingRelayerState Teh pending relayer state.
+    /// @param _activeStateToLatestStateMap The map of active state index to latest state index.
+    /// @param _relayerIndex The index of the relayer to process.
+    /// @param _state In memory struct to store intermediate state.
     function _processLivenessCheckForRelayer(
         RelayerState calldata _activeRelayerState,
         RelayerState calldata _pendingRelayerState,
@@ -361,6 +425,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
     }
 
+    /// @dev Assuming that the relayer failed the liveness check AND does not qualify for jailing, only penalize it's stake
+    /// @param _relayerAddress The address of the relayer to penalize.
+    /// @param _relayerInfo The relayer info of the relayer to penalize.
+    /// @param _stake The current stake of the relayer.
+    /// @param _penalty The penalty to be deducted from the relayer's stake.
+    /// @param _state In memory struct to store intermediate state.
     function _penalizeRelayer(
         RelayerAddress _relayerAddress,
         RelayerInfo storage _relayerInfo,
@@ -394,6 +464,17 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit RelayerPenalized(_relayerAddress, updatedStake, _penalty);
     }
 
+    /// @dev Assuming that the relayer failed the liveness check AND qualifies for jailing, penalize it's stake and jail it.
+    ///      Process any pending rewards and then destroy all of the relayer's protocol reward shares, to prevent it from earning
+    ///      any more rewards.
+    /// @param _pendingRelayerState The pending relayer state. The relayer needs to be removed from this state.
+    /// @param _activeStateToLatestStateMap The map of active state index to latest state index.
+    /// @param _relayerAddress The address of the relayer to jail.
+    /// @param _relayerInfo The relayer info of the relayer to jail.
+    /// @param _stake The current stake of the relayer.
+    /// @param _relayerIndex The index of the relayer to jail.
+    /// @param _penalty The penalty to be deducted from the relayer's stake.
+    /// @param _state In memory struct to store intermediate state.
     function _penalizeAndJailRelayer(
         RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateToLatestStateMap,
@@ -461,6 +542,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         emit RelayerJailed(_relayerAddress, jailedUntilTimestamp);
     }
 
+    /// @dev Writes the update state to storage after liveness check has been performed.
+    /// @param _latestState The latest relayer state.
+    /// @param _state The in memory struct to store intermediate state.
     function _postLivenessCheck(RelayerState calldata _latestState, ProcessLivenessCheckMemoryState memory _state)
         internal
     {
@@ -498,6 +582,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
     }
 
+    /// @dev Utillity function to remove a relayer from a relayer list.
+    /// @param _relayerList The relayer list.
+    /// @param _expectedRelayerAddress The address of the relayer to be removed.
+    /// @param _relayerIndex The index of the relayer in the relayer list.
     function _removeRelayerFromRelayerList(
         RelayerAddress[] memory _relayerList,
         RelayerAddress _expectedRelayerAddress,
@@ -509,12 +597,19 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         _relayerList.m_remove(_relayerIndex);
     }
 
+    /// @inheritdoc ITATransactionAllocation
     function calculateMinimumTranasctionsForLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
         uint256 _totalTransactions,
         FixedPointType _zScore
     ) external pure override returns (FixedPointType) {
+        // The condition for liveness is:
+        //   Probability (p) = _relayerStake / _totalStake
+        //   Standard Deviation (s) = √(p * (1 - p) * _totalTransactions)
+        //   Expected Number of Transactions (e) = p * _totalTransactions
+        //   Minimum Number of Transactions = Max(e - z * s, 0)
+
         if (_totalTransactions == 0) {
             return FP_ZERO;
         }
@@ -536,6 +631,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return FP_ZERO;
     }
 
+    /// @dev Returns true if the relayer passes the liveness check for the current epoch, else false.
+    /// @param _activeState The active relayer state.
+    /// @param _relayerIndex The index of the relayer in the active relayer list.
+    /// @param _epochEndTimestamp The end timestamp of the current epoch.
+    /// @param _totalTransactionsInEpoch  The total number of transactions in the current epoch.
+    /// @param _zScoreSquared A precomputed zScore parameter squared value.
+    /// @return True if the relayer passes the liveness check for the current epoch, else false.
     function _verifyRelayerLiveness(
         RelayerState calldata _activeState,
         uint256 _relayerIndex,
@@ -564,6 +666,13 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         );
     }
 
+    /// @dev An optimized version of verifying whether _transactionsDoneByRelayer >= calculatedMinimumTranasctionsForLiveness()
+    /// @param _relayerStake The stake of the relayer.
+    /// @param _totalStake The total stake of all relayers.
+    /// @param _tranasctionsDoneByRelayer The number of transactions done by the relayer.
+    /// @param _totalTransactions The total number of transactions done by all relayers.
+    /// @param _zScoreSquared The zScore parameter squared value.
+    /// @return True if the relayer passes the liveness check for the current epoch, else false.
     function _checkRelayerLiveness(
         uint256 _relayerStake,
         uint256 _totalStake,
@@ -571,6 +680,18 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 _totalTransactions,
         FixedPointType _zScoreSquared
     ) internal pure returns (bool) {
+        // Calculating square roots is expensive, so we modfiy the inequality to avoid it.
+        //
+        // Let t = _tranasctionsDoneByRelayer, T = _totalTransactions, p = _relayerStake / _totalStake
+        // The original condition is:
+        //   Expected Number of Transactions (e) = pT
+        //   Standard Deviation (s) = √(p(1 - p)T) = √((1-p)e)
+        //   Minimum Number of Transactions = e - z * s = e - z√((1-p)e)
+        //   Therefore, t >= e - z√((1-p)e)
+        //           or  z√((1-p)e) >= e - t
+
+        // Optimized condition:
+        // We skip the check if e - t <= 0
         FixedPointType p = _relayerStake.fp().div(_totalStake);
         FixedPointType e = p.mul(_totalTransactions);
         FixedPointType _tranasctionsDoneByRelayerFp = _tranasctionsDoneByRelayer.fp();
@@ -578,6 +699,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             return true;
         }
 
+        // Square both sides of the inequality to avoid calculating the square root
+        // z^2 * (1-p)e >= (e - t)^2
         FixedPointType lhs = _zScoreSquared * e * (FP_ONE - p);
         FixedPointType rhs = e - _tranasctionsDoneByRelayerFp;
         rhs = rhs * rhs;
@@ -585,6 +708,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         return lhs >= rhs;
     }
 
+    /// @dev Helper function to calculate the penalty for a relayer.
+    /// @param _stake The stake of the relayer.
+    /// @return The penalty for the relayer.
     function _calculatePenalty(uint256 _stake) internal view returns (uint256) {
         return (_stake * getRMStorage().absencePenaltyPercentage) / (100 * PERCENTAGE_MULTIPLIER);
     }
