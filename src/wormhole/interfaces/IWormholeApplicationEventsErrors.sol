@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.19;
 
+/// @title IWormholeApplicationEventsErrors
 interface IWormholeApplicationEventsErrors {
     error VMVersionIncompatible(uint256 expected, uint256 actual);
     error AlreadyInitialized();

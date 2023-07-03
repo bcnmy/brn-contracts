@@ -7,9 +7,7 @@ import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
 /// @title ITADelegationEventsErrors
 interface ITADelegationEventsErrors {
-    error PoolNotSupported(RelayerAddress relayerAddress, TokenAddress tokenAddress);
     error NoSupportedGasTokens();
-    error RelayerIsActiveInLatestState();
     error InvalidRelayerIndex();
     error InvalidTokenIndex();
     error NativeAmountMismatch();

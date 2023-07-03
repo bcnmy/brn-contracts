@@ -259,12 +259,12 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         }
 
         // Normal Exit
-        if (node.status == RelayerStatus.Exiting && (node.minExitTimestamp > block.timestamp)) {
-            revert InvalidWithdrawal(node.stake, block.timestamp, node.minExitTimestamp);
+        if (node.status == RelayerStatus.Exiting && node.minExitTimestamp > block.timestamp) {
+            revert ExitCooldownNotExpired(node.stake, block.timestamp, node.minExitTimestamp);
         }
 
         // Exit After Jail
-        if (node.status == RelayerStatus.Jailed && (node.minExitTimestamp > block.timestamp)) {
+        if (node.status == RelayerStatus.Jailed && node.minExitTimestamp > block.timestamp) {
             revert RelayerJailNotExpired(node.minExitTimestamp);
         }
 

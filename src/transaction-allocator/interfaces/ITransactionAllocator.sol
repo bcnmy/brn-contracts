@@ -9,6 +9,7 @@ import {IApplicationBase} from "ta-base-application/interfaces/IApplicationBase.
 import {ITAHelpers} from "ta-common/interfaces/ITAHelpers.sol";
 import {IGuards} from "src/utils/interfaces/IGuards.sol";
 
+/// @title ITransactionAllocator - The combined interface for the Transaction Allocator
 interface ITransactionAllocator is
     ITADelegation,
     ITARelayerManagement,

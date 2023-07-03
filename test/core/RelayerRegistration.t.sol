@@ -517,7 +517,7 @@ contract RelayerRegistrationTest is
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                InvalidWithdrawal.selector,
+                ExitCooldownNotExpired.selector,
                 initialRelayerStake[relayerMainAddress[1]],
                 block.timestamp,
                 block.timestamp + 1
