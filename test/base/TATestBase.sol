@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
+import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 import "forge-std/Test.sol";
 
 import "ta-proxy/interfaces/ITAProxy.sol";

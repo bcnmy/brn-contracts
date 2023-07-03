@@ -2,12 +2,18 @@
 
 pragma solidity 0.8.19;
 
-import "solidity-bytes-utils/contracts/BytesLib.sol";
+import {BytesLib} from "solidity-bytes-utils/contracts/BytesLib.sol";
+import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
+import {IWormholeRelayerDelivery} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 
-import "./interfaces/IWormholeApplication.sol";
-import "./WormholeApplicationStorage.sol";
-import "ta-base-application/ApplicationBase.sol";
+import {IWormholeApplication} from "./interfaces/IWormholeApplication.sol";
+import {WormholeApplicationStorage} from "./WormholeApplicationStorage.sol";
+import {ApplicationBase} from "ta-base-application/ApplicationBase.sol";
+import {WormholeChainId, ReceiptVAAPayload, VaaKey} from "./interfaces/WormholeTypes.sol";
+import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
 
+/// @title WormholeApplication
+/// @notice The Wormhole Application module is responsible for executing Wormhole messages and performing transaction allocation.
 contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeApplicationStorage {
     uint256 constant EXPECTED_VM_VERSION = 1;
     uint256 constant SIGNATURE_SIZE = 66;
@@ -19,6 +25,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
 
     using BytesLib for bytes;
 
+    /// @inheritdoc IWormholeApplication
     function initializeWormholeApplication(IWormhole _wormhole, IWormholeRelayerDelivery _delivery) external {
         WHStorage storage ws = getWHStorage();
         if (ws.initialized) {
@@ -32,7 +39,51 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         emit Initialized(address(_wormhole), address(_delivery));
     }
 
-    ////// Alloction Logic //////
+    /// @inheritdoc IWormholeApplication
+    function executeWormhole(
+        bytes[] calldata _encodedVMs,
+        bytes calldata _encodedDeliveryVAA,
+        bytes calldata _deliveryOverrides
+    ) external payable override {
+        (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain, bytes32 emitterAddress) =
+            _parseVAASelective(_encodedDeliveryVAA);
+        _verifyTransaction(_hashSequenceNumber(deliveryVAASequenceNumber));
+
+        // Forward the call the CoreRelayerDelivery with value
+        (RelayerAddress relayerAddress,,) = _getCalldataParams();
+        WHStorage storage whs = getWHStorage();
+        whs.delivery.deliver{value: msg.value}(
+            _encodedVMs, _encodedDeliveryVAA, payable(RelayerAddress.unwrap(relayerAddress)), _deliveryOverrides
+        );
+
+        // Generate a ReceiptVAA
+        bytes memory receiptVAAPayload = abi.encode(
+            ReceiptVAAPayload({
+                relayerAddress: relayerAddress,
+                deliveryVAAKey: VaaKey({
+                    sequence: deliveryVAASequenceNumber,
+                    chainId: WormholeChainId.unwrap(emitterChain),
+                    emitterAddress: emitterAddress
+                })
+            })
+        );
+        whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);
+
+        emit WormholeDeliveryExecuted(_encodedDeliveryVAA);
+    }
+
+    /// @inheritdoc IWormholeApplication
+    function allocateWormholeDeliveryVAA(
+        RelayerAddress _relayerAddress,
+        bytes[] calldata _requests,
+        RelayerState calldata _currentState
+    ) external view override returns (bytes[] memory, uint256, uint256) {
+        return _allocateTransaction(_relayerAddress, _requests, _currentState);
+    }
+
+    /// @dev Returns the transaction hash for the given wormhole transaction, by hashing the sequence number of the delivery request.
+    /// @param _calldata The calldata of executeWormhole to hash. Ignores any appended data
+    /// @return The transaction hash
     function _getTransactionHash(bytes calldata _calldata) internal pure virtual override returns (bytes32) {
         (, bytes memory encodedDeliveryVAA,) = abi.decode(_calldata[4:], (bytes[], bytes, bytes));
         (uint256 sequenceNumber,,) = _parseVAASelective(encodedDeliveryVAA);
@@ -40,10 +91,19 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
         return _hashSequenceNumber(sequenceNumber);
     }
 
+    /// @dev Hashes the sequence number of the delivery request.
+    /// @param _sequenceNumber The sequence number of the delivery request
+    /// @return The hash
     function _hashSequenceNumber(uint256 _sequenceNumber) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(_sequenceNumber));
     }
 
+    /// @dev Parses the delivery VAA and returns the sequence number, emitter chain, and emitter address.
+    ///      Does not perform signature validation, it is assumed that the VAA has already been validated or that it will be later.
+    /// @param _encodedVAA The encoded delivery VAA
+    /// @return sequenceNumber The sequence number of the delivery request
+    /// @return emitterChain The chain ID of the emitter in wormhole format
+    /// @return emitterAddress The address of the emitter in wormhole format
     function _parseVAASelective(bytes memory _encodedVAA)
         internal
         pure
@@ -81,46 +141,5 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
             WormholeChainId.wrap(_encodedVAA.toUint16(EMITTER_CHAIN_BODY_OFFSET + SIGNATURE_SIZE * signersLen));
         emitterAddress = _encodedVAA.toBytes32(EMITTER_CHAIN_BODY_OFFSET + SIGNATURE_SIZE * signersLen + 2);
         sequenceNumber = _encodedVAA.toUint64(SEQUENCE_ID_BODY_OFFSET + SIGNATURE_SIZE * signersLen);
-    }
-
-    function allocateWormholeDeliveryVAA(
-        RelayerAddress _relayerAddress,
-        bytes[] calldata _requests,
-        RelayerState calldata _currentState
-    ) external view override returns (bytes[] memory, uint256, uint256) {
-        return _allocateTransaction(_relayerAddress, _requests, _currentState);
-    }
-
-    /// Execution Logic
-    function executeWormhole(
-        bytes[] calldata _encodedVMs,
-        bytes calldata _encodedDeliveryVAA,
-        bytes calldata _deliveryOverrides
-    ) external payable override {
-        (uint64 deliveryVAASequenceNumber, WormholeChainId emitterChain, bytes32 emitterAddress) =
-            _parseVAASelective(_encodedDeliveryVAA);
-        _verifyTransaction(_hashSequenceNumber(deliveryVAASequenceNumber));
-
-        // Forward the call the CoreRelayerDelivery with value
-        (RelayerAddress relayerAddress,,) = _getCalldataParams();
-        WHStorage storage whs = getWHStorage();
-        whs.delivery.deliver{value: msg.value}(
-            _encodedVMs, _encodedDeliveryVAA, payable(RelayerAddress.unwrap(relayerAddress)), _deliveryOverrides
-        );
-
-        // Generate a ReceiptVAA
-        bytes memory receiptVAAPayload = abi.encode(
-            ReceiptVAAPayload({
-                relayerAddress: relayerAddress,
-                deliveryVAAKey: VaaKey({
-                    sequence: deliveryVAASequenceNumber,
-                    chainId: WormholeChainId.unwrap(emitterChain),
-                    emitterAddress: emitterAddress
-                })
-            })
-        );
-        whs.wormhole.publishMessage(0, receiptVAAPayload, whs.receiptVAAConsistencyLevel);
-
-        emit WormholeDeliveryExecuted(_encodedDeliveryVAA);
     }
 }

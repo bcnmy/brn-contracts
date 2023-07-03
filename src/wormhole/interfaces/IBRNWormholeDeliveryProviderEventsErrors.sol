@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import "./WormholeTypes.sol";
+import {VaaKey, WormholeChainId} from "./WormholeTypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
 
 interface IBRNWormholeDeliveryProviderEventsErrors {
     error CallerMustBeWormholeRelayer();
