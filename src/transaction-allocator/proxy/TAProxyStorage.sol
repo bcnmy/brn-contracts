@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.19;
 
+/// @title TAProxyStorage
 abstract contract TAProxyStorage {
     bytes32 internal constant PROXY_STORAGE_SLOT = keccak256("Proxy.storage");
 
