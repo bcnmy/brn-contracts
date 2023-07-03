@@ -2,19 +2,24 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-import "./interfaces/ITAProxy.sol";
-import "./TAProxyStorage.sol";
-import "ta-delegation/TADelegationStorage.sol";
-import "ta-relayer-management/TARelayerManagementStorage.sol";
-import "ta-relayer-management/interfaces/ITARelayerManagement.sol";
-import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
-import "src/library/VersionManager.sol";
-import "src/library/arrays/U16ArrayHelper.sol";
-import "src/library/arrays/RAArrayHelper.sol";
+import {ITAProxy} from "./interfaces/ITAProxy.sol";
+import {TAProxyStorage} from "./TAProxyStorage.sol";
+import {TADelegationStorage} from "ta-delegation/TADelegationStorage.sol";
+import {TARelayerManagementStorage} from "ta-relayer-management/TARelayerManagementStorage.sol";
+import {TATransactionAllocationStorage} from "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+import {ITARelayerManagement} from "ta-relayer-management/interfaces/ITARelayerManagement.sol";
 
+import {VersionManager} from "src/library/VersionManager.sol";
+import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+
+import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
+
+/// @title TAProxy
+/// @notice The proxy contract for the Transaction Allocator.
 contract TAProxy is
     ITAProxy,
     TAProxyStorage,
@@ -62,6 +67,8 @@ contract TAProxy is
 
     /* solhint-enable no-complex-fallback, payable-fallback, no-inline-assembly */
 
+    /// @dev Initialize the Transaction Allocator contract.
+    /// @param _params The parameters used to initialize the Transaction Allocator contract.
     function _initialize(InitializerParams memory _params) internal {
         RMStorage storage rms = getRMStorage();
         TADStorage storage tds = getTADStorage();
@@ -78,17 +85,10 @@ contract TAProxy is
         rms.baseRewardRatePerMinimumStakePerSec = _params.baseRewardRatePerMinimumStakePerSec;
         tds.minimumDelegationAmount = _params.minimumDelegationAmount;
         rms.relayerStateUpdateDelayInWindows = _params.relayerStateUpdateDelayInWindows;
-        tas.livenessZParameter = FixedPointType.wrap(_params.livenessZParameter);
+        tas.livenessZParameter = _params.livenessZParameter;
         tas.stakeThresholdForJailing = _params.stakeThresholdForJailing;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
-        uint256 length = _params.supportedTokens.length;
-        for (uint256 i; i != length;) {
-            rms.isGasTokenSupported[_params.supportedTokens[i]] = true;
-            unchecked {
-                ++i;
-            }
-        }
 
         // Initial State
         tas.epochEndTimestamp = block.timestamp;
@@ -112,8 +112,8 @@ contract TAProxy is
         require(success, "registerFoundationRelayer failed");
     }
 
-    /// @notice Adds a new module
-    /// @dev function selector should not have been registered.
+    /// @dev Adds a new module
+    ///      function selector should not have been registered.
     /// @param implementation address of the implementation
     /// @param selectors selectors of the implementation contract
     function _addModule(address implementation, bytes4[] memory selectors) internal {

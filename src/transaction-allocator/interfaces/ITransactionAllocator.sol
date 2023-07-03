@@ -2,16 +2,19 @@
 
 pragma solidity 0.8.19;
 
-import "ta-delegation/interfaces/ITADelegation.sol";
-import "ta-relayer-management/interfaces/ITARelayerManagement.sol";
-import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
-import "ta-base-application/interfaces/IApplicationBase.sol";
-import "ta-common/interfaces/ITAHelpers.sol";
+import {ITADelegation} from "ta-delegation/interfaces/ITADelegation.sol";
+import {ITARelayerManagement} from "ta-relayer-management/interfaces/ITARelayerManagement.sol";
+import {ITATransactionAllocation} from "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
+import {IApplicationBase} from "ta-base-application/interfaces/IApplicationBase.sol";
+import {ITAHelpers} from "ta-common/interfaces/ITAHelpers.sol";
+import {IGuards} from "src/utils/interfaces/IGuards.sol";
 
+/// @title ITransactionAllocator - The combined interface for the Transaction Allocator
 interface ITransactionAllocator is
     ITADelegation,
     ITARelayerManagement,
     ITATransactionAllocation,
     ITAHelpers,
-    IApplicationBase
+    IApplicationBase,
+    IGuards
 {}

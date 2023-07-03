@@ -4,13 +4,26 @@ pragma solidity 0.8.19;
 
 import "openzeppelin-contracts/token/ERC20/ERC20.sol";
 import "openzeppelin-contracts/utils/cryptography/ECDSA.sol";
+import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 import "forge-std/Test.sol";
+
+import "ta-proxy/interfaces/ITAProxy.sol";
+import "ta-common/TATypes.sol";
+import "ta-delegation/TADelegation.sol";
+import "ta-relayer-management/TARelayerManagement.sol";
+import "ta-transaction-allocation/TATransactionAllocation.sol";
+import "wormhole-application/WormholeApplication.sol";
+import "test/modules/debug/TADebug.sol";
+import "mock/minimal-application/MinimalApplication.sol";
+import "test/modules/testnet-debug/TATestnetDebug.sol";
+import "src/mock/token/ERC20FreeMint.sol";
 
 import "../modules/ITransactionAllocatorDebug.sol";
 import "script/TA.Deployment.s.sol";
 
 abstract contract TATestBase is Test {
     using FixedPointTypeHelper for FixedPointType;
+    using Uint256WrapperHelper for uint256;
     using ECDSA for bytes32;
 
     uint256 constant CDF_ERROR_MARGIN = 0.005 ether; // 0.005%
@@ -38,7 +51,7 @@ abstract contract TATestBase is Test {
         minimumDelegationAmount: 1 ether,
         baseRewardRatePerMinimumStakePerSec: 1003000000000,
         relayerStateUpdateDelayInWindows: 1,
-        livenessZParameter: 3300000000000000000000000,
+        livenessZParameter: uint256(33).fp().div(10),
         bondTokenAddress: TokenAddress.wrap(address(this)),
         supportedTokens: supportedTokens,
         // Foundation Relayer Parameters
@@ -48,6 +61,14 @@ abstract contract TATestBase is Test {
         foundationRelayerEndpoint: "endpoint",
         foundationDelegatorPoolPremiumShare: 0
     });
+    Module[] modules = [
+        Module.TADelegation,
+        Module.TARelayerManagement,
+        Module.TATransactionAllocation,
+        Module.TADebug,
+        Module.MinimalApplication,
+        Module.WormholeApplication
+    ];
 
     ITransactionAllocatorDebug internal ta;
     MinimalApplication internal app;
@@ -146,14 +167,22 @@ abstract contract TATestBase is Test {
 
         // Approve tokens for foundation relayer registration
         uint256 deployerPrivateKey = getNextPrivateKey();
-        vm.broadcast(relayerMainKey[0]);
-        bico.approve(
-            computeCreateAddress(vm.addr(deployerPrivateKey), vm.getNonce(vm.addr(deployerPrivateKey)) + 6), 10000 ether
-        );
 
         // Deploy TA, requires --ffi
-        TADeploymentScript script = new TADeploymentScript();
-        (ta, app) = script.deployInternalTestSetup(deployerPrivateKey, deployParams);
+        {
+            TADeploymentScript script = new TADeploymentScript();
+            TADeploymentScript.DeploymentResult memory result = script.deploy(
+                deployParams,
+                modules,
+                WormholeConfig({wormhole: IWormhole(address(0)), relayer: IWormholeRelayer(address(0))}),
+                false,
+                false,
+                deployerPrivateKey,
+                relayerMainKey[0]
+            );
+            ta = ITransactionAllocatorDebug(address(result.proxy));
+            app = MinimalApplication(address(result.minimalApplication));
+        }
 
         _appendRelayerToLatestState(relayerMainAddress[0]);
 
@@ -177,12 +206,12 @@ abstract contract TATestBase is Test {
                 relayerGenerationIterationBitmap: 0,
                 activeState: _activeState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(_activeState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(_activeState)
             })
         );
     }
 
-    function _generateActiveStateToPendingStateMap(RelayerState memory _activeState)
+    function _generateActiveStateToLatestStateMap(RelayerState memory _activeState)
         internal
         view
         returns (uint256[] memory map)

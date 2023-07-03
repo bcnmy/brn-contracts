@@ -2,9 +2,10 @@
 
 pragma solidity 0.8.19;
 
-import "src/library/FixedPointArithmetic.sol";
-import "ta-common/TATypes.sol";
+import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
+import {RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
 
+/// @title TADelegationStorage
 abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");
 

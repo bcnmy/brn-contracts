@@ -2,22 +2,24 @@
 
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
-import "src/library/FixedPointArithmetic.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 
+/// @title TATransactionAllocationStorage
 abstract contract TATransactionAllocationStorage {
     bytes32 internal constant TRANSACTION_ALLOCATION_STORAGE_SLOT = keccak256("TransactionAllocation.storage");
 
     struct TAStorage {
-        // Config
+        ////////////////////////// Configuration Parameters //////////////////////////
         uint256 epochLengthInSec;
         uint256 epochEndTimestamp;
         FixedPointType livenessZParameter;
         uint256 stakeThresholdForJailing;
-        // Liveness Stats
+        ////////////////////////// Liveness Records //////////////////////////
         mapping(uint256 epochEndTimestamp => mapping(RelayerAddress => uint256 transactionsSubmitted))
             transactionsSubmitted;
         mapping(uint256 epochEndTimestamp => uint256) totalTransactionsSubmitted;
+        ////////////////////////// Misc //////////////////////////
         mapping(RelayerAddress => uint256 lastTransactionSubmissionWindow) lastTransactionSubmissionWindow;
     }
 

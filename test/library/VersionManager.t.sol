@@ -26,11 +26,11 @@ contract VersionManagerTest is Test {
         assertEq(state.verifyHashAgainstActiveState(versions[0], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[0]), true);
 
-        state.setPendingState(versions[1], currentTime);
+        state.setLatestState(versions[1], currentTime);
         assertEq(state.verifyHashAgainstActiveState(versions[0], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[1]), true);
 
-        state.setPendingStateForActivation(currentTime + 1);
+        state.setLatestStateForActivation(currentTime + 1);
         assertEq(state.verifyHashAgainstActiveState(versions[0], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[1]), true);
 
@@ -42,11 +42,11 @@ contract VersionManagerTest is Test {
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[1]), true);
 
-        state.setPendingState(versions[2], currentTime);
+        state.setLatestState(versions[2], currentTime);
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[2]), true);
 
-        state.setPendingState(versions[3], currentTime);
+        state.setLatestState(versions[3], currentTime);
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[3]), true);
 
@@ -54,11 +54,11 @@ contract VersionManagerTest is Test {
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[3]), true);
 
-        state.setPendingState(versions[4], currentTime);
+        state.setLatestState(versions[4], currentTime);
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[4]), true);
 
-        state.setPendingStateForActivation(currentTime + 5);
+        state.setLatestStateForActivation(currentTime + 5);
         currentTime += 3;
         assertEq(state.verifyHashAgainstActiveState(versions[1], currentTime), true);
         assertEq(state.verifyHashAgainstLatestState(versions[4]), true);

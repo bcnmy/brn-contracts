@@ -3,9 +3,11 @@
 pragma solidity 0.8.19;
 
 import "src/mock/minimal-application/MinimalApplication2.sol";
+import "src/utils/Guards.sol";
 import "test/base/TATestBase.sol";
+import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 
-contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors {
+contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors, Guards {
     bytes[] txns;
     mapping(bytes4 selector => bool) testExecuted;
     mapping(bytes4 selector => bool) selectorExcludedFromTests;
@@ -66,7 +68,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: new uint256[](0)
+                activeStateToLatestStateMap: new uint256[](0)
             })
         );
     }
@@ -104,7 +106,6 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
             abi.encodeCall(
                 ta.relayerInfo_isAccount, (relayerMainAddress[0], relayerAccountAddresses[relayerMainAddress[0]][0])
             ),
-            abi.encodeCall(ta.isGasTokenSupported, (TokenAddress.wrap(address(bico)))),
             abi.encodeCall(ta.relayersPerWindow, ()),
             abi.encodeCall(ta.blocksPerWindow, ()),
             abi.encodeCall(ta.bondTokenAddress, ()),
@@ -153,7 +154,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                         relayerGenerationIterationBitmap: 0,
                         activeState: latestRelayerState,
                         latestState: latestRelayerState,
-                        activeStateToPendingStateMap: new uint256[](0)
+                        activeStateToLatestStateMap: new uint256[](0)
                     })
                 )
             ),

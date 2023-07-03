@@ -8,8 +8,6 @@ import "wormhole-application/interfaces/IWormholeApplication.sol";
 import "wormhole-application/interfaces/IBRNWormholeDeliveryProviderEventsErrors.sol";
 
 contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProviderEventsErrors {
-    using AddressUtils for address;
-
     RelayerAddress relayerAddress;
     VaaKey deliveryVaaKey;
     bytes signedDeliveryVAA;
@@ -64,7 +62,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
                 latestState: latestRelayerState,
-                activeStateToPendingStateMap: _generateActiveStateToPendingStateMap(latestRelayerState)
+                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
             })
         );
 
@@ -155,13 +153,15 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
         vm.selectFork(sourceFork);
         // Change transaction allocator contract for target chain
         vm.prank(brnOwnerAddress);
-        bytes32 newTransactionAllocatorAddress = address(0x1).toBytes32();
+        bytes32 newTransactionAllocatorAddress = toWormholeFormat(address(0x1));
         deliveryProviderSource.setBrnTransactionAllocatorAddress(targetChain, newTransactionAllocatorAddress);
 
         _prankRA(relayerAddress);
         vm.expectRevert(
             abi.encodeWithSelector(
-                WormholeReceiptVAAEmitterMismatch.selector, newTransactionAllocatorAddress, address(ta).toBytes32()
+                WormholeReceiptVAAEmitterMismatch.selector,
+                newTransactionAllocatorAddress,
+                toWormholeFormat(address(ta))
             )
         );
         deliveryProviderSource.claimFee(refundVAAs, new bytes[][](1));
@@ -283,7 +283,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
         vm.expectRevert(
             abi.encodeWithSelector(
                 WormholeRedeliveryVAAEmitterMismatch.selector,
-                address(relayerSource).toBytes32(),
+                toWormholeFormat(address(relayerSource)),
                 redeliveryVM.emitterAddress
             )
         );

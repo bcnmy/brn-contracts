@@ -11,7 +11,7 @@ contract TestTokenDeploymentScript is Script {
     address[] mintAddresses;
     uint256[] mintAmounts;
 
-    function run() external {
+    function run() external returns (ERC20FreeMint) {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
         ERC20FreeMint token = new ERC20FreeMint("Bond Token", "BOND");
@@ -20,6 +20,8 @@ contract TestTokenDeploymentScript is Script {
         }
         console2.log("Bond Token address: ", address(token));
         vm.stopBroadcast();
+
+        return token;
     }
 
     function test() external {}

@@ -2,17 +2,15 @@
 
 pragma solidity 0.8.19;
 
+import {toWormholeFormat} from "wormhole-contracts/libraries/relayer/Utils.sol";
 import "forge-std/Script.sol";
 
 import "ta/interfaces/ITransactionAllocator.sol";
 import "wormhole-application/BRNWormholeDeliveryProvider.sol";
 import "src/mock/wormhole/MockWormholeReceiver.sol";
-import "src/library/AddressUtils.sol";
 
 // TODO: Add code to verify deployment paramters (not etherscan)
 contract WormholeDeployer is Script {
-    using AddressUtils for address;
-
     struct ChainConfig {
         uint256 fork;
         WormholeChainId chainId;
@@ -121,11 +119,11 @@ contract WormholeDeployer is Script {
             deliveryProvider.setMaximumBudget(targetConfig.chainId, targetConfig.maximumBudget);
             deliveryProvider.setIsWormholeChainSupported(targetConfig.chainId, true);
             deliveryProvider.setBrnTransactionAllocatorAddress(
-                targetConfig.chainId, address(targetConfig.transactionAllocator).toBytes32()
+                targetConfig.chainId, toWormholeFormat(address(targetConfig.transactionAllocator))
             );
             deliveryProvider.setAssetConversionBuffer(targetConfig.chainId, targetConfig.assetConversionBuffer);
             deliveryProvider.setBrnRelayerProviderAddress(
-                targetConfig.chainId, address(deliveryProviders[chainIds[i]]).toBytes32()
+                targetConfig.chainId, toWormholeFormat(address(deliveryProviders[chainIds[i]]))
             );
 
             receiver.setMockWormholeReceiverAddress(targetConfig.chainId, address(receivers[chainIds[i]]));

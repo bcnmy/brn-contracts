@@ -2,6 +2,7 @@
 
 pragma solidity ^0.8.19;
 
+import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
 import "./IMinimalApplicationEventsErrors.sol";
 import "ta-base-application/interfaces/IApplicationBase.sol";
 

@@ -23,7 +23,7 @@ contract MinimalApplication2 is IMinimalApplication, ApplicationBase {
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
         RelayerState calldata _currentState
-    ) external view override returns (bytes[] memory, uint256, uint256) {
-        return _allocateTransaction(_relayerAddress, _requests, _currentState);
+    ) external view override returns (bytes[] memory txns, uint256 rgi, uint256 index) {
+        (txns, rgi, index) = _allocateTransaction(_relayerAddress, _requests, _currentState);
     }
 }

@@ -1,18 +1,35 @@
 // SPDX-License-Identifier: Apache 2
 
-// Heavily based on https://github.com/wormhole-foundation/wormhole/blob/1a50de38e5dca6f8f254998e843285f61a7d32f2/ethereum/contracts/relayer/deliveryProvider/DeliveryProvider.sol
-
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/access/Ownable.sol";
+import {Ownable} from "openzeppelin-contracts/access/Ownable.sol";
 
 import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
+import {toWormholeFormat} from "wormhole-contracts/libraries/relayer/Utils.sol";
+import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 import "wormhole-contracts/relayer/wormholeRelayer/WormholeRelayerSerde.sol";
-import "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
+import {
+    ExecutionParamsVersion,
+    EvmExecutionParamsV1,
+    decodeExecutionParamsVersion,
+    UnsupportedExecutionParamsVersion,
+    decodeEvmExecutionParamsV1,
+    encodeEvmExecutionInfoV1,
+    EvmExecutionInfoV1
+} from "wormhole-contracts/libraries/relayer/ExecutionParameters.sol";
+import {IDeliveryProvider} from "wormhole-contracts/interfaces/relayer/IDeliveryProviderTyped.sol";
 
-import "src/library/AddressUtils.sol";
-import "./interfaces/IBRNWormholeDeliveryProvider.sol";
+import {IBRNWormholeDeliveryProvider} from "./interfaces/IBRNWormholeDeliveryProvider.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {ReceiptVAAPayload, WormholeChainId} from "./interfaces/WormholeTypes.sol";
 
+/// @title BRN Wormhole Delivery Provider
+/// @notice The BRN Wormhole Delivery Provider is responsible for the following:
+///         1. Quoting the price of a message delivery to a target chain
+///         2. Quoting Asset Conversion prices
+///         3. Storing and accounting for the fees that are paid to the BRN Relayer Provider on the source chain.
+///         4. Allow relayers to claim fees by submitting a proof of execution on the destination chain - receipt VAA
+/// Heavily based on https://github.com/wormhole-foundation/wormhole/blob/1a50de38e5dca6f8f254998e843285f61a7d32f2/ethereum/contracts/relayer/deliveryProvider/DeliveryProvider.sol
 contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiLib for Wei;
     using GasLib for Gas;
@@ -20,7 +37,6 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     using WeiPriceLib for WeiPrice;
     using TargetNativeLib for TargetNative;
     using LocalNativeLib for LocalNative;
-    using AddressUtils for address;
 
     /////////////////////// State ///////////////////////
     IWormhole public immutable wormhole;
@@ -44,11 +60,12 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
     constructor(IWormhole _wormhole, IWormholeRelayer _relayer, address _owner) Ownable(_owner) {
         wormhole = _wormhole;
         relayer = _relayer;
-        wormholeRelayerAddress = address(_relayer).toBytes32();
+        wormholeRelayerAddress = toWormholeFormat(address(_relayer));
         chainId = WormholeChainId.wrap(_wormhole.chainId());
     }
 
     /////////////////////// DeliveryProvider Specification ///////////////////////
+    /// @inheritdoc IBRNWormholeDeliveryProvider
     function quoteEvmDeliveryPrice(uint16 targetChain, Gas gasLimit, TargetNative receiverValue)
         public
         view
@@ -68,6 +85,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         );
     }
 
+    /// @inheritdoc IDeliveryProvider
     function quoteDeliveryPrice(uint16 targetChain, TargetNative receiverValue, bytes memory encodedExecutionParams)
         external
         view
@@ -89,6 +107,7 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         );
     }
 
+    /// @inheritdoc IDeliveryProvider
     function quoteAssetConversion(uint16 targetChain, LocalNative currentChainAmount)
         external
         view
@@ -98,20 +117,24 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         return quoteAssetConversion(chainId, WormholeChainId.wrap(targetChain), currentChainAmount);
     }
 
-    //Returns the address on this chain that rewards should be sent to
+    /// @inheritdoc IDeliveryProvider
     function getRewardAddress() public view override returns (address payable) {
+        // All rewards are stored in this contract.
         return payable(address(this));
     }
 
+    /// @inheritdoc IDeliveryProvider
     function getTargetChainAddress(uint16 targetChain) public view override returns (bytes32 deliveryProviderAddress) {
         return brnRelayerProviderAddress[WormholeChainId.wrap(targetChain)];
     }
 
+    /// @inheritdoc IDeliveryProvider
     function isChainSupported(uint16 targetChain) external view override returns (bool supported) {
         return isWormholeChainSupported[WormholeChainId.wrap(targetChain)];
     }
 
     /////////////////////// Helpers ///////////////////////
+
     function quoteAssetConversion(
         WormholeChainId sourceChain,
         WormholeChainId targetChain,
@@ -190,13 +213,15 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
             revert NoFunds();
         }
 
-        // The sequnce number can correspond to a delivery VAA or a re-delivery VAA
+        // Prior to this call, a delivery VAA or Re delivery VAA must have been emitted by the Wormhole Relayer contract.
+        // We can use the sequence number of the VAA to identify the VAA that was emitted.
         uint256 deliveryVAASequenceNumber = wormhole.nextSequence(address(relayer)) - 1;
         fundsDepositedForRelaying[deliveryVAASequenceNumber] += msg.value;
 
         emit FundsDepositedForRelaying(deliveryVAASequenceNumber, msg.value);
     }
 
+    /// @inheritdoc IBRNWormholeDeliveryProvider
     function claimFee(bytes[] calldata _encodedReceiptVAAs, bytes[][] calldata _encodedRedeliveryVAAs)
         external
         override
@@ -222,6 +247,10 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         }
     }
 
+    /// @dev Checks the validity of the receipt VAA and the associated redelivery VAAs
+    /// @param _encodedReceiptVAA The encoded receipt VAA
+    /// @param _encodedRedeliveryVAA The encoded redelivery VAAs associated with the receipt VAA
+    /// @return The total fee claimable by the relayer
     function _checkClaim(bytes calldata _encodedReceiptVAA, bytes[] calldata _encodedRedeliveryVAA)
         internal
         returns (uint256)
@@ -265,6 +294,11 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         return amount;
     }
 
+    /// @dev Checks the validity of the redelivery VAA against the delivery VAA
+    /// @param _deliveryInstructionVAAKey The VAA Key of the delivery VAA
+    /// @param _encodedRedeliveryVAA The encoded redelivery VAA
+    /// @param _relayer The address of the relayer claiming the fee
+    /// @return The fee claimable by the relayer
     function _checkRedeliveryVAAClaim(
         VaaKey memory _deliveryInstructionVAAKey,
         bytes calldata _encodedRedeliveryVAA,
@@ -295,6 +329,9 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         return amount;
     }
 
+    /// @dev Parses and verifies a VAA
+    /// @param _encodedVAA The encoded VAA
+    /// @return The parsed VAA if valid
     function _parseAndVerifyVAA(bytes calldata _encodedVAA) internal view returns (IWormhole.VM memory) {
         (IWormhole.VM memory vm, bool valid, string memory reason) = wormhole.parseAndVerifyVM(_encodedVAA);
 
@@ -305,6 +342,10 @@ contract BRNWormholeDeliveryProvider is IBRNWormholeDeliveryProvider, Ownable {
         return vm;
     }
 
+    /// @dev Compares two VAA keys
+    /// @param _a The first VAA key
+    /// @param _b The second VAA key
+    /// @return True if the VAA keys are equal
     function _compareVaaKey(VaaKey memory _a, VaaKey memory _b) internal pure returns (bool) {
         return _a.chainId == _b.chainId && _a.emitterAddress == _b.emitterAddress && _a.sequence == _b.sequence;
     }

@@ -54,6 +54,9 @@ using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
 
 //////////////////////////// Structs ////////////////////////////
 
+/// @dev Struct for storing the state of all relayers in the system.
+/// @custom:member cdf The cumulative distribution function of the relayers.
+/// @custom:member relayers The list of relayers.
 struct RelayerState {
     uint16[] cdf;
     RelayerAddress[] relayers;
@@ -61,9 +64,10 @@ struct RelayerState {
 
 //////////////////////////// Enums ////////////////////////////
 
+/// @dev Enum for the status of a relayer.
 enum RelayerStatus {
-    Uninitialized,
-    Active,
-    Exiting,
-    Jailed
+    Uninitialized, // The relayer has not registered in the system, or has successfully unregistered and exited.
+    Active, // The relayer is active in the system.
+    Exiting, // The relayer has called unregister(), and is waiting for the exit period to end to claim it's stake.
+    Jailed // The relayer has been jailed by the system and must wait for the jail time to expire before manually re-entering or exiting.
 }

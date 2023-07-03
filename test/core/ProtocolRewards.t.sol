@@ -428,7 +428,7 @@ contract ProtocolRewardsTest is
         ta.unregister(latestRelayerState, _findRelayerIndex(relayer));
         _removeRelayerFromLatestState(relayer);
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, [relayer]));
+        vm.expectRevert(abi.encodeWithSelector(RelayerIsNotActive.selector, [relayer]));
         _prankRA(relayer);
         ta.claimProtocolReward();
     }
@@ -597,7 +597,7 @@ contract ProtocolRewardsTest is
         // Relayer was jailed
         assertTrue(ta.relayerInfo(inactiveRelayer).status == RelayerStatus.Jailed);
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, [inactiveRelayer]));
+        vm.expectRevert(abi.encodeWithSelector(RelayerIsNotActive.selector, [inactiveRelayer]));
         _prankRA(inactiveRelayer);
         ta.claimProtocolReward();
     }

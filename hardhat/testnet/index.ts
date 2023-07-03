@@ -31,7 +31,7 @@ const initializeWormholeApplication = async () => {
   // Initialize the foundation relayer
   relayers.push(
     new Relayer(
-      process.env.FOUNDATION_RELAYER_PRIVATE_KEY!,
+      process.env.TESTNET_FOUNDATION_RELAYER_PRIVATE_KEY!,
       (
         await targetChain.transactionAllocator.relayerInfo(
           new Wallet(process.env.ANVIL_DEFAULT_PRIVATE_KEY!, targetChain.httpProvider).address

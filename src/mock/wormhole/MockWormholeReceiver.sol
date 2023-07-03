@@ -2,17 +2,16 @@
 pragma solidity 0.8.19;
 
 import {IDeliveryProvider} from "wormhole-contracts/interfaces/relayer/IDeliveryProviderTyped.sol";
+import {toWormholeFormat} from "wormhole-contracts/libraries/relayer/Utils.sol";
+import {IWormholeRelayer} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 import "wormhole-contracts/interfaces/relayer/IWormholeReceiver.sol";
 import "wormhole-contracts/interfaces/IWormhole.sol";
 
+import "wormhole-application/interfaces/WormholeTypes.sol";
 import "wormhole-application/interfaces/IBRNWormholeDeliveryProvider.sol";
-import "src/library/AddressUtils.sol";
 import "./interaces/IMockWormholeReceiver.sol";
-import "forge-std/console2.sol";
 
 contract MockWormholeReceiver is IMockWormholeReceiver, IWormholeReceiver {
-    using AddressUtils for address;
-
     IBRNWormholeDeliveryProvider public immutable deliveryProvider;
     IWormholeRelayer public immutable relayer;
     WormholeChainId public immutable chainId;
@@ -83,7 +82,7 @@ contract MockWormholeReceiver is IMockWormholeReceiver, IWormholeReceiver {
             vaaKeys[i] = VaaKey({
                 sequence: sequence,
                 chainId: WormholeChainId.unwrap(chainId),
-                emitterAddress: address(this).toBytes32()
+                emitterAddress: toWormholeFormat(address(this))
             });
         }
 
@@ -146,7 +145,7 @@ contract MockWormholeReceiver is IMockWormholeReceiver, IWormholeReceiver {
     }
 
     function setMockWormholeReceiverAddress(WormholeChainId _chainId, address _address) public {
-        mockWormholeReceiverAddress[_chainId] = _address.toBytes32();
+        mockWormholeReceiverAddress[_chainId] = toWormholeFormat(_address);
     }
 
     receive() external payable {}
