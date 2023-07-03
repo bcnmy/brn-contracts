@@ -2,17 +2,31 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/token/ERC20/IERC20.sol";
-import "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import "openzeppelin-contracts/utils/math/SafeCast.sol";
-import "openzeppelin-contracts/utils/Address.sol";
+import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
+import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
-import "./interfaces/ITAHelpers.sol";
-import "./TAConstants.sol";
-import "ta-relayer-management/TARelayerManagementStorage.sol";
-import "ta-delegation/TADelegationStorage.sol";
-import "src/library/arrays/RAArrayHelper.sol";
-import "src/library/arrays/U16ArrayHelper.sol";
+import {ITAHelpers} from "./interfaces/ITAHelpers.sol";
+import {TARelayerManagementStorage} from "ta-relayer-management/TARelayerManagementStorage.sol";
+import {TADelegationStorage} from "ta-delegation/TADelegationStorage.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {
+    Uint256WrapperHelper,
+    FixedPointTypeHelper,
+    FixedPointType,
+    FP_ZERO,
+    FP_ONE
+} from "src/library/FixedPointArithmetic.sol";
+import {VersionManager} from "src/library/VersionManager.sol";
+import {RelayerAddress, TokenAddress, RelayerState, RelayerStatus} from "./TATypes.sol";
+import {
+    CDF_PRECISION_MULTIPLIER,
+    BOND_TOKEN_DECIMAL_MULTIPLIER,
+    NATIVE_TOKEN,
+    PERCENTAGE_MULTIPLIER
+} from "./TAConstants.sol";
 
 /// @title TAHelpers
 /// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides varios helper functions.
@@ -29,7 +43,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlyActiveRelayer(RelayerAddress _relayer) {
         if (!_isActiveRelayer(_relayer)) {
-            revert InvalidRelayer(_relayer);
+            revert RelayerIsNotActive(_relayer);
         }
         _;
     }

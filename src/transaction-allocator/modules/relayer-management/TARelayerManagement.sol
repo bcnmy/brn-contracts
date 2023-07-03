@@ -156,7 +156,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         RelayerInfo storage node = rms.relayerInfo[_relayerAddress];
 
         if (_relayerAddress == RelayerAddress.wrap(address(0))) {
-            revert InvalidRelayer(_relayerAddress);
+            revert RelayerIsNotActive(_relayerAddress);
         }
         if (_accounts.length == 0) {
             revert NoAccountsProvided();
@@ -201,7 +201,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         // Verify relayer index
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         if (_latestState.relayers[_relayerIndex] != relayerAddress) {
-            revert InvalidRelayer(relayerAddress);
+            revert RelayerIsNotActive(relayerAddress);
         }
 
         RMStorage storage rms = getRMStorage();

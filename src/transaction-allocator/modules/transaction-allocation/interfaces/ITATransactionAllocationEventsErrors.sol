@@ -6,6 +6,7 @@ import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
 
 /// @title ITATransactionAllocationEventsErrors
 interface ITATransactionAllocationEventsErrors {
+    error InvalidRelayerGenerationIteration();
     error NoRelayersRegistered();
     error InsufficientRelayersRegistered();
     error InvalidRelayerWindow();

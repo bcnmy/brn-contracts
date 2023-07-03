@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "openzeppelin-contracts/utils/math/Math.sol";
+import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
 
 using Math for uint256;
 using Uint256WrapperHelper for uint256;

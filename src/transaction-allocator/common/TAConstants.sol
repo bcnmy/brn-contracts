@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./TATypes.sol";
+import {TokenAddress} from "./TATypes.sol";
 
 // Controls the precision of the entries in the Cumulative Distribution Function's array representation built on top of the relayer stakes.
 uint16 constant CDF_PRECISION_MULTIPLIER = 10 ** 4;

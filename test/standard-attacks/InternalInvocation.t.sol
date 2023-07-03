@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "src/mock/minimal-application/MinimalApplication2.sol";
 import "src/utils/Guards.sol";
 import "test/base/TATestBase.sol";
+import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 
 contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors, Guards {
     bytes[] txns;

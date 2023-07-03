@@ -394,7 +394,7 @@ contract RelayerRegistrationTest is
         // Unregister
         uint256 relayerCount = ta.relayerCount();
         _prankRA(relayerMainAddress[1]);
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[1]));
+        vm.expectRevert(abi.encodeWithSelector(RelayerIsNotActive.selector, relayerMainAddress[1]));
         ta.unregister(latestRelayerState, (_findRelayerIndex(relayerMainAddress[1]) + 1) % relayerCount);
     }
 
@@ -458,7 +458,7 @@ contract RelayerRegistrationTest is
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
 
-        vm.expectRevert(abi.encodeWithSelector(InvalidRelayer.selector, relayerMainAddress[1]));
+        vm.expectRevert(abi.encodeWithSelector(RelayerIsNotActive.selector, relayerMainAddress[1]));
         _prankRA(relayerMainAddress[1]);
         ta.setRelayerAccountsStatus(new RelayerAccountAddress[](0), new bool[](0));
     }

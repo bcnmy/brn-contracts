@@ -2,7 +2,7 @@
 
 pragma solidity 0.8.19;
 
-import "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
 
 /// @title Relayer Address Array Helper
 /// @dev Helper functions for arrays of RelayerAddress

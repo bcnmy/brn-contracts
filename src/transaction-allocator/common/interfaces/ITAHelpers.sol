@@ -2,14 +2,11 @@
 
 pragma solidity 0.8.19;
 
-import "../TATypes.sol";
-import "src/library/FixedPointArithmetic.sol";
+import {RelayerAddress, TokenAddress, RelayerState} from "../TATypes.sol";
 
 interface ITAHelpers {
-    error NativeTransferFailed(address to, uint256 amount);
-    error InvalidRelayer(RelayerAddress relayer);
+    error RelayerIsNotActive(RelayerAddress relayer);
     error ParameterLengthMismatch();
-    error InvalidRelayerGenerationIteration();
     error RelayerIndexDoesNotPointToSelectedCdfInterval();
     error RelayerAddressDoesNotMatchSelectedRelayer();
     error InvalidLatestRelayerState();

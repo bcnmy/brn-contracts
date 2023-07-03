@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "./interfaces/IApplicationBase.sol";
-
-import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
-import "ta-relayer-management/TARelayerManagementStorage.sol";
+import {IApplicationBase} from "./interfaces/IApplicationBase.sol";
+import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {ITATransactionAllocation} from "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 
 /// @title ApplicationBase
 /// @dev This contract can be inherited by applications wishing to use BRN's services.
@@ -12,7 +11,7 @@ import "ta-relayer-management/TARelayerManagementStorage.sol";
 ///      1. Transaction Alloction: Given a transaction, which "selected" relayer should process it?
 ///      2. Payments and refunds: The application should compensate the relayers for their work.
 ///      3. Provide a way for relayers to know which transactions they should process.
-abstract contract ApplicationBase is IApplicationBase, TARelayerManagementStorage {
+abstract contract ApplicationBase is IApplicationBase {
     /// @dev Verifies that the transaction was allocated to the relayer and other validations.
     ///      This function should be called by the application before processing the transaction.
     ///      Reverts if the transaction was not allocated to the relayer.
