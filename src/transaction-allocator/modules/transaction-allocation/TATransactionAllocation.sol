@@ -403,7 +403,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 penalty = _calculatePenalty(stake);
 
         // Initialize protocol reward state cache if not already done
-        // TODO: Test this thoroughly
         if (_state.updatedSharePrice == FP_ZERO) {
             _state.updatedUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
             _state.updatedSharePrice = _protocolRewardRelayerSharePrice(_state.updatedUnpaidProtocolRewards);
@@ -458,9 +457,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _relayerInfo.rewardShares = _relayerInfo.rewardShares - protocolRewardSharesBurnt;
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
+
+            emit RelayerProtocolSharesBurnt(_relayerAddress, protocolRewardSharesBurnt);
         }
 
-        // TODO: Emit shares burnt
         emit RelayerPenalized(_relayerAddress, updatedStake, _penalty);
     }
 
@@ -503,6 +503,8 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
             _state.totalProtocolRewardsPaid += relayerRewards + delegatorRewards;
+
+            emit RelayerProtocolSharesBurnt(_relayerAddress, protocolRewardSharesBurnt);
         }
 
         // Penalize the relayer

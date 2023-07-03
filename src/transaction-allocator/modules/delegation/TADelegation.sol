@@ -119,6 +119,8 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         rs.totalUnpaidProtocolRewards = updatedTotalUnpaidProtocolRewards - relayerRewards - delegatorRewards;
         rs.totalProtocolRewardShares = rs.totalProtocolRewardShares - sharesToBurn;
         relayerInfo.rewardShares = relayerInfo.rewardShares - sharesToBurn;
+
+        emit RelayerProtocolSharesBurnt(_relayer, sharesToBurn);
     }
 
     /// @inheritdoc ITADelegation
