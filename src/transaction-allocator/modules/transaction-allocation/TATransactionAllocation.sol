@@ -402,9 +402,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             _state.updatedSharePrice = _protocolRewardRelayerSharePrice(_state.updatedUnpaidProtocolRewards);
         }
 
-        // Initialize the weights list if it is not initialized
+        // Initialize the relayer lists if they are not initialized
         if (_state.newWeightsList.length == 0) {
             _state.newWeightsList = RelayerStateManager.cdfToWeights(_pendingRelayerState.cdf);
+            _state.newRelayerList = _pendingRelayerState.relayers;
         }
 
         if (stake - penalty >= _state.stakeThresholdForJailing) {
@@ -419,7 +420,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             );
         } else {
             _penalizeAndJailRelayer(
-                _pendingRelayerState,
                 _activeStateIndexToExpectedMemoryStateIndex,
                 relayerAddress,
                 relayerInfo,
@@ -480,7 +480,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Assuming that the relayer failed the liveness check AND qualifies for jailing, penalize it's stake and jail it.
     ///      Process any pending rewards and then destroy all of the relayer's protocol reward shares, to prevent it from earning
     ///      any more rewards.
-    /// @param _pendingRelayerState The pending relayer state. The relayer needs to be removed from this state.
     /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
     /// @param _relayerAddress The address of the relayer to jail.
     /// @param _relayerInfo The relayer info of the relayer to jail.
@@ -489,7 +488,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @param _penalty The penalty to be deducted from the relayer's stake.
     /// @param _state In memory struct to store intermediate state.
     function _penalizeAndJailRelayer(
-        RelayerStateManager.RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex,
         RelayerAddress _relayerAddress,
         RelayerInfo storage _relayerInfo,
@@ -539,11 +537,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             // The jailed stake to be deducted from global totalStake
             _state.totalActiveRelayerJailedStake += updatedStake;
-
-            // Initialize new relayers array if it is not initialized
-            if (_state.activeRelayersJailedCount == 0) {
-                _state.newRelayerList = _pendingRelayerState.relayers;
-            }
 
             _removeRelayerFromState(_state, _activeStateIndexToExpectedMemoryStateIndex[_relayerIndex], _relayerAddress);
             unchecked {
@@ -688,14 +681,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
         delete ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
 
-        uint256 relayerStakeNormalized = _activeState.cdf[_relayerIndex];
+        uint256 relayerWeight = _activeState.cdf[_relayerIndex];
 
         if (_relayerIndex != 0) {
-            relayerStakeNormalized -= _activeState.cdf[_relayerIndex - 1];
+            relayerWeight -= _activeState.cdf[_relayerIndex - 1];
         }
 
         return _checkRelayerLiveness(
-            relayerStakeNormalized,
+            relayerWeight,
             _activeState.cdf[_activeState.cdf.length - 1],
             transactionsProcessedByRelayer,
             _totalTransactionsInEpoch,

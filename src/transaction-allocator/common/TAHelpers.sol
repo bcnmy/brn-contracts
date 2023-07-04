@@ -4,14 +4,11 @@ pragma solidity 0.8.19;
 
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {ITAHelpers} from "./interfaces/ITAHelpers.sol";
 import {TARelayerManagementStorage} from "ta-relayer-management/TARelayerManagementStorage.sol";
 import {TADelegationStorage} from "ta-delegation/TADelegationStorage.sol";
-import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
-import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 import {
     Uint256WrapperHelper,
     FixedPointTypeHelper,
@@ -28,13 +25,10 @@ import {RelayerStateManager} from "./RelayerStateManager.sol";
 /// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides varios helper functions.
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
-    using SafeCast for uint256;
     using Address for address payable;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
-    using U256ArrayHelper for uint256[];
-    using RAArrayHelper for RelayerAddress[];
     using RelayerStateManager for RelayerStateManager.RelayerState;
 
     ////////////////////////////// Verification Helpers //////////////////////////////
