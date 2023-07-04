@@ -26,6 +26,4 @@ contract TATestnetDebug is ITATestnetDebug, TATransactionAllocationStorage, TAPr
             sstore(slot, value)
         }
     }
-
-    function test123() external {}
 }

@@ -380,7 +380,4 @@ abstract contract TATestBase is Test {
         }
         return count;
     }
-
-    // Add this to be excluded from coverage
-    function test() external pure virtual {}
 }

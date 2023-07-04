@@ -18,6 +18,4 @@ contract ERC20FreeMint is ERC20 {
             _mint(to[i], amount[i]);
         }
     }
-
-    function test() external {}
 }

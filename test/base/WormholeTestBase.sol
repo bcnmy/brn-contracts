@@ -207,7 +207,4 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
         _vm.version = wormholeVMVersion;
         return guardians[_emitterChain].encodeAndSignMessage(_vm);
     }
-
-    // Excluce from test coverage
-    function test() external pure override {}
 }

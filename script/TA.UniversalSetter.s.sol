@@ -33,6 +33,4 @@ contract TAUniversalSetter is Script, TARelayerManagementStorage {
 
         vm.stopBroadcast();
     }
-
-    function test() external {}
 }

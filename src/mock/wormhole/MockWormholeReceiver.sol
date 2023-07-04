@@ -149,7 +149,4 @@ contract MockWormholeReceiver is IMockWormholeReceiver, IWormholeReceiver {
     }
 
     receive() external payable {}
-
-    // Exclude from coverage
-    function test() external {}
 }

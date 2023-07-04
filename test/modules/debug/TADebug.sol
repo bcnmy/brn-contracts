@@ -69,6 +69,4 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     {
         return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
     }
-
-    function test1() external {}
 }
