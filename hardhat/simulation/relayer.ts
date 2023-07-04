@@ -87,7 +87,7 @@ export class Relayer {
     );
   }
 
-  private getActiveStateToLatestStateMap(
+  private getactiveStateIndexToExpectedMemoryStateIndex(
     activeState: RelayerStateStruct,
     latestState: RelayerStateStruct
   ): number[] {
@@ -187,10 +187,8 @@ export class Relayer {
             relayerGenerationIterationBitmap: relayerGenerationIterations,
             activeState: currentState,
             latestState: latestState,
-            activeStateToLatestStateMap: this.getActiveStateToLatestStateMap(
-              currentState,
-              latestState
-            ),
+            activeStateIndexToExpectedMemoryStateIndex:
+              this.getactiveStateIndexToExpectedMemoryStateIndex(currentState, latestState),
           },
           {
             gasLimit: 10000000,

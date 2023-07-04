@@ -52,16 +52,6 @@ function tokenInequality(TokenAddress a, TokenAddress b) pure returns (bool) {
 
 using {tokenEquality as ==, tokenInequality as !=} for TokenAddress global;
 
-//////////////////////////// Structs ////////////////////////////
-
-/// @dev Struct for storing the state of all relayers in the system.
-/// @custom:member cdf The cumulative distribution function of the relayers.
-/// @custom:member relayers The list of relayers.
-struct RelayerState {
-    uint16[] cdf;
-    RelayerAddress[] relayers;
-}
-
 //////////////////////////// Enums ////////////////////////////
 
 /// @dev Enum for the status of a relayer.

@@ -5,7 +5,8 @@ pragma solidity 0.8.19;
 import {ITATransactionAllocationEventsErrors} from "./ITATransactionAllocationEventsErrors.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 import {ITATransactionAllocationGetters} from "./ITATransactionAllocationGetters.sol";
-import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title ITATransactionAllocation
 interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITATransactionAllocationGetters {
@@ -16,16 +17,16 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITAT
     /// @custom:member relayerGenerationIterationBitmap A bitmap with set bit indicating the relayer was selected at that iteration.
     /// @custom:member activeState The active state of the relayers.
     /// @custom:member latestState The latest state of the relayers.
-    /// @custom:member activeStateToLatestStateMap A mapping from the active state to the latest state.
-    ///                latestState.relayers[activeStateToLatestStateMap[i]] = activeState.relayers[i] for all i.
+    /// @custom:member activeStateIndexToExpectedMemoryStateIndex A mapping from the active state to the latest state.
+    ///                latestState.relayers[activeStateIndexToExpectedMemoryStateIndex[i]] = activeState.relayers[i] for all i.
     struct ExecuteParams {
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;
         uint256 relayerIndex;
         uint256 relayerGenerationIterationBitmap;
-        RelayerState activeState;
-        RelayerState latestState;
-        uint256[] activeStateToLatestStateMap;
+        RelayerStateManager.RelayerState activeState;
+        RelayerStateManager.RelayerState latestState;
+        uint256[] activeStateIndexToExpectedMemoryStateIndex;
     }
 
     /// @notice This function is called by the relayer to execute the transactions.
@@ -37,7 +38,7 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITAT
     /// @return selectedRelayers list of relayers selected of length relayersPerWindow, but
     ///                          there can be duplicates
     /// @return indices list of indices of the selected relayers in the active state, used for verification
-    function allocateRelayers(RelayerState calldata _activeState)
+    function allocateRelayers(RelayerStateManager.RelayerState calldata _activeState)
         external
         view
         returns (RelayerAddress[] memory, uint256[] memory);

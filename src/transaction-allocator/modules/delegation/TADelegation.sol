@@ -8,9 +8,8 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 import {ITADelegation} from "./interfaces/ITADelegation.sol";
 import {TADelegationGetters} from "./TADelegationGetters.sol";
 import {TAHelpers} from "ta-common/TAHelpers.sol";
-import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
 import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 import {
     FixedPointType,
     FixedPointTypeHelper,
@@ -18,7 +17,8 @@ import {
     FP_ZERO,
     FP_ONE
 } from "src/library/FixedPointArithmetic.sol";
-import {RelayerState, RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {NATIVE_TOKEN} from "ta-common/TAConstants.sol";
 
 /// @title TADelegation
@@ -38,10 +38,10 @@ import {NATIVE_TOKEN} from "ta-common/TAConstants.sol";
 contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
-    using U16ArrayHelper for uint16[];
-    using U32ArrayHelper for uint32[];
     using RAArrayHelper for RelayerAddress[];
+    using U256ArrayHelper for uint256[];
     using SafeERC20 for IERC20;
+    using RelayerStateManager for RelayerStateManager.RelayerState;
 
     /// @dev Mints delegation pool shares at the current share price for that relayer's pool
     /// @param _relayerAddress The relayer address to delegate to
@@ -124,7 +124,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     }
 
     /// @inheritdoc ITADelegation
-    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
+    function delegate(RelayerStateManager.RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
         external
         override
         noSelfCall
@@ -133,7 +133,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             revert InvalidRelayerIndex();
         }
 
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
 
         RelayerAddress relayerAddress = _latestState.relayers[_relayerIndex];
         _updateRelayerProtocolRewards(relayerAddress);
@@ -151,7 +151,9 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
 
         // Schedule the CDF update
-        _updateCdf_c(_latestState.relayers);
+        uint256[] memory newCdf = _latestState.increaseWeight(_relayerIndex, _amount);
+        bytes32 newRelayerStateHash = RelayerStateManager.hash(newCdf, _latestState.relayers);
+        _updateLatestRelayerState(newRelayerStateHash);
     }
 
     struct TokensToBeTransferred {
@@ -193,12 +195,12 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     }
 
     /// @inheritdoc ITADelegation
-    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress)
-        external
-        override
-        noSelfCall
-    {
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+    function undelegate(
+        RelayerStateManager.RelayerState calldata _latestState,
+        RelayerAddress _relayerAddress,
+        uint256 _relayerIndex
+    ) external override noSelfCall {
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
 
         TADStorage storage ds = getTADStorage();
 
@@ -237,9 +239,16 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         }
 
         // Update the CDF if and only if the relayer is still registered
-        // There can be a case where the relayer is unregistered and the user still has rewards
+        // The delegator should be allowed to undelegate even if the relayer has been removed
         if (_isActiveRelayer(_relayerAddress)) {
-            _updateCdf_c(_latestState.relayers);
+            // Verify the relayer index
+            if (_latestState.relayers[_relayerIndex] != _relayerAddress) {
+                revert InvalidRelayerIndex();
+            }
+
+            uint256[] memory newCdf = _latestState.decreaseWeight(_relayerIndex, delegation_);
+            bytes32 newRelayerStateHash = RelayerStateManager.hash(newCdf, _latestState.relayers);
+            _updateLatestRelayerState(newRelayerStateHash);
         }
     }
 

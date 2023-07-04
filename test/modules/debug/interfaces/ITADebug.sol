@@ -4,16 +4,20 @@ pragma solidity 0.8.19;
 
 import "src/library/FixedPointArithmetic.sol";
 import "ta-common/TATypes.sol";
+import "ta-common/RelayerStateManager.sol";
 
 interface ITADebug {
-    function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
-        external
-        view
-        returns (bool);
+    function debug_verifyRelayerStateAtWindow(
+        RelayerStateManager.RelayerState calldata _relayerState,
+        uint256 __windowIndex
+    ) external view returns (bool);
 
     function debug_currentWindowIndex() external view returns (uint256);
 
-    function debug_relayerStateHash(RelayerState calldata _relayerState) external pure returns (bytes32);
+    function debug_relayerStateHash(RelayerStateManager.RelayerState calldata _relayerState)
+        external
+        pure
+        returns (bytes32);
 
     function debug_setTransactionsProcessedByRelayer(RelayerAddress _relayerAddress, uint256 _transactionsProcessed)
         external;

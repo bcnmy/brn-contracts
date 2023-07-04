@@ -10,7 +10,8 @@ import {IWormholeApplication} from "./interfaces/IWormholeApplication.sol";
 import {WormholeApplicationStorage} from "./WormholeApplicationStorage.sol";
 import {ApplicationBase} from "ta-base-application/ApplicationBase.sol";
 import {WormholeChainId, ReceiptVAAPayload, VaaKey} from "./interfaces/WormholeTypes.sol";
-import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title WormholeApplication
 /// @notice The Wormhole Application module is responsible for executing Wormhole messages and performing transaction allocation.
@@ -76,7 +77,7 @@ contract WormholeApplication is IWormholeApplication, ApplicationBase, WormholeA
     function allocateWormholeDeliveryVAA(
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
-        RelayerState calldata _currentState
+        RelayerStateManager.RelayerState calldata _currentState
     ) external view override returns (bytes[] memory, uint256, uint256) {
         return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }

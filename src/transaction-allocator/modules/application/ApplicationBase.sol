@@ -2,7 +2,8 @@
 pragma solidity 0.8.19;
 
 import {IApplicationBase} from "./interfaces/IApplicationBase.sol";
-import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {ITATransactionAllocation} from "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 
 /// @title ApplicationBase
@@ -86,7 +87,7 @@ abstract contract ApplicationBase is IApplicationBase {
     function _allocateTransaction(
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
-        RelayerState calldata _currentState
+        RelayerStateManager.RelayerState calldata _currentState
     )
         internal
         view

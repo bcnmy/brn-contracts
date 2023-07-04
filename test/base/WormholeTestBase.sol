@@ -95,7 +95,7 @@ abstract contract WormholeTestBase is TATestBase, IMockWormholeReceiver {
         // BRN Deployment on destination chain
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);

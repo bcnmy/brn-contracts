@@ -26,7 +26,7 @@ contract TransactionAllocationTest is
 
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -40,7 +40,7 @@ contract TransactionAllocationTest is
     function _allocateTransactions(
         RelayerAddress _relayerAddress,
         bytes[] memory _txns,
-        RelayerState memory _relayerState
+        RelayerStateManager.RelayerState memory _relayerState
     ) internal view override returns (bytes[] memory, uint256, uint256) {
         return ta.allocateMinimalApplicationTransaction(_relayerAddress, _txns, _relayerState);
     }
@@ -70,7 +70,9 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
+                        latestRelayerState
+                        )
                 })
             );
             vm.stopPrank();
@@ -93,7 +95,7 @@ contract TransactionAllocationTest is
 
     function testCannotExecuteTransactionWithInvalidCdf() external {
         // Corrupt the CDF
-        RelayerState memory corruptedState = latestRelayerState;
+        RelayerStateManager.RelayerState memory corruptedState = latestRelayerState;
         corruptedState.cdf[0] += 1;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -105,7 +107,7 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateActiveStateToLatestStateMap(latestRelayerState);
+            uint256[] memory map = _generateactiveStateIndexToExpectedMemoryStateIndex(latestRelayerState);
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidActiveRelayerState.selector);
@@ -117,7 +119,7 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: corruptedState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    activeStateIndexToExpectedMemoryStateIndex: map
                 })
             );
             vm.stopPrank();
@@ -134,7 +136,7 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateActiveStateToLatestStateMap(latestRelayerState);
+            uint256[] memory map = _generateactiveStateIndexToExpectedMemoryStateIndex(latestRelayerState);
 
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             ta.execute(
@@ -145,7 +147,7 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    activeStateIndexToExpectedMemoryStateIndex: map
                 })
             );
             vm.expectRevert(
@@ -161,7 +163,7 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    activeStateIndexToExpectedMemoryStateIndex: map
                 })
             );
             vm.stopPrank();
@@ -190,7 +192,9 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
+                        latestRelayerState
+                        )
                 })
             );
             vm.stopPrank();
@@ -239,7 +243,9 @@ contract TransactionAllocationTest is
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
                     latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
+                        latestRelayerState
+                        )
                 })
             );
             vm.stopPrank();

@@ -30,7 +30,7 @@ contract ProtocolRewardsTest is
 
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         vm.warp(block.timestamp + deployParams.epochLengthInSec / 2);
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
@@ -287,7 +287,7 @@ contract ProtocolRewardsTest is
         );
         assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
 
         FixedPointType initialShares = ta.totalProtocolRewardShares();
@@ -378,7 +378,7 @@ contract ProtocolRewardsTest is
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
         }
         // Unregister the relayer
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _prankRA(inactiveRelayer);
         ta.unregister(latestRelayerState, _findRelayerIndex(inactiveRelayer));
         _removeRelayerFromLatestState(inactiveRelayer);
@@ -451,7 +451,7 @@ contract ProtocolRewardsTest is
         );
         assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
 
         FixedPointType initialShares = ta.totalProtocolRewardShares();
@@ -531,7 +531,7 @@ contract ProtocolRewardsTest is
         assertEq(ta.relayerInfo(inactiveRelayer).rewardShares, initialExpectedRelayerShares[inactiveRelayerIndex]);
 
         // Unregister the relayer
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _prankRA(inactiveRelayer);
         ta.unregister(latestRelayerState, _findRelayerIndex(inactiveRelayer));
         _removeRelayerFromLatestState(inactiveRelayer);

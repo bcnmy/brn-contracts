@@ -7,7 +7,7 @@ import {RelayerAddress} from "ta-common/TATypes.sol";
 /// @title Relayer Address Array Helper
 /// @dev Helper functions for arrays of RelayerAddress
 library RAArrayHelper {
-    error IndexOutOfBounds(uint256 index, uint256 length);
+    error IndexOutOfBoundsRA(uint256 index, uint256 length);
 
     /// @dev Copies the array into memory and appends the value
     /// @param _array The array to append to
@@ -45,7 +45,7 @@ library RAArrayHelper {
     {
         uint256 newLength = _array.length - 1;
         if (_index > newLength) {
-            revert IndexOutOfBounds(_index, _array.length);
+            revert IndexOutOfBoundsRA(_index, _array.length);
         }
 
         RelayerAddress[] memory newArray = new RelayerAddress[](newLength);
@@ -75,7 +75,7 @@ library RAArrayHelper {
         returns (RelayerAddress[] memory)
     {
         if (_index >= _array.length) {
-            revert IndexOutOfBounds(_index, _array.length);
+            revert IndexOutOfBoundsRA(_index, _array.length);
         }
 
         RelayerAddress[] memory newArray = _array;
@@ -104,7 +104,7 @@ library RAArrayHelper {
         uint256 newLength = _array.length - 1;
 
         if (_index > newLength) {
-            revert IndexOutOfBounds(_index, _array.length);
+            revert IndexOutOfBoundsRA(_index, _array.length);
         }
 
         if (_index != newLength) {

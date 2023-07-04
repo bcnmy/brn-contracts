@@ -32,7 +32,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         supportedTokens.push(NATIVE_TOKEN);
 
         // Register all Relayers
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -111,24 +111,34 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         _updateLatestStateCdf();
     }
 
+    uint256 nativeBalanceBefore;
+    uint256 bicoBalanceBefore;
+    uint256 totalDelegationBefore;
+    FixedPointType sharesBicoBefore;
+    FixedPointType sharesNativeBefore;
+    FixedPointType totalSharesBicoBefore;
+    FixedPointType totalSharesNativeBefore;
+    uint256 claimableRewardsBicoBefore;
+    uint256 claimableRewardsNativeBefore;
+
     function _undelegate(
         RelayerAddress _r,
         DelegatorAddress _d,
         bool _expectNonZeroNativeDelegationReward,
         bool _expectNonZeroBicoDeleagationReward
     ) internal {
-        uint256 nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
-        uint256 bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
-        uint256 totalDelegationBefore = ta.totalDelegation(r);
-        FixedPointType sharesBicoBefore = ta.shares(_r, _d, bondTokenAddress);
-        FixedPointType sharesNativeBefore = ta.shares(_r, _d, NATIVE_TOKEN);
-        FixedPointType totalSharesBicoBefore = ta.totalShares(r, bondTokenAddress);
-        FixedPointType totalSharesNativeBefore = ta.totalShares(r, NATIVE_TOKEN);
-        uint256 claimableRewardsBicoBefore = ta.claimableDelegationRewards(_r, bondTokenAddress, _d);
-        uint256 claimableRewardsNativeBefore = ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d);
+        nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
+        bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
+        totalDelegationBefore = ta.totalDelegation(r);
+        sharesBicoBefore = ta.shares(_r, _d, bondTokenAddress);
+        sharesNativeBefore = ta.shares(_r, _d, NATIVE_TOKEN);
+        totalSharesBicoBefore = ta.totalShares(r, bondTokenAddress);
+        totalSharesNativeBefore = ta.totalShares(r, NATIVE_TOKEN);
+        claimableRewardsBicoBefore = ta.claimableDelegationRewards(_r, bondTokenAddress, _d);
+        claimableRewardsNativeBefore = ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d);
 
         _prankDa(_d);
-        ta.undelegate(latestRelayerState, _r);
+        ta.undelegate(latestRelayerState, _r, _findRelayerIndex(_r));
 
         // Shares should be destroyed
         assertEq(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
@@ -315,7 +325,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     }
 
     function testDelegationShouldUpdateCDFWithDelay() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         _delegate(r, ridx, d0);
 
@@ -333,7 +343,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     }
 
     function testUnDelegationShouldUpdateCDFWithDelay() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         _delegate(r, ridx, d0);
 

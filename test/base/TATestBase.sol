@@ -26,8 +26,6 @@ abstract contract TATestBase is Test {
     using Uint256WrapperHelper for uint256;
     using ECDSA for bytes32;
 
-    uint256 constant CDF_ERROR_MARGIN = 0.005 ether; // 0.005%
-
     string constant mnemonic = "test test test test test test test test test test test junk";
     uint256 constant relayerCount = 10;
     uint256 constant relayerAccountsPerRelayer = 10;
@@ -88,7 +86,7 @@ abstract contract TATestBase is Test {
     uint256 deploymentTimestamp;
 
     // Test State
-    RelayerState internal latestRelayerState;
+    RelayerStateManager.RelayerState internal latestRelayerState;
 
     // Relayer Deploy Params
     string endpoint = "test";
@@ -191,7 +189,7 @@ abstract contract TATestBase is Test {
     }
 
     // Used for triggering livness check, penalization, jailing and state updates
-    function _sendEmptyTransaction(RelayerState memory _activeState) internal {
+    function _sendEmptyTransaction(RelayerStateManager.RelayerState memory _activeState) internal {
         // Find a relayer selected in the current window
         (RelayerAddress[] memory selectedRelayers, uint256[] memory selectedRelayerIndices) =
             ta.allocateRelayers(_activeState);
@@ -206,12 +204,14 @@ abstract contract TATestBase is Test {
                 relayerGenerationIterationBitmap: 0,
                 activeState: _activeState,
                 latestState: latestRelayerState,
-                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(_activeState)
+                activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
+                    _activeState
+                    )
             })
         );
     }
 
-    function _generateActiveStateToLatestStateMap(RelayerState memory _activeState)
+    function _generateactiveStateIndexToExpectedMemoryStateIndex(RelayerStateManager.RelayerState memory _activeState)
         internal
         view
         returns (uint256[] memory map)
@@ -271,7 +271,7 @@ abstract contract TATestBase is Test {
         return (RelayerAddress.wrap(address(0)), 0, 0);
     }
 
-    function _allocateTransactions(RelayerAddress, bytes[] memory, RelayerState memory)
+    function _allocateTransactions(RelayerAddress, bytes[] memory, RelayerStateManager.RelayerState memory)
         internal
         virtual
         returns (bytes[] memory, uint256, uint256)
@@ -285,16 +285,12 @@ abstract contract TATestBase is Test {
     }
 
     function _checkCdfInLatestState() internal {
-        uint256 totalStake = ta.totalStake();
-        uint16[] memory cdf = ta.getLatestCdfArray(latestRelayerState.relayers);
-
         for (uint256 i = 0; i < latestRelayerState.relayers.length; i++) {
             RelayerAddress relayerAddress = latestRelayerState.relayers[i];
-            uint256 relativeStake = latestRelayerState.cdf[i] - (i == 0 ? 0 : latestRelayerState.cdf[i - 1]);
-            assertApproxEqRel(
-                relativeStake * totalStake,
-                (ta.relayerInfo(relayerAddress).stake + ta.totalDelegation(relayerAddress)) * cdf[cdf.length - 1],
-                CDF_ERROR_MARGIN,
+            uint256 weight = latestRelayerState.cdf[i] - (i == 0 ? 0 : latestRelayerState.cdf[i - 1]);
+            assertEq(
+                weight,
+                ta.relayerInfo(relayerAddress).stake + ta.totalDelegation(relayerAddress),
                 string.concat("CDF Verification - Relayer ", vm.toString(i))
             );
         }

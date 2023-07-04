@@ -49,7 +49,7 @@ interface ITARelayerManagementGetters {
 
     function baseRewardRatePerMinimumStakePerSec() external view returns (uint256);
 
-    function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint16[] memory);
+    function getLatestCdfArray(RelayerAddress[] calldata _activeRelayers) external view returns (uint256[] memory);
 
     function relayerStateHash() external view returns (bytes32, bytes32);
 

@@ -2,7 +2,8 @@
 
 pragma solidity ^0.8.19;
 
-import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import "./IMinimalApplicationEventsErrors.sol";
 import "ta-base-application/interfaces/IApplicationBase.sol";
 
@@ -12,6 +13,6 @@ interface IMinimalApplication is IMinimalApplicationEventsErrors, IApplicationBa
     function allocateMinimalApplicationTransaction(
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
-        RelayerState calldata _currentState
+        RelayerStateManager.RelayerState calldata _currentState
     ) external view returns (bytes[] memory, uint256, uint256);
 }

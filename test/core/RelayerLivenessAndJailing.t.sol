@@ -29,7 +29,7 @@ contract RelayerLivenessAndJailingTest is
 
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -53,7 +53,7 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 totalPenaly = 0;
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         for (uint256 i = 1; i < relayerCount; ++i) {
             RelayerAddress relayer = relayerMainAddress[i];
@@ -101,11 +101,11 @@ contract RelayerLivenessAndJailingTest is
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
         }
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _prankRA(inactiveRelayer);
         ta.unregister(latestRelayerState, _findRelayerIndex(inactiveRelayer));
         _removeRelayerFromLatestState(inactiveRelayer);
-        RelayerState memory postRemovalState = latestRelayerState;
+        RelayerStateManager.RelayerState memory postRemovalState = latestRelayerState;
 
         uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
         penalty[inactiveRelayer] = _calculatePenalty(stake);
@@ -151,7 +151,7 @@ contract RelayerLivenessAndJailingTest is
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
         penalty[inactiveRelayer] = _calculatePenalty(stake);
@@ -198,11 +198,11 @@ contract RelayerLivenessAndJailingTest is
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _prankRA(inactiveRelayer);
         ta.unregister(latestRelayerState, _findRelayerIndex(inactiveRelayer));
         _removeRelayerFromLatestState(inactiveRelayer);
-        RelayerState memory postRemovalState = latestRelayerState;
+        RelayerStateManager.RelayerState memory postRemovalState = latestRelayerState;
 
         uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
         penalty[inactiveRelayer] = _calculatePenalty(stake);
@@ -252,7 +252,7 @@ contract RelayerLivenessAndJailingTest is
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
@@ -303,7 +303,7 @@ contract RelayerLivenessAndJailingTest is
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
@@ -354,7 +354,7 @@ contract RelayerLivenessAndJailingTest is
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
@@ -382,7 +382,7 @@ contract RelayerLivenessAndJailingTest is
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
@@ -411,7 +411,7 @@ contract RelayerLivenessAndJailingTest is
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
