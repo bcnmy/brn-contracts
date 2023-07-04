@@ -194,7 +194,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint16[] memory cdf = _generateCdfArray_c(_relayerAddresses);
         bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.cd_hash());
 
-        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+        emit NewRelayerState(relayerStateHash);
 
         getRMStorage().relayerStateVersionManager.setLatestState(relayerStateHash, _windowIndex(block.number));
     }
@@ -206,7 +206,7 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         uint16[] memory cdf = _generateCdfArray_m(_relayerAddresses);
         bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.m_hash());
 
-        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
+        emit NewRelayerState(relayerStateHash);
 
         getRMStorage().relayerStateVersionManager.setLatestState(relayerStateHash, _windowIndex(block.number));
     }

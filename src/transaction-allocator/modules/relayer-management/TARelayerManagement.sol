@@ -124,7 +124,6 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     ) external override {
         RMStorage storage rms = getRMStorage();
 
-        // TODO: Check if this is the right way to protect this function
         if (rms.relayerCount != 0) {
             revert FoundationRelayerAlreadyRegistered();
         }

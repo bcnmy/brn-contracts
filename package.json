@@ -11,7 +11,8 @@
     "simulation:watch": "watch -n 5 hardhat/simulation/cat-latest-metrics.sh",
     "test": "FOUNDRY_PROFILE=test forge test",
     "coverage": "FOUNDRY_PROFILE=test forge coverage",
-    "gas-report": "FOUNDRY_PROFILE=test forge test --gas-report"
+    "gas-report": "FOUNDRY_PROFILE=test forge test --gas-report",
+    "snapshot": "FOUNDRY_PROFILE=test forge snapshot"
   },
   "repository": "git+https://github.com/bcnmy/POC-DRN.git",
   "author": "Ankur Dubey <ankurdubey521@protonmail.com>",
