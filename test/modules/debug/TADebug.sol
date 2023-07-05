@@ -61,6 +61,10 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         getRMStorage().baseRewardRatePerMinimumStakePerSec = _rate;
     }
 
+    function debug_setStakeThresholdForJailing(uint256 _amount) external override {
+        getTAStorage().stakeThresholdForJailing = _amount;
+    }
+
     function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
         external
         view

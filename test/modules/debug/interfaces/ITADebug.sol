@@ -36,4 +36,6 @@ interface ITADebug {
         external
         view
         returns (uint256, uint256, FixedPointType);
+
+    function debug_setStakeThresholdForJailing(uint256 _amount) external;
 }

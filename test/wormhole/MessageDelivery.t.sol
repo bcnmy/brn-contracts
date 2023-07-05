@@ -55,10 +55,7 @@ contract WormholeMessageDeliveryTest is WormholeTestBase {
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                    latestRelayerState
-                    )
+                latestState: latestRelayerState
             })
         );
 
@@ -113,10 +110,7 @@ contract WormholeMessageDeliveryTest is WormholeTestBase {
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                    latestRelayerState
-                    )
+                latestState: latestRelayerState
             })
         );
 

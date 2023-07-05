@@ -67,8 +67,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateIndexToExpectedMemoryStateIndex: new uint256[](0)
+                latestState: latestRelayerState
             })
         );
     }
@@ -153,8 +152,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                         relayerIndex: 0,
                         relayerGenerationIterationBitmap: 0,
                         activeState: latestRelayerState,
-                        latestState: latestRelayerState,
-                        activeStateIndexToExpectedMemoryStateIndex: new uint256[](0)
+                        latestState: latestRelayerState
                     })
                 )
             ),

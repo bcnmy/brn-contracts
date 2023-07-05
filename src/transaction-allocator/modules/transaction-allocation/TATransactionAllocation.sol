@@ -85,9 +85,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         // If the transaction is the first transaction of the epoch, then perform the liveness check and other operations
         if (block.timestamp >= epochEndTimestamp_) {
-            epochEndTimestamp_ = _performFirstTransactionOfEpochDuties(
-                _params.activeState, _params.latestState, _params.activeStateIndexToExpectedMemoryStateIndex
-            );
+            epochEndTimestamp_ = _performFirstTransactionOfEpochDuties(_params.activeState, _params.latestState);
         }
 
         // Record Liveness Metrics
@@ -110,11 +108,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Runs the liveness check, activates any pending state and emits the latest relayer state.
     /// @param _activeState The active relayer state.
     /// @param _latestState The latest relayer state.
-    /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
     function _performFirstTransactionOfEpochDuties(
         RelayerStateManager.RelayerState calldata _activeState,
-        RelayerStateManager.RelayerState calldata _latestState,
-        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex
+        RelayerStateManager.RelayerState calldata _latestState
     ) internal returns (uint256) {
         _verifyExternalStateForRelayerStateUpdation(_latestState);
 
@@ -123,7 +119,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             bool isRelayerStateUpdatedDuringLivnessCheck,
             bytes32 newRelayerStateHash,
             RelayerStateManager.RelayerState memory newRelayerState
-        ) = _processLivenessCheck(_activeState, _latestState, _activeStateIndexToExpectedMemoryStateIndex);
+        ) = _processLivenessCheck(_activeState, _latestState);
 
         // Process any pending Updates
         uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
@@ -358,11 +354,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Processes the liveness check for the current epoch for all active relayers.
     /// @param _activeRelayerState The active relayer state.
     /// @param _pendingRelayerState The pending relayer state.
-    /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
     function _processLivenessCheck(
         RelayerStateManager.RelayerState calldata _activeRelayerState,
-        RelayerStateManager.RelayerState calldata _pendingRelayerState,
-        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex
+        RelayerStateManager.RelayerState calldata _pendingRelayerState
     )
         internal
         returns (
@@ -389,9 +383,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         uint256 activeRelayerCount = _activeRelayerState.relayers.length;
         for (uint256 i; i != activeRelayerCount;) {
-            _processLivenessCheckForRelayer(
-                _activeRelayerState, _pendingRelayerState, _activeStateIndexToExpectedMemoryStateIndex, i, state
-            );
+            _processLivenessCheckForRelayer(_activeRelayerState, _pendingRelayerState, i, state);
 
             unchecked {
                 ++i;
@@ -406,13 +398,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Processes the liveness check for the current epoch for a single relayer.
     /// @param _activeRelayerState The active relayer state.
     /// @param _pendingRelayerState Teh pending relayer state.
-    /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
     /// @param _relayerIndex The index of the relayer to process.
     /// @param _state In memory struct to store intermediate state.
     function _processLivenessCheckForRelayer(
         RelayerStateManager.RelayerState calldata _activeRelayerState,
         RelayerStateManager.RelayerState calldata _pendingRelayerState,
-        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex,
         uint256 _relayerIndex,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
@@ -446,25 +436,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         }
 
         if (stake - penalty >= _state.stakeThresholdForJailing) {
-            _penalizeRelayer(
-                _activeStateIndexToExpectedMemoryStateIndex,
-                relayerAddress,
-                relayerInfo,
-                stake,
-                _relayerIndex,
-                penalty,
-                _state
-            );
+            _penalizeRelayer(relayerAddress, relayerInfo, stake, penalty, _state);
         } else {
-            _penalizeAndJailRelayer(
-                _activeStateIndexToExpectedMemoryStateIndex,
-                relayerAddress,
-                relayerInfo,
-                stake,
-                _relayerIndex,
-                penalty,
-                _state
-            );
+            _penalizeAndJailRelayer(relayerAddress, relayerInfo, stake, penalty, _state);
         }
     }
 
@@ -475,11 +449,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @param _penalty The penalty to be deducted from the relayer's stake.
     /// @param _state In memory struct to store intermediate state.
     function _penalizeRelayer(
-        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex,
         RelayerAddress _relayerAddress,
         RelayerInfo storage _relayerInfo,
         uint256 _stake,
-        uint256 _relayerIndex,
         uint256 _penalty,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
@@ -504,9 +476,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
             _state.totalProtocolRewardSharesBurnt = _state.totalProtocolRewardSharesBurnt + protocolRewardSharesBurnt;
 
-            _decreaseRelayerWeightInState(
-                _state, _activeStateIndexToExpectedMemoryStateIndex[_relayerIndex], _relayerAddress, _penalty
-            );
+            _decreaseRelayerWeightInState(_state, _relayerAddress, _penalty);
 
             emit RelayerProtocolSharesBurnt(_relayerAddress, protocolRewardSharesBurnt);
         }
@@ -517,19 +487,15 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Assuming that the relayer failed the liveness check AND qualifies for jailing, penalize it's stake and jail it.
     ///      Process any pending rewards and then destroy all of the relayer's protocol reward shares, to prevent it from earning
     ///      any more rewards.
-    /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
     /// @param _relayerAddress The address of the relayer to jail.
     /// @param _relayerInfo The relayer info of the relayer to jail.
     /// @param _stake The current stake of the relayer.
-    /// @param _relayerIndex The index of the relayer to jail.
     /// @param _penalty The penalty to be deducted from the relayer's stake.
     /// @param _state In memory struct to store intermediate state.
     function _penalizeAndJailRelayer(
-        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex,
         RelayerAddress _relayerAddress,
         RelayerInfo storage _relayerInfo,
         uint256 _stake,
-        uint256 _relayerIndex,
         uint256 _penalty,
         ProcessLivenessCheckMemoryState memory _state
     ) internal {
@@ -575,7 +541,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             // The jailed stake to be deducted from global totalStake
             _state.totalActiveRelayerJailedStake += updatedStake;
 
-            _removeRelayerFromState(_state, _activeStateIndexToExpectedMemoryStateIndex[_relayerIndex], _relayerAddress);
+            _removeRelayerFromState(_state, _relayerAddress);
             unchecked {
                 ++_state.activeRelayersJailedCount;
             }
@@ -632,29 +598,45 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /// @dev Utillity function to remove a relayer from the memory state.
-    function _removeRelayerFromState(
-        ProcessLivenessCheckMemoryState memory _state,
-        uint256 _relayerIndexInMemoryState,
-        RelayerAddress _expectedRelayerAddress
-    ) internal pure {
-        if (_state.newRelayerList[_relayerIndexInMemoryState] != _expectedRelayerAddress) {
-            revert RelayerAddressMismatch(_state.newRelayerList[_relayerIndexInMemoryState], _expectedRelayerAddress);
-        }
-        _state.newRelayerList.m_remove(_relayerIndexInMemoryState);
-        _state.newWeightsList.m_remove(_relayerIndexInMemoryState);
+    function _removeRelayerFromState(ProcessLivenessCheckMemoryState memory _state, RelayerAddress _relayerAddress)
+        internal
+        pure
+    {
+        uint256 relayerIndexInMemoryState = _findRelayerIndexInMemoryState(_state, _relayerAddress);
+        _state.newRelayerList.m_remove(relayerIndexInMemoryState);
+        _state.newWeightsList.m_remove(relayerIndexInMemoryState);
     }
 
     /// @dev Utillity function to decrease a relayer's weight from the memory state.
     function _decreaseRelayerWeightInState(
         ProcessLivenessCheckMemoryState memory _state,
-        uint256 _relayerIndexInMemoryState,
-        RelayerAddress _expectedRelayerAddress,
+        RelayerAddress _relayerAddress,
         uint256 _valueToDecrease
     ) internal pure {
-        if (_state.newRelayerList[_relayerIndexInMemoryState] != _expectedRelayerAddress) {
-            revert RelayerAddressMismatch(_state.newRelayerList[_relayerIndexInMemoryState], _expectedRelayerAddress);
+        uint256 relayerIndexInMemoryState = _findRelayerIndexInMemoryState(_state, _relayerAddress);
+        _state.newWeightsList[relayerIndexInMemoryState] -= _valueToDecrease;
+    }
+
+    /// @dev Utillity function to find a relayer's index in the memory state, in O(relayerCount).
+    ///      This will be called rarely (once per epoch, AND once per relayer that is penalized or jailed)
+    /// @param _state The in memory struct to store intermediate state.
+    /// @param _relayerAddress The address of the relayer to find.
+    function _findRelayerIndexInMemoryState(
+        ProcessLivenessCheckMemoryState memory _state,
+        RelayerAddress _relayerAddress
+    ) internal pure returns (uint256) {
+        uint256 length = _state.newRelayerList.length;
+        for (uint256 i; i != length;) {
+            if (_state.newRelayerList[i] == _relayerAddress) {
+                return i;
+            }
+            unchecked {
+                ++i;
+            }
         }
-        _state.newWeightsList[_relayerIndexInMemoryState] -= _valueToDecrease;
+
+        // It should not be possible to reach here
+        revert RelayerAddressNotFoundInMemoryState(_relayerAddress);
     }
 
     /// @inheritdoc ITATransactionAllocation

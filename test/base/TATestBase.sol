@@ -203,32 +203,9 @@ abstract contract TATestBase is Test {
                 relayerIndex: selectedRelayerIndices[0],
                 relayerGenerationIterationBitmap: 0,
                 activeState: _activeState,
-                latestState: latestRelayerState,
-                activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                    _activeState
-                    )
+                latestState: latestRelayerState
             })
         );
-    }
-
-    function _generateactiveStateIndexToExpectedMemoryStateIndex(RelayerStateManager.RelayerState memory _activeState)
-        internal
-        view
-        returns (uint256[] memory map)
-    {
-        map = new uint256[](_activeState.relayers.length);
-
-        // This is a test, idc about gas
-        // wen in-memory mapping?
-        for (uint256 i = 0; i < _activeState.relayers.length; i++) {
-            map[i] = latestRelayerState.relayers.length;
-            for (uint256 j = 0; j < latestRelayerState.relayers.length; j++) {
-                if (_activeState.relayers[i] == latestRelayerState.relayers[j]) {
-                    map[i] = j;
-                    break;
-                }
-            }
-        }
     }
 
     // Test Utils
@@ -314,6 +291,21 @@ abstract contract TATestBase is Test {
 
         latestRelayerState.relayers[relayerIndex] = latestRelayerState.relayers[latestRelayerState.relayers.length - 1];
         latestRelayerState.relayers.pop();
+        _updateLatestStateCdf();
+    }
+
+    function _removeRelayersFromLatestState(RelayerAddress[] memory _relayerAddress) internal {
+        for (uint256 i = 0; i < _relayerAddress.length; i++) {
+            RelayerAddress relayerAddress = _relayerAddress[i];
+            uint256 relayerIndex = _findRelayerIndex(relayerAddress);
+            if (relayerIndex == latestRelayerState.relayers.length) {
+                return;
+            }
+
+            latestRelayerState.relayers[relayerIndex] =
+                latestRelayerState.relayers[latestRelayerState.relayers.length - 1];
+            latestRelayerState.relayers.pop();
+        }
         _updateLatestStateCdf();
     }
 

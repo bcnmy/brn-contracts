@@ -61,10 +61,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                    latestRelayerState
-                    )
+                latestState: latestRelayerState
             })
         );
 

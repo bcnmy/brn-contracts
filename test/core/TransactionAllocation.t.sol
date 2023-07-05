@@ -69,10 +69,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                        latestRelayerState
-                        )
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -107,8 +104,6 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateactiveStateIndexToExpectedMemoryStateIndex(latestRelayerState);
-
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidActiveRelayerState.selector);
             ta.execute(
@@ -118,8 +113,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: corruptedState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: map
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -136,8 +130,6 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateactiveStateIndexToExpectedMemoryStateIndex(latestRelayerState);
-
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             ta.execute(
                 ITATransactionAllocation.ExecuteParams({
@@ -146,8 +138,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: map
+                    latestState: latestRelayerState
                 })
             );
             vm.expectRevert(
@@ -162,8 +153,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: map
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -191,10 +181,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex + 1,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                        latestRelayerState
-                        )
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -242,15 +229,40 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateIndexToExpectedMemoryStateIndex: _generateactiveStateIndexToExpectedMemoryStateIndex(
-                        latestRelayerState
-                        )
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
         }
 
         assertEq(testRun, true);
+    }
+
+    function testCannotExecuteTransactionFromWithIncorrectForwardedNativeAmount() external {
+        for (uint256 i = 0; i < relayerMainAddress.length; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+                _allocateTransactions(relayerAddress, txns, latestRelayerState);
+
+            if (allotedTransactions.length == 0) {
+                continue;
+            }
+
+            uint256 testRelayerIndex = (i + 1) % relayerMainAddress.length;
+
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[testRelayerIndex]][0]);
+            vm.expectRevert(ParameterLengthMismatch.selector);
+            ta.execute(
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length + 1),
+                    relayerIndex: selectedRelayerCdfIndex + 1,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations,
+                    activeState: latestRelayerState,
+                    latestState: latestRelayerState
+                })
+            );
+            vm.stopPrank();
+        }
     }
 }

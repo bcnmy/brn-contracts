@@ -17,8 +17,6 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITAT
     /// @custom:member relayerGenerationIterationBitmap A bitmap with set bit indicating the relayer was selected at that iteration.
     /// @custom:member activeState The active state of the relayers.
     /// @custom:member latestState The latest state of the relayers.
-    /// @custom:member activeStateIndexToExpectedMemoryStateIndex A mapping from the active state to the latest state.
-    ///                latestState.relayers[activeStateIndexToExpectedMemoryStateIndex[i]] = activeState.relayers[i] for all i.
     struct ExecuteParams {
         bytes[] reqs;
         uint256[] forwardedNativeAmounts;
@@ -26,7 +24,6 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITAT
         uint256 relayerGenerationIterationBitmap;
         RelayerStateManager.RelayerState activeState;
         RelayerStateManager.RelayerState latestState;
-        uint256[] activeStateIndexToExpectedMemoryStateIndex;
     }
 
     /// @notice This function is called by the relayer to execute the transactions.

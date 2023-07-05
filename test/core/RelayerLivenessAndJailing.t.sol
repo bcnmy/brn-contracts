@@ -37,13 +37,19 @@ contract RelayerLivenessAndJailingTest is
     }
 
     function testMinimumTransactionForLivenessCalculation() external {
-        FixedPointType minTransactions =
-            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, 50, ta.livenessZParameter());
+        FixedPointType z = ta.livenessZParameter();
+
+        FixedPointType minTransactions = ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 2 * 10 ** 18, 50, z);
         assertEq(minTransactions.u256(), 13);
 
-        minTransactions =
-            ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, 50, ta.livenessZParameter());
+        minTransactions = ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, 50, z);
         assertEq(minTransactions.u256(), 0);
+
+        minTransactions = ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 5 * 10 ** 18, 0, z);
+        assertEq(minTransactions.u256(), 0);
+
+        vm.expectRevert(NoRelayersRegistered.selector);
+        ta.calculateMinimumTranasctionsForLiveness(10 ** 18, 0, 50, z);
     }
 
     function testPenalizeActiveRelayerIfInsufficientTransactionAreSubmitted() external {
@@ -185,6 +191,75 @@ contract RelayerLivenessAndJailingTest is
         // Verify the new CDF
         assertEq(latestRelayerState.cdf.length, relayerCount - 1);
         assertEq(latestRelayerState.relayers.length, relayerCount - 1);
+        _checkCdfInLatestState();
+    }
+
+    function testJailMulipleActiveRelayerIfInsufficientTransationsAreSubmittedAndStakesBecomesLtMinStake() external {
+        RelayerAddress activeRelayer0 = relayerMainAddress[0];
+        RelayerAddress activeRelayer1 = relayerMainAddress[4];
+        uint256 totalStake = ta.totalStake();
+
+        // Setup to jail all relayers except relayer 0 and relayer 5.
+        ta.debug_setTotalTransactionsProcessed(20000000);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer0, 10000000);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer1, 10000000);
+        ta.debug_setStakeThresholdForJailing(initialRelayerStake[relayerMainAddress[9]] * 100);
+
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
+
+        uint256 jailedUntilTimestamp = block.timestamp + ta.jailTimeInSec();
+        uint256 totalStakeRemoved = 0;
+
+        for (uint256 i = 0; i < relayerCount; ++i) {
+            if (i == 0 || i == 4) continue;
+
+            RelayerAddress inactiveRelayer = relayerMainAddress[i];
+            uint256 stake = ta.relayerInfo(inactiveRelayer).stake;
+            totalStakeRemoved += stake;
+            penalty[inactiveRelayer] = _calculatePenalty(stake);
+
+            vm.expectEmit(true, true, true, false);
+            emit RelayerPenalized(inactiveRelayer, stake - penalty[inactiveRelayer], penalty[inactiveRelayer]);
+            vm.expectEmit(true, true, true, false);
+            emit RelayerJailed(inactiveRelayer, jailedUntilTimestamp);
+        }
+
+        _moveForwardToNextEpoch();
+        _sendEmptyTransaction(currentState);
+        _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
+        RelayerAddress[] memory relayersToRemove = new RelayerAddress[](relayerCount - 2);
+        uint256 j;
+        for (uint256 i = 0; i < relayerCount; ++i) {
+            if (i == 0 || i == 4) continue;
+            RelayerAddress inactiveRelayer = relayerMainAddress[i];
+            relayersToRemove[j++] = inactiveRelayer;
+        }
+        _removeRelayersFromLatestState(relayersToRemove);
+
+        // Verify new state
+        assertEq(ta.totalStake(), totalStake - totalStakeRemoved);
+        assertEq(ta.relayerCount(), 2);
+
+        for (uint256 i = 0; i < relayerCount; ++i) {
+            if (i == 0 || i == 4) continue;
+            RelayerAddress inactiveRelayer = relayerMainAddress[i];
+            assertEq(
+                ta.relayerInfo(inactiveRelayer).stake, initialRelayerStake[inactiveRelayer] - penalty[inactiveRelayer]
+            );
+            assertTrue(ta.relayerInfo(inactiveRelayer).status == RelayerStatus.Jailed);
+        }
+
+        assertEq(ta.relayerInfo(activeRelayer0).stake, initialRelayerStake[activeRelayer0]);
+        assertTrue(ta.relayerInfo(activeRelayer0).status == RelayerStatus.Active);
+        assertEq(ta.relayerInfo(activeRelayer1).stake, initialRelayerStake[activeRelayer1]);
+        assertTrue(ta.relayerInfo(activeRelayer1).status == RelayerStatus.Active);
+
+        // Verify that the CDF has changed
+        assertTrue(ta.debug_verifyRelayerStateAtWindow(latestRelayerState, ta.debug_currentWindowIndex()));
+
+        // Verify the new CDF
+        assertEq(latestRelayerState.cdf.length, 2);
+        assertEq(latestRelayerState.relayers.length, 2);
         _checkCdfInLatestState();
     }
 
@@ -344,6 +419,32 @@ contract RelayerLivenessAndJailingTest is
         // Verify global counters
         assertEq(ta.totalStake(), totalStake);
         assertEq(ta.relayerCount(), relayerCount);
+    }
+
+    function testCannotPerformFirstTransactionOfEpochWithInvalidLatestRelayerState() external {
+        _moveForwardToNextEpoch();
+
+        RelayerStateManager.RelayerState memory activeState = latestRelayerState;
+        RelayerStateManager.RelayerState memory invalidState = latestRelayerState;
+        invalidState.cdf[0]--;
+
+        // Find a relayer selected in the current window
+        (RelayerAddress[] memory selectedRelayers, uint256[] memory selectedRelayerIndices) =
+            ta.allocateRelayers(activeState);
+        _prankRA(selectedRelayers[0]);
+
+        // Execute a transaction with no requests
+        vm.expectRevert(InvalidLatestRelayerState.selector);
+        ta.execute(
+            ITATransactionAllocation.ExecuteParams({
+                reqs: new bytes[](0),
+                forwardedNativeAmounts: new uint256[](0),
+                relayerIndex: selectedRelayerIndices[0],
+                relayerGenerationIterationBitmap: 0,
+                activeState: activeState,
+                latestState: invalidState
+            })
+        );
     }
 
     function testCannotUnjailAndReenterBeforeJailExpiry() external {
