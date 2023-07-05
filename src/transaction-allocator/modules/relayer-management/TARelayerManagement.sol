@@ -108,8 +108,9 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         _register(relayerAddress, _stake, _accounts, _endpoint, _delegatorPoolPremiumShare);
 
         // Queue Update for Active Relayer List
-        bytes32 newRelayerStateHash = _latestState.addNewRelayer(relayerAddress, _stake).hash();
-        _updateLatestRelayerState(newRelayerStateHash);
+        RelayerStateManager.RelayerState memory newState = _latestState.addNewRelayer(relayerAddress, _stake);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
+
         emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
     }
 
@@ -230,8 +231,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         }
 
         // Update the CDF
-        bytes32 newRelayerStateHash = _latestState.removeRelayer(_relayerIndex).hash();
-        _updateLatestRelayerState(newRelayerStateHash);
+        RelayerStateManager.RelayerState memory newState = _latestState.removeRelayer(_relayerIndex);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
 
         // Set withdrawal Info
         node.status = RelayerStatus.Exiting;
@@ -328,8 +329,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         rms.totalProtocolRewardShares = rms.totalProtocolRewardShares + node.rewardShares;
 
         // Schedule CDF Update
-        bytes32 newRelayerStateHash = _latestState.addNewRelayer(relayerAddress, totalNodeStake).hash();
-        _updateLatestRelayerState(newRelayerStateHash);
+        RelayerStateManager.RelayerState memory newState = _latestState.addNewRelayer(relayerAddress, totalNodeStake);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
 
         emit RelayerUnjailedAndReentered(relayerAddress);
     }

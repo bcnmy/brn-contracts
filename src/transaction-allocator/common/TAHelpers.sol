@@ -20,6 +20,8 @@ import {VersionManager} from "src/library/VersionManager.sol";
 import {RelayerAddress, TokenAddress, RelayerStatus} from "./TATypes.sol";
 import {BOND_TOKEN_DECIMAL_MULTIPLIER, NATIVE_TOKEN, PERCENTAGE_MULTIPLIER} from "./TAConstants.sol";
 import {RelayerStateManager} from "./RelayerStateManager.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 
 /// @title TAHelpers
 /// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides various helper functions.
@@ -30,6 +32,8 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
     using RelayerStateManager for RelayerStateManager.RelayerState;
+    using RAArrayHelper for RelayerAddress[];
+    using U256ArrayHelper for uint256[];
 
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlyActiveRelayer(RelayerAddress _relayer) {
@@ -95,9 +99,21 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     ////////////////////////////// Relayer State //////////////////////////////
 
     /// @dev Sets the latest relayer state, but does not schedule it for activation.
-    /// @param _relayerStateHash The hash of the relayer state to be set
-    function _updateLatestRelayerState(bytes32 _relayerStateHash) internal {
-        getRMStorage().relayerStateVersionManager.setLatestState(_relayerStateHash, _windowIndex(block.number));
+    /// @param _relayers The list of relayers in the new state
+    /// @param _cdf The cumulative distribution function of the stake + delegation of relayers in the new state
+    function _cd_updateLatestRelayerState(RelayerAddress[] calldata _relayers, uint256[] memory _cdf) internal {
+        bytes32 newRelayerStateHash = RelayerStateManager.hash(_cdf, _relayers);
+        getRMStorage().relayerStateVersionManager.setLatestState(newRelayerStateHash, _windowIndex(block.number));
+        emit NewRelayerState(newRelayerStateHash, _relayers, _cdf);
+    }
+
+    /// @dev Sets the latest relayer state, but does not schedule it for activation.
+    /// @param _relayers The list of relayers in the new state
+    /// @param _cdf The cumulative distribution function of the stake + delegation of relayers in the new state
+    function _m_updateLatestRelayerState(RelayerAddress[] memory _relayers, uint256[] memory _cdf) internal {
+        bytes32 newRelayerStateHash = RelayerStateManager.hash(_cdf.m_hash(), _relayers.m_hash());
+        getRMStorage().relayerStateVersionManager.setLatestState(newRelayerStateHash, _windowIndex(block.number));
+        emit NewRelayerState(newRelayerStateHash, _relayers, _cdf);
     }
 
     ////////////////////////////// Delegation ////////////////////////

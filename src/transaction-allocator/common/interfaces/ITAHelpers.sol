@@ -4,6 +4,7 @@ pragma solidity 0.8.19;
 
 import {RelayerAddress, TokenAddress} from "../TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title ITAHelpers
 interface ITAHelpers {
@@ -14,4 +15,5 @@ interface ITAHelpers {
 
     event DelegatorRewardsAdded(RelayerAddress indexed _relayer, TokenAddress indexed _token, uint256 indexed _amount);
     event RelayerProtocolSharesBurnt(RelayerAddress indexed relayerAddress, FixedPointType indexed sharesBurnt);
+    event NewRelayerState(bytes32 indexed relayerStateHash, RelayerAddress[] indexed relayers, uint256[] indexed cdf);
 }

@@ -152,8 +152,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
 
         // Schedule the CDF update
         uint256[] memory newCdf = _latestState.increaseWeight(_relayerIndex, _amount);
-        bytes32 newRelayerStateHash = RelayerStateManager.hash(newCdf, _latestState.relayers);
-        _updateLatestRelayerState(newRelayerStateHash);
+        _cd_updateLatestRelayerState(_latestState.relayers, newCdf);
     }
 
     struct TokensToBeTransferred {
@@ -247,8 +246,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             }
 
             uint256[] memory newCdf = _latestState.decreaseWeight(_relayerIndex, delegation_);
-            bytes32 newRelayerStateHash = RelayerStateManager.hash(newCdf, _latestState.relayers);
-            _updateLatestRelayerState(newRelayerStateHash);
+            _cd_updateLatestRelayerState(_latestState.relayers, newCdf);
         }
     }
 
