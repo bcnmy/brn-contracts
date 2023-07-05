@@ -83,20 +83,11 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         uint256 epochEndTimestamp_ = ts.epochEndTimestamp;
 
+        // If the transaction is the first transaction of the epoch, then perform the liveness check and other operations
         if (block.timestamp >= epochEndTimestamp_) {
-            // Run liveness checks for last epoch
-            _processLivenessCheck(
+            epochEndTimestamp_ = _performFirstTransactionOfEpochDuties(
                 _params.activeState, _params.latestState, _params.activeStateIndexToExpectedMemoryStateIndex
             );
-
-            // Process any pending Updates
-            uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
-            getRMStorage().relayerStateVersionManager.setLatestStateForActivation(updateWindowIndex);
-
-            // Update the epoch end time
-            epochEndTimestamp_ = block.timestamp + ts.epochLengthInSec;
-            ts.epochEndTimestamp = epochEndTimestamp_;
-            emit EpochEndTimestampUpdated(epochEndTimestamp_);
         }
 
         // Record Liveness Metrics
@@ -114,6 +105,45 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         //         invalid()
         //     }
         // }
+    }
+
+    /// @dev Runs the liveness check, activates any pending state and emits the latest relayer state.
+    /// @param _activeState The active relayer state.
+    /// @param _latestState The latest relayer state.
+    /// @param _activeStateIndexToExpectedMemoryStateIndex The map of active state index to latest state index.
+    function _performFirstTransactionOfEpochDuties(
+        RelayerStateManager.RelayerState calldata _activeState,
+        RelayerStateManager.RelayerState calldata _latestState,
+        uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex
+    ) internal returns (uint256) {
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
+
+        // Run liveness checks for last epoch
+        (
+            bool isRelayerStateUpdatedDuringLivnessCheck,
+            bytes32 newRelayerStateHash,
+            RelayerStateManager.RelayerState memory newRelayerState
+        ) = _processLivenessCheck(_activeState, _latestState, _activeStateIndexToExpectedMemoryStateIndex);
+
+        // Process any pending Updates
+        uint256 updateWindowIndex = _nextWindowForUpdate(block.number);
+        VersionManager.VersionManagerState storage vms = getRMStorage().relayerStateVersionManager;
+        vms.setLatestStateForActivation(updateWindowIndex);
+
+        // Emit the latest relayer state
+        if (isRelayerStateUpdatedDuringLivnessCheck) {
+            emit NewRelayerState(newRelayerStateHash, updateWindowIndex, newRelayerState);
+        } else {
+            emit NewRelayerState(vms.latestStateHash(), updateWindowIndex, _latestState);
+        }
+
+        // Update the epoch end time
+        TAStorage storage ts = getTAStorage();
+        uint256 newEpochEndTimestamp = block.timestamp + ts.epochLengthInSec;
+        ts.epochEndTimestamp = newEpochEndTimestamp;
+        emit EpochEndTimestampUpdated(newEpochEndTimestamp);
+
+        return newEpochEndTimestamp;
     }
 
     /// @dev Verifies that the relayer has been selected for the current window.
@@ -333,7 +363,14 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         RelayerStateManager.RelayerState calldata _activeRelayerState,
         RelayerStateManager.RelayerState calldata _pendingRelayerState,
         uint256[] calldata _activeStateIndexToExpectedMemoryStateIndex
-    ) internal {
+    )
+        internal
+        returns (
+            bool isRelayerStateUpdated,
+            bytes32 newRelayerStateHash,
+            RelayerStateManager.RelayerState memory newRelayerState
+        )
+    {
         ProcessLivenessCheckMemoryState memory state;
 
         TAStorage storage ta = getTAStorage();
@@ -347,7 +384,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (state.totalTransactionsInEpoch == 0) {
             emit NoTransactionsSubmittedInEpoch();
-            return;
+            return (isRelayerStateUpdated, newRelayerStateHash, newRelayerState);
         }
 
         uint256 activeRelayerCount = _activeRelayerState.relayers.length;
@@ -361,7 +398,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             }
         }
 
-        _postLivenessCheck(_pendingRelayerState, state);
+        (isRelayerStateUpdated, newRelayerStateHash, newRelayerState) = _postLivenessCheck(state);
 
         emit LivenessCheckProcessed(state.epochEndTimestamp);
     }
@@ -549,12 +586,18 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /// @dev Writes the update state to storage after liveness check has been performed.
-    /// @param _latestState The latest relayer state.
     /// @param _state The in memory struct to store intermediate state.
-    function _postLivenessCheck(
-        RelayerStateManager.RelayerState calldata _latestState,
-        ProcessLivenessCheckMemoryState memory _state
-    ) internal {
+    /// @return isRelayerStateUpdated True if the relayer state has been updated, else false.
+    /// @return newRelayerStateHash The hash of the new relayer state.
+    /// @return newRelayerState The new relayer state.
+    function _postLivenessCheck(ProcessLivenessCheckMemoryState memory _state)
+        internal
+        returns (
+            bool isRelayerStateUpdated,
+            bytes32 newRelayerStateHash,
+            RelayerStateManager.RelayerState memory newRelayerState
+        )
+    {
         RMStorage storage rms = getRMStorage();
 
         // Update Global Counters
@@ -573,17 +616,12 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             rms.totalUnpaidProtocolRewards = newUnpaidRewards;
         }
 
-        // Schedule CDF Update if Necessary
-        if (_state.totalActiveRelayerPenalty != 0 || _state.activeRelayersJailedCount != 0) {
-            _verifyExternalStateForRelayerStateUpdation(_latestState);
-            bytes32 newRelayerStateHash;
+        // Schedule RelayerState Update if Necessary
+        isRelayerStateUpdated = _state.totalActiveRelayerPenalty != 0 || _state.activeRelayersJailedCount != 0;
+        if (isRelayerStateUpdated) {
             uint256[] memory newCdf = RelayerStateManager.weightsToCdf(_state.newWeightsList);
-            if (_state.activeRelayersJailedCount == 0) {
-                // If no relayers have been jailed, then the relayers array from latest state can be used directly
-                newRelayerStateHash = RelayerStateManager.hash(newCdf.m_hash(), _latestState.relayers.cd_hash());
-            } else {
-                newRelayerStateHash = RelayerStateManager.hash(newCdf.m_hash(), _state.newRelayerList.m_hash());
-            }
+            newRelayerState = RelayerStateManager.RelayerState({relayers: _state.newRelayerList, cdf: newCdf});
+            newRelayerStateHash = RelayerStateManager.hash(newCdf.m_hash(), _state.newRelayerList.m_hash());
             _updateLatestRelayerState(newRelayerStateHash);
         }
 

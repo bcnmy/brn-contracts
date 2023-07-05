@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title ITATransactionAllocationEventsErrors
 interface ITATransactionAllocationEventsErrors {
@@ -23,4 +24,7 @@ interface ITATransactionAllocationEventsErrors {
     event LivenessCheckProcessed(uint256 indexed epochEndTimestamp);
     event NoTransactionsSubmittedInEpoch();
     event EpochEndTimestampUpdated(uint256 indexed epochEndTimestamp);
+    event NewRelayerState(
+        bytes32 indexed relayerStateHash, uint256 indexed activationWindow, RelayerStateManager.RelayerState newState
+    );
 }

@@ -273,10 +273,11 @@ contract RelayerLivenessAndJailingTest is
         ta.unjailAndReenter(latestRelayerState, initialRelayerStake[inactiveRelayer]);
         vm.stopPrank();
 
+        _appendRelayerToLatestState(inactiveRelayer);
+
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
         _moveForwardByWindows(deployParams.relayerStateUpdateDelayInWindows);
-        _appendRelayerToLatestState(inactiveRelayer);
         currentState = latestRelayerState;
 
         // Verify relayer state

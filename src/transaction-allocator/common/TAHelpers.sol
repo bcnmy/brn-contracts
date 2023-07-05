@@ -98,7 +98,6 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
     /// @param _relayerStateHash The hash of the relayer state to be set
     function _updateLatestRelayerState(bytes32 _relayerStateHash) internal {
         getRMStorage().relayerStateVersionManager.setLatestState(_relayerStateHash, _windowIndex(block.number));
-        emit NewRelayerState(_relayerStateHash);
     }
 
     ////////////////////////////// Delegation ////////////////////////

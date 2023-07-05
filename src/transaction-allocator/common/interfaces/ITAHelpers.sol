@@ -13,6 +13,5 @@ interface ITAHelpers {
     error InvalidActiveRelayerState();
 
     event DelegatorRewardsAdded(RelayerAddress indexed _relayer, TokenAddress indexed _token, uint256 indexed _amount);
-    event NewRelayerState(bytes32 indexed relayerStateHash);
     event RelayerProtocolSharesBurnt(RelayerAddress indexed relayerAddress, FixedPointType indexed sharesBurnt);
 }
