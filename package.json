@@ -1,7 +1,7 @@
 {
-  "name": "POC-DRN",
+  "name": "brn-contracts",
   "version": "1.0.0",
-  "description": "POC for the decentralized relayer network",
+  "description": "The Biconomy Decentralized Relayer Network smart contracts",
   "scripts": {
     "build": "forge build --sizes",
     "hbuild": "hardhat compile",
@@ -14,13 +14,13 @@
     "gas-report": "FOUNDRY_PROFILE=test forge test --gas-report",
     "snapshot": "FOUNDRY_PROFILE=test forge snapshot"
   },
-  "repository": "git+https://github.com/bcnmy/POC-DRN.git",
+  "repository": "git+https://github.com/bcnmy/brn-contracts.git",
   "author": "Ankur Dubey <ankurdubey521@protonmail.com>",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/bcnmy/POC-DRN/issues"
+    "url": "https://github.com/bcnmy/brn-contracts/issues"
   },
-  "homepage": "https://github.com/bcnmy/POC-DRN#readme",
+  "homepage": "https://github.com/bcnmy/brn-contracts#readme",
   "devDependencies": {
     "@nomicfoundation/hardhat-foundry": "^1.0.0",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.8",

@@ -266,6 +266,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
             revert RelayerJailNotExpired(node.minExitTimestamp);
         }
 
+        delete node.status;
+
         _deleteRelayerAccountAddresses(relayerAddress, _relayerAccountsToRemove);
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);

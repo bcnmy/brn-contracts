@@ -22,7 +22,7 @@ import {BOND_TOKEN_DECIMAL_MULTIPLIER, NATIVE_TOKEN, PERCENTAGE_MULTIPLIER} from
 import {RelayerStateManager} from "./RelayerStateManager.sol";
 
 /// @title TAHelpers
-/// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides varios helper functions.
+/// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides various helper functions.
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
     using Address for address payable;
