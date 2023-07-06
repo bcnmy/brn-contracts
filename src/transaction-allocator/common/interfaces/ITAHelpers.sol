@@ -4,7 +4,6 @@ pragma solidity 0.8.19;
 
 import {RelayerAddress, TokenAddress} from "../TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
-import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title ITAHelpers
 interface ITAHelpers {

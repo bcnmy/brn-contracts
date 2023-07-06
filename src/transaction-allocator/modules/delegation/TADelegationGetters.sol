@@ -61,4 +61,32 @@ abstract contract TADelegationGetters is TADelegationStorage, ITADelegationGette
     function minimumDelegationAmount() external view override noSelfCall returns (uint256) {
         return getTADStorage().minimumDelegationAmount;
     }
+
+    function delegationWithdrawal(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress)
+        external
+        view
+        override
+        noSelfCall
+        returns (DelegationWithdrawalResult memory)
+    {
+        DelegationWithdrawal storage withdrawal =
+            getTADStorage().delegationWithdrawal[_relayerAddress][_delegatorAddress];
+        DelegationWithdrawalEntry[] memory withdrawals = new DelegationWithdrawalEntry[](
+            getTADStorage().supportedPools.length
+        );
+        for (uint256 i = 0; i < getTADStorage().supportedPools.length; i++) {
+            withdrawals[i] = DelegationWithdrawalEntry({
+                tokenAddress: getTADStorage().supportedPools[i],
+                amount: withdrawal.amounts[getTADStorage().supportedPools[i]]
+            });
+        }
+        return DelegationWithdrawalResult({
+            minWithdrawalTimestamp: withdrawal.minWithdrawalTimestamp,
+            withdrawals: withdrawals
+        });
+    }
+
+    function delegationWithdrawDelayInSec() external view override noSelfCall returns (uint256) {
+        return getTADStorage().delegationWithdrawDelayInSec;
+    }
 }

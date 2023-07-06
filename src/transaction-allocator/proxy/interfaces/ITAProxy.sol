@@ -33,6 +33,8 @@ interface ITAProxy {
         ////////////////////////// Protocol Rewards Configuration Parameters //////////////////////////
         uint256 baseRewardRatePerMinimumStakePerSec;
         TokenAddress[] supportedTokens;
+        ////////////////////////// Delegation Configuration Parameters //////////////////////////
+        uint256 delegationWithdrawDelayInSec;
         ////////////////////////// Foundation Relayer Parameters //////////////////////////
         RelayerAddress foundationRelayerAddress;
         RelayerAccountAddress[] foundationRelayerAccountAddresses;

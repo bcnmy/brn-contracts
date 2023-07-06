@@ -17,7 +17,8 @@ interface ITADelegation is ITADelegationEventsErrors, ITADelegationGetters {
     function delegate(RelayerStateManager.RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
         external;
 
-    /// @notice Undelegate tokens from a relayer and claim rewards.
+    /// @notice Undelegate tokens from a relayer and calculates rewards. The rewards are not transferred, and must be
+    ///         claimed by calling withdrawDelegation after a delay.
     /// @param _latestState The latest relayer state, used to calculate the new state post undelegation.
     /// @param _relayerAddress The address of the relayer to undelegate from.
     /// @param _relayerIndex The index of the relayer to undelegate from in the latest relayer state. If the relayer is unregistered
@@ -27,6 +28,10 @@ interface ITADelegation is ITADelegationEventsErrors, ITADelegationGetters {
         RelayerAddress _relayerAddress,
         uint256 _relayerIndex
     ) external;
+
+    /// @notice Allows the withdrawal of a delegation after a delay.
+    /// @param _relayerAddress The address of the relayer to which funds were originally delegated to.
+    function withdrawDelegation(RelayerAddress _relayerAddress) external;
 
     /// @notice Calculate the amount of rewards claimable by a delegator.
     /// @param _relayerAddress The address of the relayer to which the delegator has delegated to.

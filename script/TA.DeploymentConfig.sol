@@ -56,6 +56,7 @@ abstract contract TADeploymentConfig is Script {
 
         ////////////// Local Simulation //////////////
         deploymentConfig[LOCAL_SIMULATION_CHAIN_ID] = ITAProxy.InitializerParams({
+            delegationWithdrawDelayInSec: 100,
             blocksPerWindow: 2,
             epochLengthInSec: 4500,
             relayersPerWindow: 3,
@@ -87,6 +88,7 @@ abstract contract TADeploymentConfig is Script {
 
         ////////////// Fuji //////////////
         deploymentConfig[43113] = ITAProxy.InitializerParams({
+            delegationWithdrawDelayInSec: 100,
             blocksPerWindow: 20,
             epochLengthInSec: 4500,
             relayersPerWindow: 2,

@@ -38,6 +38,7 @@ abstract contract TATestBase is Test {
 
     TokenAddress[] internal supportedTokens;
     ITAProxy.InitializerParams deployParams = ITAProxy.InitializerParams({
+        delegationWithdrawDelayInSec: 100,
         blocksPerWindow: 10,
         epochLengthInSec: 100,
         relayersPerWindow: 10,
@@ -331,7 +332,7 @@ abstract contract TATestBase is Test {
         vm.prank(RelayerAddress.unwrap(_relayer));
     }
 
-    function _prankDa(DelegatorAddress _da) internal {
+    function _prankDA(DelegatorAddress _da) internal {
         vm.prank(DelegatorAddress.unwrap(_da));
     }
 

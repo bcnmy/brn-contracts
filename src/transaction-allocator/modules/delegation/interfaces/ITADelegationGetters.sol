@@ -29,7 +29,24 @@ interface ITADelegationGetters {
         view
         returns (uint256);
 
+    struct DelegationWithdrawalEntry {
+        TokenAddress tokenAddress;
+        uint256 amount;
+    }
+
+    struct DelegationWithdrawalResult {
+        uint256 minWithdrawalTimestamp;
+        DelegationWithdrawalEntry[] withdrawals;
+    }
+
+    function delegationWithdrawal(RelayerAddress _relayerAddress, DelegatorAddress _delegatorAddress)
+        external
+        view
+        returns (DelegationWithdrawalResult memory);
+
     function supportedPools() external view returns (TokenAddress[] memory);
 
     function minimumDelegationAmount() external view returns (uint256);
+
+    function delegationWithdrawDelayInSec() external view returns (uint256);
 }

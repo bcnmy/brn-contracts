@@ -195,7 +195,10 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
             abi.encodeCall(ta.totalShares, (relayerMainAddress[0], NATIVE_TOKEN)),
             abi.encodeCall(ta.unclaimedDelegationRewards, (relayerMainAddress[0], NATIVE_TOKEN)),
             abi.encodeCall(ta.supportedPools, ()),
-            abi.encodeCall(ta.minimumDelegationAmount, ())
+            abi.encodeCall(ta.minimumDelegationAmount, ()),
+            abi.encodeCall(ta.delegationWithdrawal, (relayerMainAddress[0], delegatorAddresses[0])),
+            abi.encodeCall(ta.withdrawDelegation, (relayerMainAddress[0])),
+            abi.encodeCall(ta.delegationWithdrawDelayInSec, ())
         ];
 
         // Run the test for each defined transaction

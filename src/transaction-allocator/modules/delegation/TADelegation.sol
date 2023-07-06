@@ -155,7 +155,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         _cd_updateLatestRelayerState(_latestState.relayers, newCdf);
     }
 
-    struct TokensToBeTransferred {
+    struct AmountOwed {
         TokenAddress token;
         uint256 amount;
     }
@@ -173,7 +173,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         DelegatorAddress _delegatorAddress,
         TokenAddress _bondToken,
         uint256 _delegation
-    ) internal returns (TokensToBeTransferred memory) {
+    ) internal returns (AmountOwed memory) {
         TADStorage storage ds = getTADStorage();
 
         uint256 rewardsEarned_ = _delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
@@ -187,10 +187,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
         ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
 
-        return TokensToBeTransferred({
-            token: _pool,
-            amount: _pool == _bondToken ? rewardsEarned_ + _delegation : rewardsEarned_
-        });
+        return AmountOwed({token: _pool, amount: _pool == _bondToken ? rewardsEarned_ + _delegation : rewardsEarned_});
     }
 
     /// @inheritdoc ITADelegation
@@ -210,9 +207,9 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
 
         // Burn shares for each pool and calculate rewards
         uint256 length = ds.supportedPools.length;
-        TokensToBeTransferred[] memory tokensToBeTransferred = new TokensToBeTransferred[](length);
+        AmountOwed[] memory amountOwed = new AmountOwed[](length);
         for (uint256 i; i != length;) {
-            tokensToBeTransferred[i] = _processRewards(
+            amountOwed[i] = _processRewards(
                 _relayerAddress, ds.supportedPools[i], DelegatorAddress.wrap(msg.sender), bondToken, delegation_
             );
             unchecked {
@@ -225,12 +222,21 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         delete ds.delegation[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
         emit DelegationRemoved(_relayerAddress, DelegatorAddress.wrap(msg.sender), delegation_);
 
-        // Transfer the rewards and the original stake
+        // Store the rewards and the original stake to be withdrawn after the delay
+        DelegationWithdrawal storage withdrawal =
+            ds.delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+        withdrawal.minWithdrawalTimestamp = block.timestamp + ds.delegationWithdrawDelayInSec;
         for (uint256 i; i != length;) {
-            TokensToBeTransferred memory t = tokensToBeTransferred[i];
+            AmountOwed memory t = amountOwed[i];
             if (t.amount > 0) {
-                _transfer(t.token, msg.sender, t.amount);
-                emit RewardSent(_relayerAddress, DelegatorAddress.wrap(msg.sender), t.token, t.amount);
+                withdrawal.amounts[t.token] += t.amount;
+                emit DelegationWithdrawalCreated(
+                    _relayerAddress,
+                    DelegatorAddress.wrap(msg.sender),
+                    t.token,
+                    t.amount,
+                    withdrawal.minWithdrawalTimestamp
+                );
             }
             unchecked {
                 ++i;
@@ -318,6 +324,35 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             return (currentValue - delegation_).u256();
         }
         return 0;
+    }
+
+    /// @inheritdoc ITADelegation
+    function withdrawDelegation(RelayerAddress _relayerAddress) external noSelfCall {
+        TokenAddress[] storage supportedPools = getTADStorage().supportedPools;
+        DelegationWithdrawal storage withdrawal =
+            getTADStorage().delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+
+        if (withdrawal.minWithdrawalTimestamp > block.timestamp) {
+            revert WithdrawalNotReady(withdrawal.minWithdrawalTimestamp);
+        }
+
+        uint256 length = supportedPools.length;
+        for (uint256 i; i != length;) {
+            TokenAddress tokenAddress = supportedPools[i];
+
+            uint256 amount = withdrawal.amounts[tokenAddress];
+            delete withdrawal.amounts[tokenAddress];
+
+            _transfer(tokenAddress, msg.sender, amount);
+
+            emit RewardSent(_relayerAddress, DelegatorAddress.wrap(msg.sender), tokenAddress, amount);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        delete getTADStorage().delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
     }
 
     /// @inheritdoc ITADelegation
