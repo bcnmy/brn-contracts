@@ -91,7 +91,7 @@ abstract contract TADeploymentConfig is Script {
             delegationWithdrawDelayInSec: 100,
             blocksPerWindow: 20,
             epochLengthInSec: 4500,
-            relayersPerWindow: 2,
+            relayersPerWindow: 3,
             jailTimeInSec: 100,
             withdrawDelayInSec: 50,
             absencePenaltyPercentage: 200,

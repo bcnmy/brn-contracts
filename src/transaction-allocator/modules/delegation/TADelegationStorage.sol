@@ -10,7 +10,6 @@ abstract contract TADelegationStorage {
     bytes32 internal constant DELEGATION_STORAGE_SLOT = keccak256("Delegation.storage");
 
     /// @dev Structure for storing the information of a delegation withdrawal.
-    /// @custom:member tokens The tokens to be withdrawn.
     /// @custom:member amounts The corresponding amounts of tokens to be withdrawn.
     /// @custom:member minWithdrawalTimestamp The minimum timestamp after which the withdrawal can be executed.
     struct DelegationWithdrawal {
