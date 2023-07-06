@@ -1,29 +1,28 @@
-import { Wallet } from 'ethers';
-import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
+import { BigNumberish, Wallet } from 'ethers';
 import { config } from './config';
 import fs from 'fs';
 import path from 'path';
-import { solidityKeccak256 } from 'ethers/lib/utils';
+import { parseEther, solidityKeccak256 } from 'ethers/lib/utils';
+import { RelayerStateManager } from '../../typechain-types/src/wormhole/WormholeApplication';
 
 const hashToRelayerStatePath = path.join(__dirname, 'hashToRelayerState.json');
 
 // Read hashToRelayerState from a file
-export const hashToRelayerState: Record<string, RelayerStateStruct> = fs.existsSync(
-  hashToRelayerStatePath
-)
-  ? JSON.parse(fs.readFileSync(hashToRelayerStatePath).toString())
-  : {};
+export const hashToRelayerState: Record<string, RelayerStateManager.RelayerStateStruct> =
+  fs.existsSync(hashToRelayerStatePath)
+    ? JSON.parse(fs.readFileSync(hashToRelayerStatePath).toString())
+    : {};
 
 const targetChainConfig = config.targetChain;
 const { transactionAllocatorWs, httpProvider } = targetChainConfig;
 
 transactionAllocatorWs.on(
   'NewRelayerState',
-  (latestHash: string, latestRelayerState: RelayerStateStruct) => {
+  (latestHash: string, relayers: string[], cdf: BigNumberish[]) => {
     console.log(`State Tracker: Received NewRelayerState event with hash: ${latestHash}`);
     hashToRelayerState[latestHash] = {
-      cdf: latestRelayerState.cdf,
-      relayers: latestRelayerState.relayers,
+      cdf,
+      relayers,
     };
 
     // Write hashToRelayerState to a file
@@ -37,7 +36,7 @@ const foundationRelayerAddress = new Wallet(
   httpProvider
 ).address;
 const relayers = [foundationRelayerAddress];
-const cdf = [10000];
+const cdf = [parseEther('10000')];
 
 const defaultHash = solidityKeccak256(
   ['bytes32', 'bytes32'],

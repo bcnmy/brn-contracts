@@ -7,7 +7,7 @@
     "hbuild": "hardhat compile",
     "simulation:chain": "anvil --block-time 2 --chain-id 2982195648",
     "simulation:deploy": "FOUNDRY_PROFILE=test ./script/TA.Deploy.Testnet.sh",
-    "simulation:run": "ts-node hardhat/simulation/index.ts",
+    "simulation:run": "hardhat compile && ts-node hardhat/simulation/index.ts",
     "simulation:watch": "watch -n 5 hardhat/simulation/cat-latest-metrics.sh",
     "test": "FOUNDRY_PROFILE=test forge test",
     "coverage": "FOUNDRY_PROFILE=test forge coverage",

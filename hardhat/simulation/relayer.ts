@@ -4,7 +4,7 @@ import { hashToRelayerState } from './state-tracker';
 import { Mempool } from './mempool';
 import { logTransaction } from './utils';
 import { IMinimalApplication, IMinimalApplication__factory } from '../../typechain-types';
-import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
+import { RelayerStateManager } from '../../typechain-types/src/wormhole/WormholeApplication';
 
 export class Relayer {
   wallet: Wallet;
@@ -87,22 +87,6 @@ export class Relayer {
     );
   }
 
-  private getactiveStateIndexToExpectedMemoryStateIndex(
-    activeState: RelayerStateStruct,
-    latestState: RelayerStateStruct
-  ): number[] {
-    const state = new Array(activeState.relayers.length).fill(activeState.relayers.length);
-    for (let i = 0; i < activeState.relayers.length; i++) {
-      for (let j = 0; j < latestState.relayers.length; j++) {
-        if (activeState.relayers[i] === latestState.relayers[j]) {
-          state[i] = j;
-          break;
-        }
-      }
-    }
-    return state;
-  }
-
   private async getRelayerStateHashes(window: number): Promise<[string, string]> {
     if (Relayer.stateHashCache.has(window)) {
       return Relayer.stateHashCache.get(window)!;
@@ -172,8 +156,8 @@ export class Relayer {
     txnAllocated: string[],
     relayerIndex: number,
     relayerGenerationIterations: number,
-    currentState: RelayerStateStruct,
-    latestState: RelayerStateStruct
+    currentState: RelayerStateManager.RelayerStateStruct,
+    latestState: RelayerStateManager.RelayerStateStruct
   ) {
     // Submit transactions
     console.log(`Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`);
@@ -187,8 +171,6 @@ export class Relayer {
             relayerGenerationIterationBitmap: relayerGenerationIterations,
             activeState: currentState,
             latestState: latestState,
-            activeStateIndexToExpectedMemoryStateIndex:
-              this.getactiveStateIndexToExpectedMemoryStateIndex(currentState, latestState),
           },
           {
             gasLimit: 10000000,

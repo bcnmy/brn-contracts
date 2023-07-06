@@ -14,5 +14,5 @@ interface ITAHelpers {
 
     event DelegatorRewardsAdded(RelayerAddress indexed _relayer, TokenAddress indexed _token, uint256 indexed _amount);
     event RelayerProtocolSharesBurnt(RelayerAddress indexed relayerAddress, FixedPointType indexed sharesBurnt);
-    event NewRelayerState(bytes32 indexed relayerStateHash, RelayerAddress[] indexed relayers, uint256[] indexed cdf);
+    event NewRelayerState(bytes32 indexed relayerStateHash, RelayerAddress[] relayers, uint256[] cdf);
 }

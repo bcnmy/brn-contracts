@@ -1,14 +1,18 @@
-import { Wallet } from 'ethers';
-import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
+import { BigNumberish, Wallet } from 'ethers';
 import { config } from './config';
+import { RelayerStateManager } from '../../typechain-types/src/wormhole/WormholeApplication';
+import { parseEther } from 'ethers/lib/utils';
 
-export const hashToRelayerState: Record<string, RelayerStateStruct> = {};
+export const hashToRelayerState: Record<string, RelayerStateManager.RelayerStateStruct> = {};
 
 config.transactionAllocatorWs.on(
   'NewRelayerState',
-  (latestHash: string, latestRelayerState: RelayerStateStruct) => {
+  (latestHash: string, relayers: string[], cdf: BigNumberish[]) => {
     console.log(`State Tracker: Received NewRelayerState event with hash: ${latestHash}`);
-    hashToRelayerState[latestHash] = latestRelayerState;
+    hashToRelayerState[latestHash] = {
+      relayers,
+      cdf,
+    };
   }
 );
 
@@ -22,13 +26,13 @@ config.transactionAllocatorWs.on(
   });
 
   // Default Case
-  const defaultHash = '0x8ebc1cb924d705d3d4201a6d0a45bfd5db9e0a7f2203d4ec44da62b0f1233ed9';
+  const defaultHash = '0x7172bafae3c84fc55ec0146222525742c1c2f455620fa5d58e2fc57356655ffd';
   const foundationRelayerAddress = new Wallet(
     process.env.ANVIL_DEFAULT_PRIVATE_KEY!,
     config.httpProvider
   ).address;
   const relayers = [foundationRelayerAddress];
-  const cdf = [10000];
+  const cdf = [parseEther('10000')];
   hashToRelayerState[defaultHash] = {
     cdf,
     relayers,
@@ -36,10 +40,14 @@ config.transactionAllocatorWs.on(
 
   for (const log of logs) {
     const parsedLog = config.transactionAllocator.interface.parseLog(log);
-    hashToRelayerState[parsedLog.args.relayerStateHash] = parsedLog.args.relayerState;
+    const [relayerStateHash, relayers, cdf] = parsedLog.args;
+    hashToRelayerState[relayerStateHash] = {
+      relayers,
+      cdf,
+    };
     console.log(
-      `State Tracker: Fetched state for hash: ${parsedLog.args.relayerStateHash}: ${JSON.stringify(
-        parsedLog.args.relayerState,
+      `State Tracker: Fetched state for hash: ${relayerStateHash}: ${JSON.stringify(
+        hashToRelayerState[relayerStateHash],
         null,
         2
       )}`
