@@ -5,29 +5,33 @@ pragma solidity 0.8.19;
 import "./interfaces/ITADebug.sol";
 import "ta-common/TAHelpers.sol";
 import "ta-transaction-allocation/TATransactionAllocationStorage.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
-    using U16ArrayHelper for uint16[];
     using RAArrayHelper for RelayerAddress[];
+    using U256ArrayHelper for uint256[];
     using VersionManager for VersionManager.VersionManagerState;
+    using RelayerStateManager for RelayerStateManager.RelayerState;
 
-    function debug_verifyRelayerStateAtWindow(RelayerState calldata _relayerState, uint256 __windowIndex)
-        external
-        view
-        override
-        returns (bool)
-    {
-        return getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(
-            _getRelayerStateHash(_relayerState.cdf.cd_hash(), _relayerState.relayers.cd_hash()), __windowIndex
-        );
+    function debug_verifyRelayerStateAtWindow(
+        RelayerStateManager.RelayerState calldata _relayerState,
+        uint256 __windowIndex
+    ) external view override returns (bool) {
+        return
+            getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(_relayerState.hash(), __windowIndex);
     }
 
     function debug_currentWindowIndex() external view override returns (uint256) {
         return _windowIndex(block.number);
     }
 
-    function debug_relayerStateHash(RelayerState calldata _relayerState) external pure override returns (bytes32) {
-        return _getRelayerStateHash(_relayerState.cdf.cd_hash(), _relayerState.relayers.cd_hash());
+    function debug_relayerStateHash(RelayerStateManager.RelayerState calldata _relayerState)
+        external
+        pure
+        override
+        returns (bytes32)
+    {
+        return _relayerState.hash();
     }
 
     function debug_setTransactionsProcessedByRelayer(RelayerAddress _relayerAddress, uint256 _transactionsProcessed)
@@ -57,6 +61,10 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         getRMStorage().baseRewardRatePerMinimumStakePerSec = _rate;
     }
 
+    function debug_setStakeThresholdForJailing(uint256 _amount) external override {
+        getTAStorage().stakeThresholdForJailing = _amount;
+    }
+
     function debug_getPendingProtocolRewardsData(RelayerAddress _relayerAddress)
         external
         view
@@ -65,6 +73,4 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     {
         return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
     }
-
-    function test1() external {}
 }

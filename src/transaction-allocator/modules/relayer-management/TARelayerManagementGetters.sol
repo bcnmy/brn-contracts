@@ -6,12 +6,13 @@ import {Guards} from "src/utils/Guards.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
 import {RelayerAddress, RelayerAccountAddress, TokenAddress} from "ta-common/TATypes.sol";
 import {VersionManager} from "src/library/VersionManager.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
 
 import {TARelayerManagementStorage} from "./TARelayerManagementStorage.sol";
 import {ITARelayerManagementGetters} from "./interfaces/ITARelayerManagementGetters.sol";
 import {TAHelpers} from "ta-common/TAHelpers.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title TARelayerManagementGetters
 abstract contract TARelayerManagementGetters is
@@ -21,8 +22,9 @@ abstract contract TARelayerManagementGetters is
     TAHelpers
 {
     using VersionManager for VersionManager.VersionManagerState;
-    using U16ArrayHelper for uint16[];
+    using U256ArrayHelper for uint256[];
     using RAArrayHelper for RelayerAddress[];
+    using RelayerStateManager for RelayerStateManager.RelayerState;
 
     function relayerCount() external view override noSelfCall returns (uint256) {
         return getRMStorage().relayerCount;
@@ -132,11 +134,29 @@ abstract contract TARelayerManagementGetters is
         view
         override
         noSelfCall
-        returns (uint16[] memory)
+        returns (uint256[] memory)
     {
-        uint16[] memory cdfArray = _generateCdfArray_c(_latestActiveRelayers);
-        _verifyExternalStateForRelayerStateUpdation(cdfArray.m_hash(), _latestActiveRelayers.cd_hash());
+        RMStorage storage rs = getRMStorage();
+        TADStorage storage ds = getTADStorage();
 
-        return cdfArray;
+        uint256 length = _latestActiveRelayers.length;
+        uint256[] memory cdf = new uint256[](length);
+
+        cdf[0] = rs.relayerInfo[_latestActiveRelayers[0]].stake + ds.totalDelegation[_latestActiveRelayers[0]];
+        for (uint256 i = 1; i != length;) {
+            cdf[i] = rs.relayerInfo[_latestActiveRelayers[i]].stake + ds.totalDelegation[_latestActiveRelayers[i]]
+                + cdf[i - 1];
+            unchecked {
+                ++i;
+            }
+        }
+
+        RelayerStateManager.RelayerState memory latestState =
+            RelayerStateManager.RelayerState({cdf: cdf, relayers: _latestActiveRelayers});
+        if (!getRMStorage().relayerStateVersionManager.verifyHashAgainstLatestState(latestState.hash())) {
+            revert InvalidLatestRelayerState();
+        }
+
+        return cdf;
     }
 }

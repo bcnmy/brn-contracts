@@ -6,7 +6,8 @@ import {IWormhole} from "wormhole-contracts/interfaces/IWormhole.sol";
 import {IWormholeRelayerDelivery} from "wormhole-contracts/interfaces/relayer/IWormholeRelayerTyped.sol";
 
 import {IWormholeApplicationEventsErrors} from "./IWormholeApplicationEventsErrors.sol";
-import {RelayerAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {IApplicationBase} from "ta-base-application/interfaces/IApplicationBase.sol";
 
 /// @title IWormholeApplication
@@ -34,6 +35,6 @@ interface IWormholeApplication is IWormholeApplicationEventsErrors, IApplication
     function allocateWormholeDeliveryVAA(
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
-        RelayerState calldata _currentState
+        RelayerStateManager.RelayerState calldata _currentState
     ) external view returns (bytes[] memory, uint256, uint256);
 }

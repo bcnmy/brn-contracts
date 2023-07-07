@@ -13,6 +13,7 @@ import {TATestnetDebug} from "test/modules/testnet-debug/TATestnetDebug.sol";
 import {ERC20FreeMint} from "src/mock/token/ERC20FreeMint.sol";
 import {TADeploymentConfig, Module, WormholeConfig} from "./TA.DeploymentConfig.sol";
 import {TokenAddress, RelayerAddress} from "ta-common/TATypes.sol";
+import "forge-std/console2.sol";
 
 // TODO: create2/create3
 

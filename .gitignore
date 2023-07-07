@@ -30,3 +30,4 @@ ScratchPad.t.sol
 metrics/
 *.bak
 .gas*
+yarn-error.log

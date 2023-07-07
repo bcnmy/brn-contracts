@@ -12,11 +12,7 @@ import {TARelayerManagementStorage} from "ta-relayer-management/TARelayerManagem
 import {TATransactionAllocationStorage} from "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 import {ITARelayerManagement} from "ta-relayer-management/interfaces/ITARelayerManagement.sol";
 
-import {VersionManager} from "src/library/VersionManager.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
-import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
-
-import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {TokenAddress} from "ta-common/TATypes.sol";
 
 /// @title TAProxy
 /// @notice The proxy contract for the Transaction Allocator.
@@ -27,9 +23,6 @@ contract TAProxy is
     TARelayerManagementStorage,
     TATransactionAllocationStorage
 {
-    using VersionManager for VersionManager.VersionManagerState;
-    using U16ArrayHelper for uint16[];
-    using RAArrayHelper for RelayerAddress[];
     using SafeERC20 for IERC20;
 
     constructor(address[] memory modules, bytes4[][] memory selectors, InitializerParams memory _params) {
@@ -89,6 +82,7 @@ contract TAProxy is
         tas.stakeThresholdForJailing = _params.stakeThresholdForJailing;
         rms.bondToken = IERC20(TokenAddress.unwrap(_params.bondTokenAddress));
         tds.supportedPools = _params.supportedTokens;
+        tds.delegationWithdrawDelayInSec = _params.delegationWithdrawDelayInSec;
 
         // Initial State
         tas.epochEndTimestamp = block.timestamp;

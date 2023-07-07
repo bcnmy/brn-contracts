@@ -5,6 +5,7 @@ pragma solidity 0.8.19;
 import "test/base/TATestBase.sol";
 import "ta-common/interfaces/ITAHelpers.sol";
 import "ta-delegation/interfaces/ITADelegationEventsErrors.sol";
+import "ta-delegation/interfaces/ITADelegationGetters.sol";
 
 contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     using Uint256WrapperHelper for uint256;
@@ -32,7 +33,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         supportedTokens.push(NATIVE_TOKEN);
 
         // Register all Relayers
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -40,7 +41,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
 
         // Approval
         for (uint256 i = 0; i < delegatorAddresses.length; ++i) {
-            _prankDa(delegatorAddresses[i]);
+            _prankDA(delegatorAddresses[i]);
             bico.approve(address(ta), type(uint256).max);
         }
 
@@ -103,12 +104,24 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         if (delegation[_d] == 0) {
             fail("Delegation amount is 0");
         }
-        _prankDa(_d);
+        _prankDA(_d);
         ta.delegate(latestRelayerState, _ridx, delegation[_d]);
         assertEq(bico.balanceOf(DelegatorAddress.unwrap(_d)), balanceBefore - delegation[_d]);
         assertEq(ta.delegation(_r, _d), delegationBefore + delegation[_d]);
 
         _updateLatestStateCdf();
+    }
+
+    struct UndelegateTestState {
+        uint256 nativeBalanceBefore;
+        uint256 bicoBalanceBefore;
+        uint256 totalDelegationBefore;
+        FixedPointType sharesBicoBefore;
+        FixedPointType sharesNativeBefore;
+        FixedPointType totalSharesBicoBefore;
+        FixedPointType totalSharesNativeBefore;
+        uint256 claimableRewardsBicoBefore;
+        uint256 claimableRewardsNativeBefore;
     }
 
     function _undelegate(
@@ -117,35 +130,52 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         bool _expectNonZeroNativeDelegationReward,
         bool _expectNonZeroBicoDeleagationReward
     ) internal {
-        uint256 nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
-        uint256 bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
-        uint256 totalDelegationBefore = ta.totalDelegation(r);
-        FixedPointType sharesBicoBefore = ta.shares(_r, _d, bondTokenAddress);
-        FixedPointType sharesNativeBefore = ta.shares(_r, _d, NATIVE_TOKEN);
-        FixedPointType totalSharesBicoBefore = ta.totalShares(r, bondTokenAddress);
-        FixedPointType totalSharesNativeBefore = ta.totalShares(r, NATIVE_TOKEN);
-        uint256 claimableRewardsBicoBefore = ta.claimableDelegationRewards(_r, bondTokenAddress, _d);
-        uint256 claimableRewardsNativeBefore = ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d);
+        UndelegateTestState memory s = UndelegateTestState({
+            nativeBalanceBefore: DelegatorAddress.unwrap(_d).balance,
+            bicoBalanceBefore: bico.balanceOf(DelegatorAddress.unwrap(_d)),
+            totalDelegationBefore: ta.totalDelegation(r),
+            sharesBicoBefore: ta.shares(_r, _d, bondTokenAddress),
+            sharesNativeBefore: ta.shares(_r, _d, NATIVE_TOKEN),
+            totalSharesBicoBefore: ta.totalShares(r, bondTokenAddress),
+            totalSharesNativeBefore: ta.totalShares(r, NATIVE_TOKEN),
+            claimableRewardsBicoBefore: ta.claimableDelegationRewards(_r, bondTokenAddress, _d),
+            claimableRewardsNativeBefore: ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d)
+        });
 
-        _prankDa(_d);
-        ta.undelegate(latestRelayerState, _r);
+        _prankDA(_d);
+        ta.undelegate(latestRelayerState, _r, _findRelayerIndex(_r));
 
         // Shares should be destroyed
         assertEq(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
         assertEq(ta.shares(_r, _d, NATIVE_TOKEN), FP_ZERO);
 
         // Global counters
-        assertEq(ta.totalShares(r, bondTokenAddress), totalSharesBicoBefore - sharesBicoBefore);
-        assertEq(ta.totalShares(r, NATIVE_TOKEN), totalSharesNativeBefore - sharesNativeBefore);
-        assertEq(ta.totalDelegation(r), totalDelegationBefore - delegation[_d]);
+        assertEq(ta.totalShares(r, bondTokenAddress), s.totalSharesBicoBefore - s.sharesBicoBefore);
+        assertEq(ta.totalShares(r, NATIVE_TOKEN), s.totalSharesNativeBefore - s.sharesNativeBefore);
+        assertEq(ta.totalDelegation(r), s.totalDelegationBefore - delegation[_d]);
 
-        // Check that rewards are credited
-        assertTrue(DelegatorAddress.unwrap(_d).balance >= nativeBalanceBefore);
-        assertTrue(bico.balanceOf(DelegatorAddress.unwrap(_d)) >= bicoBalanceBefore + delegation[_d]);
-        reward[_d][NATIVE_TOKEN] = DelegatorAddress.unwrap(_d).balance - nativeBalanceBefore;
-        reward[_d][bondTokenAddress] = bico.balanceOf(DelegatorAddress.unwrap(_d)) - bicoBalanceBefore - delegation[_d];
-        assertEq(reward[_d][bondTokenAddress], claimableRewardsBicoBefore);
-        assertEq(reward[_d][NATIVE_TOKEN], claimableRewardsNativeBefore);
+        // Check that rewards are NOT credited
+        assertTrue(DelegatorAddress.unwrap(_d).balance == s.nativeBalanceBefore);
+        assertTrue(bico.balanceOf(DelegatorAddress.unwrap(_d)) == s.bicoBalanceBefore);
+
+        // Check that claimable rewards are now 0
+        assertEq(ta.claimableDelegationRewards(_r, bondTokenAddress, _d), 0);
+        assertEq(ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d), 0);
+
+        // Check that withdrawal with correct amount is created
+        ITADelegationGetters.DelegationWithdrawalResult memory withdrawal = ta.delegationWithdrawal(_r, _d);
+        assertEq(withdrawal.minWithdrawalTimestamp, block.timestamp + deployParams.delegationWithdrawDelayInSec);
+        assertEq(withdrawal.withdrawals.length, 2);
+        // BICO
+        assertTrue(withdrawal.withdrawals[0].tokenAddress == bondTokenAddress);
+        assertTrue(withdrawal.withdrawals[0].amount >= delegation[_d]);
+        reward[_d][bondTokenAddress] = withdrawal.withdrawals[0].amount - delegation[_d];
+        assertEq(reward[_d][bondTokenAddress], s.claimableRewardsBicoBefore);
+        // NATIVE
+        assertTrue(withdrawal.withdrawals[1].tokenAddress == NATIVE_TOKEN);
+        assertTrue(withdrawal.withdrawals[1].amount >= 0);
+        reward[_d][NATIVE_TOKEN] = withdrawal.withdrawals[1].amount;
+        assertEq(reward[_d][NATIVE_TOKEN], s.claimableRewardsNativeBefore);
 
         if (_expectNonZeroNativeDelegationReward) {
             assertTrue(reward[_d][NATIVE_TOKEN] > 0);
@@ -155,6 +185,28 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         }
 
         _updateLatestStateCdf();
+    }
+
+    function _withdraw(RelayerAddress _r, DelegatorAddress _d) internal {
+        uint256 nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
+        uint256 bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
+
+        _prankDA(_d);
+        ta.withdrawDelegation(_r);
+
+        // Check that withdrawal is cleared
+        ITADelegationGetters.DelegationWithdrawalResult memory withdrawalAfter = ta.delegationWithdrawal(_r, _d);
+        assertEq(withdrawalAfter.minWithdrawalTimestamp, 0);
+        assertEq(withdrawalAfter.withdrawals.length, 2);
+        assertEq(withdrawalAfter.withdrawals[0].amount, 0);
+        assertEq(withdrawalAfter.withdrawals[1].amount, 0);
+
+        // Check that rewards are credited
+        assertEq(DelegatorAddress.unwrap(_d).balance, nativeBalanceBefore + reward[_d][NATIVE_TOKEN]);
+        assertEq(
+            bico.balanceOf(DelegatorAddress.unwrap(_d)),
+            bicoBalanceBefore + reward[_d][bondTokenAddress] + delegation[_d]
+        );
     }
 
     function testTokenDelegation() external {
@@ -217,7 +269,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         assertEq(ta.totalDelegation(r), uint256(6000 ether));
     }
 
-    function testWithdraw() external {
+    function testUndelegate() external {
         // Delegation
         _delegate(r, ridx, d0);
         _increaseRewards(r, bondTokenAddress, 1 ether);
@@ -258,7 +310,29 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         );
     }
 
-    function testWithdrawPostRelayerUnregistration() external {
+    function testWithdraw() external {
+        // Delegation
+        _delegate(r, ridx, d0);
+        _increaseRewards(r, bondTokenAddress, 1 ether);
+        _delegate(r, ridx, d1);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+        _delegate(r, ridx, d2);
+        _increaseRewards(r, bondTokenAddress, 0.1 ether);
+        _increaseRewards(r, NATIVE_TOKEN, 0.1 ether);
+
+        // Undelegation
+        _undelegate(r, d0, true, true);
+        _undelegate(r, d1, true, true);
+        _undelegate(r, d2, true, true);
+
+        vm.warp(block.timestamp + deployParams.delegationWithdrawDelayInSec);
+        _withdraw(r, d0);
+        _withdraw(r, d1);
+        _withdraw(r, d2);
+    }
+
+    function testUndelegatePostRelayerUnregistration() external {
         // Delegation
         _delegate(r, ridx, d0);
         _increaseRewards(r, bondTokenAddress, 1 ether);
@@ -309,13 +383,13 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         ta.unregister(latestRelayerState, _findRelayerIndex(r));
         _removeRelayerFromLatestState(r);
 
-        _prankDa(d0);
+        _prankDA(d0);
         vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
         ta.delegate(latestRelayerState, _findRelayerIndex(r), delegation[d0]);
     }
 
     function testDelegationShouldUpdateCDFWithDelay() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         _delegate(r, ridx, d0);
 
@@ -333,7 +407,7 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
     }
 
     function testUnDelegationShouldUpdateCDFWithDelay() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         _delegate(r, ridx, d0);
 
@@ -369,5 +443,22 @@ contract DelegationTest is TATestBase, ITAHelpers, ITADelegationEventsErrors {
         vm.expectRevert(abi.encodeWithSelector(NativeAmountMismatch.selector));
         _prankRA(relayerMainAddress[0]);
         ta.addDelegationRewards{value: 0.5 ether}(r, tokenIndex, 1 ether);
+    }
+
+    function testShouldNotAllowWithdrawBeforeDelay() external {
+        _delegate(r, ridx, d0);
+        _undelegate(r, d0, false, false);
+        vm.expectRevert(
+            abi.encodeWithSelector(WithdrawalNotReady.selector, block.timestamp + ta.delegationWithdrawDelayInSec())
+        );
+        _prankDA(d0);
+        ta.withdrawDelegation(r);
+    }
+
+    function testShouldNotAllowUndelegationIfRelayerIndexIsInvalid() external {
+        _delegate(r, ridx, d0);
+        vm.expectRevert(abi.encodeWithSelector(InvalidRelayerIndex.selector));
+        _prankDA(d0);
+        ta.undelegate(latestRelayerState, r, (_findRelayerIndex(r) + 1) % relayerCount);
     }
 }

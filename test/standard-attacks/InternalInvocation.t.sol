@@ -19,7 +19,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
 
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -32,7 +32,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
     function _allocateTransactions(
         RelayerAddress _relayerAddress,
         bytes[] memory _txns,
-        RelayerState memory _relayerState
+        RelayerStateManager.RelayerState memory _relayerState
     ) internal view override returns (bytes[] memory, uint256, uint256) {
         return ta.allocateMinimalApplicationTransaction(_relayerAddress, _txns, _relayerState);
     }
@@ -67,8 +67,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateToLatestStateMap: new uint256[](0)
+                latestState: latestRelayerState
             })
         );
     }
@@ -153,8 +152,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                         relayerIndex: 0,
                         relayerGenerationIterationBitmap: 0,
                         activeState: latestRelayerState,
-                        latestState: latestRelayerState,
-                        activeStateToLatestStateMap: new uint256[](0)
+                        latestState: latestRelayerState
                     })
                 )
             ),
@@ -188,7 +186,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
     function testShouldPreventInvocationOfCoreFunctionsViaTransactionExecutionFlowInDelegationModule() external {
         txns = [
             abi.encodeCall(ta.delegate, (latestRelayerState, 0, 0)),
-            abi.encodeCall(ta.undelegate, (latestRelayerState, relayerMainAddress[0])),
+            abi.encodeCall(ta.undelegate, (latestRelayerState, relayerMainAddress[0], 0)),
             abi.encodeCall(ta.claimableDelegationRewards, (relayerMainAddress[0], NATIVE_TOKEN, delegatorAddresses[0])),
             abi.encodeCall(ta.addDelegationRewards, (relayerMainAddress[0], 0, 0)),
             abi.encodeCall(ta.totalDelegation, (relayerMainAddress[0])),
@@ -197,7 +195,10 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
             abi.encodeCall(ta.totalShares, (relayerMainAddress[0], NATIVE_TOKEN)),
             abi.encodeCall(ta.unclaimedDelegationRewards, (relayerMainAddress[0], NATIVE_TOKEN)),
             abi.encodeCall(ta.supportedPools, ()),
-            abi.encodeCall(ta.minimumDelegationAmount, ())
+            abi.encodeCall(ta.minimumDelegationAmount, ()),
+            abi.encodeCall(ta.delegationWithdrawal, (relayerMainAddress[0], delegatorAddresses[0])),
+            abi.encodeCall(ta.withdrawDelegation, (relayerMainAddress[0])),
+            abi.encodeCall(ta.delegationWithdrawDelayInSec, ())
         ];
 
         // Run the test for each defined transaction

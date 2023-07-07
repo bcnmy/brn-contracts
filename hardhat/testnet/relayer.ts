@@ -3,10 +3,10 @@ import { config } from './config';
 import { hashToRelayerState } from './state-tracker';
 import { Mempool } from './mempool';
 import { logTransaction } from './utils';
-import { RelayerStateStruct } from '../../typechain-types/src/mock/minimal-application/MinimalApplication';
 import { NonceManagerFactory, NonceManager } from './nonce-manager';
 import { IWormholeApplication, IWormholeApplication__factory } from '../../typechain-types';
 import { parseEther } from 'ethers/lib/utils';
+import { RelayerStateManager } from '../../typechain-types/src/wormhole/WormholeApplication';
 
 const targetChainConfig = config.targetChain;
 const { bondToken, transactionAllocator } = targetChainConfig;
@@ -103,22 +103,6 @@ export class Relayer {
     );
   }
 
-  private getActiveStateToLatestStateMap(
-    activeState: RelayerStateStruct,
-    latestState: RelayerStateStruct
-  ): number[] {
-    const state = new Array(activeState.relayers.length).fill(activeState.relayers.length);
-    for (let i = 0; i < activeState.relayers.length; i++) {
-      for (let j = 0; j < latestState.relayers.length; j++) {
-        if (activeState.relayers[i] === latestState.relayers[j]) {
-          state[i] = j;
-          break;
-        }
-      }
-    }
-    return state;
-  }
-
   private async getRelayerStateHashes(window: number): Promise<[string, string]> {
     if (Relayer.stateHashCache.has(window)) {
       return Relayer.stateHashCache.get(window)!;
@@ -188,8 +172,8 @@ export class Relayer {
     txnAllocated: string[],
     relayerIndex: number,
     relayerGenerationIterations: number,
-    currentState: RelayerStateStruct,
-    latestState: RelayerStateStruct
+    currentState: RelayerStateManager.RelayerStateStruct,
+    latestState: RelayerStateManager.RelayerStateStruct
   ) {
     // Submit transactions
     console.log(`Relayer ${this.wallet.address}: Submitting transactions at block ${blockNumber}`);
@@ -205,10 +189,6 @@ export class Relayer {
             relayerGenerationIterationBitmap: relayerGenerationIterations,
             activeState: currentState,
             latestState: latestState,
-            activeStateToLatestStateMap: this.getActiveStateToLatestStateMap(
-              currentState,
-              latestState
-            ),
           },
           {
             nonce: await this.nonceManager!.getNextNonce(),

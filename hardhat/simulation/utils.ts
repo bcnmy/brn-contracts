@@ -13,7 +13,6 @@ export const logTransaction = async (
       console.log(`${log}:  ${transactionHash} succeeded`);
     }
   } catch (e) {
-    console.log(`Error in ${log}:  ${JSON.stringify(e)}`);
-    // throw e;
+    console.log(`Error in ${log}:  `, e);
   }
 };

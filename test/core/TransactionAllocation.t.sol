@@ -26,7 +26,7 @@ contract TransactionAllocationTest is
 
         super.setUp();
 
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -40,7 +40,7 @@ contract TransactionAllocationTest is
     function _allocateTransactions(
         RelayerAddress _relayerAddress,
         bytes[] memory _txns,
-        RelayerState memory _relayerState
+        RelayerStateManager.RelayerState memory _relayerState
     ) internal view override returns (bytes[] memory, uint256, uint256) {
         return ta.allocateMinimalApplicationTransaction(_relayerAddress, _txns, _relayerState);
     }
@@ -69,8 +69,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -93,7 +92,7 @@ contract TransactionAllocationTest is
 
     function testCannotExecuteTransactionWithInvalidCdf() external {
         // Corrupt the CDF
-        RelayerState memory corruptedState = latestRelayerState;
+        RelayerStateManager.RelayerState memory corruptedState = latestRelayerState;
         corruptedState.cdf[0] += 1;
 
         for (uint256 i = 0; i < relayerMainAddress.length; i++) {
@@ -105,8 +104,6 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateActiveStateToLatestStateMap(latestRelayerState);
-
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             vm.expectRevert(InvalidActiveRelayerState.selector);
             ta.execute(
@@ -116,8 +113,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: corruptedState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -134,8 +130,6 @@ contract TransactionAllocationTest is
                 continue;
             }
 
-            uint256[] memory map = _generateActiveStateToLatestStateMap(latestRelayerState);
-
             _startPrankRAA(relayerAccountAddresses[relayerMainAddress[i]][0]);
             ta.execute(
                 ITATransactionAllocation.ExecuteParams({
@@ -144,8 +138,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    latestState: latestRelayerState
                 })
             );
             vm.expectRevert(
@@ -160,8 +153,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: map
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -189,8 +181,7 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerCdfIndex + 1,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
@@ -238,13 +229,40 @@ contract TransactionAllocationTest is
                     relayerIndex: selectedRelayerIndex,
                     relayerGenerationIterationBitmap: relayerGenerationIterations,
                     activeState: latestRelayerState,
-                    latestState: latestRelayerState,
-                    activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                    latestState: latestRelayerState
                 })
             );
             vm.stopPrank();
         }
 
         assertEq(testRun, true);
+    }
+
+    function testCannotExecuteTransactionFromWithIncorrectForwardedNativeAmount() external {
+        for (uint256 i = 0; i < relayerMainAddress.length; i++) {
+            RelayerAddress relayerAddress = relayerMainAddress[i];
+            (bytes[] memory allotedTransactions, uint256 relayerGenerationIterations, uint256 selectedRelayerCdfIndex) =
+                _allocateTransactions(relayerAddress, txns, latestRelayerState);
+
+            if (allotedTransactions.length == 0) {
+                continue;
+            }
+
+            uint256 testRelayerIndex = (i + 1) % relayerMainAddress.length;
+
+            _startPrankRAA(relayerAccountAddresses[relayerMainAddress[testRelayerIndex]][0]);
+            vm.expectRevert(ParameterLengthMismatch.selector);
+            ta.execute(
+                ITATransactionAllocation.ExecuteParams({
+                    reqs: allotedTransactions,
+                    forwardedNativeAmounts: new uint256[](allotedTransactions.length + 1),
+                    relayerIndex: selectedRelayerCdfIndex + 1,
+                    relayerGenerationIterationBitmap: relayerGenerationIterations,
+                    activeState: latestRelayerState,
+                    latestState: latestRelayerState
+                })
+            );
+            vm.stopPrank();
+        }
     }
 }

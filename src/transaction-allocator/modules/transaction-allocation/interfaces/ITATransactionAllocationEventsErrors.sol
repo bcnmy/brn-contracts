@@ -2,17 +2,17 @@
 
 pragma solidity 0.8.19;
 
-import {RelayerAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerAddress} from "ta-common/TATypes.sol";
 
 /// @title ITATransactionAllocationEventsErrors
 interface ITATransactionAllocationEventsErrors {
+    error RelayerAddressNotFoundInMemoryState(RelayerAddress relayerAddress);
     error RelayerIndexDoesNotPointToSelectedCdfInterval();
     error RelayerAddressDoesNotMatchSelectedRelayer();
     error InvalidRelayerGenerationIteration();
     error NoRelayersRegistered();
     error TransactionExecutionFailed(uint256 index, bytes returndata);
     error InvalidFeeAttached(uint256 totalExpectedValue, uint256 actualValue);
-    error RelayerAddressMismatch(RelayerAddress expectedAddress, RelayerAddress actualAddress);
     error RelayerAlreadySubmittedTransaction(RelayerAddress relayerAddress, uint256 windowId);
 
     event TransactionStatus(uint256 indexed index, bool indexed success, bytes indexed returndata);

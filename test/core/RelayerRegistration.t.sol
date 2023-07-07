@@ -14,7 +14,7 @@ contract RelayerRegistrationTest is
     ITAHelpers
 {
     function testRelayerRegistration() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         uint256 totalStake = initialRelayerStake[relayerMainAddress[0]];
 
         for (uint256 i = 1; i < relayerCount; i++) {
@@ -77,7 +77,7 @@ contract RelayerRegistrationTest is
     }
 
     function testSystemShouldFunctionIfNoNonFoundationRelayersRegisterInFirstEpoch() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         uint256 totalStake = initialRelayerStake[relayerMainAddress[0]];
 
         _moveForwardToNextEpoch();
@@ -144,7 +144,7 @@ contract RelayerRegistrationTest is
     }
 
     function testRelayerUnRegistration() external {
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
 
         _registerAllNonFoundationRelayers();
 
@@ -215,7 +215,7 @@ contract RelayerRegistrationTest is
 
     function testWithdrawal() external {
         // Register all relayers
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         _registerAllNonFoundationRelayers();
         _moveForwardToNextEpoch();
         _sendEmptyTransaction(currentState);
@@ -347,7 +347,7 @@ contract RelayerRegistrationTest is
     function testCannotUnregisterWithInvalidCdf() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
@@ -375,7 +375,7 @@ contract RelayerRegistrationTest is
     function testCannotUnregisterAnotherRelayer() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
@@ -401,7 +401,7 @@ contract RelayerRegistrationTest is
     function testCannotCallRegisterIfRelayerIsAlreadyRegistered() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
@@ -431,7 +431,7 @@ contract RelayerRegistrationTest is
     function testCannotSetAccountsStateAfterUnRegistering() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
@@ -466,7 +466,7 @@ contract RelayerRegistrationTest is
     function testCannotWithdrawWithoutUnregistering() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,
@@ -490,7 +490,7 @@ contract RelayerRegistrationTest is
     function testCannotWithdrawBeforeWithdrawTime() external {
         // Register
         _startPrankRA(relayerMainAddress[1]);
-        RelayerState memory currentState = latestRelayerState;
+        RelayerStateManager.RelayerState memory currentState = latestRelayerState;
         bico.approve(address(ta), initialRelayerStake[relayerMainAddress[1]]);
         ta.register(
             latestRelayerState,

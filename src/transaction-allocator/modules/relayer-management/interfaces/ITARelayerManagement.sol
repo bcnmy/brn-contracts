@@ -2,7 +2,8 @@
 
 pragma solidity 0.8.19;
 
-import {RelayerAddress, RelayerAccountAddress, RelayerState} from "ta-common/TATypes.sol";
+import {RelayerAddress, RelayerAccountAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {ITARelayerManagementEventsErrors} from "./ITARelayerManagementEventsErrors.sol";
 import {ITARelayerManagementGetters} from "./ITARelayerManagementGetters.sol";
 
@@ -17,7 +18,7 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors, ITARelayerMa
     /// @param _endpoint The rpc endpoint of the relayer.
     /// @param _delegatorPoolPremiumShare The percentage of the delegator pool rewards to be shared with the relayer.
     function register(
-        RelayerState calldata _latestState,
+        RelayerStateManager.RelayerState calldata _latestState,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string memory _endpoint,
@@ -27,7 +28,7 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors, ITARelayerMa
     /// @notice Unregisters a relayer. Puts the relayer in "exiting" state.
     /// @param _latestState The latest relayer state, used to calculate the new state post relayer unregistration.
     /// @param _relayerIndex The index of the relayer to unregister in the latest relayer state.
-    function unregister(RelayerState calldata _latestState, uint256 _relayerIndex) external;
+    function unregister(RelayerStateManager.RelayerState calldata _latestState, uint256 _relayerIndex) external;
 
     /// @notice Registers the first relayer in the system, which is the foundation relayer. This must be called only once,
     ///         during setup.
@@ -54,7 +55,7 @@ interface ITARelayerManagement is ITARelayerManagementEventsErrors, ITARelayerMa
     /// @notice Allows a jailed relayer to unjail themselves and reenter the system after the jail period ends.
     /// @param _latestState The latest relayer state, used to calculate the new state post unjail.
     /// @param _stake The relayer needs to add more stake so that their total stake is greater than the minimum stake.
-    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external;
+    function unjailAndReenter(RelayerStateManager.RelayerState calldata _latestState, uint256 _stake) external;
 
     /// @notice Allows a relayer to update it's accounts
     /// @param _accounts The accounts to add/remove for the relayer.

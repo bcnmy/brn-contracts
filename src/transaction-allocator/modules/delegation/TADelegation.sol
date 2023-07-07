@@ -8,9 +8,8 @@ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol"
 import {ITADelegation} from "./interfaces/ITADelegation.sol";
 import {TADelegationGetters} from "./TADelegationGetters.sol";
 import {TAHelpers} from "ta-common/TAHelpers.sol";
-import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
 import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 import {
     FixedPointType,
     FixedPointTypeHelper,
@@ -18,7 +17,8 @@ import {
     FP_ZERO,
     FP_ONE
 } from "src/library/FixedPointArithmetic.sol";
-import {RelayerState, RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerAddress, DelegatorAddress, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {NATIVE_TOKEN} from "ta-common/TAConstants.sol";
 
 /// @title TADelegation
@@ -38,10 +38,10 @@ import {NATIVE_TOKEN} from "ta-common/TAConstants.sol";
 contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     using FixedPointTypeHelper for FixedPointType;
     using Uint256WrapperHelper for uint256;
-    using U16ArrayHelper for uint16[];
-    using U32ArrayHelper for uint32[];
     using RAArrayHelper for RelayerAddress[];
+    using U256ArrayHelper for uint256[];
     using SafeERC20 for IERC20;
+    using RelayerStateManager for RelayerStateManager.RelayerState;
 
     /// @dev Mints delegation pool shares at the current share price for that relayer's pool
     /// @param _relayerAddress The relayer address to delegate to
@@ -124,7 +124,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     }
 
     /// @inheritdoc ITADelegation
-    function delegate(RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
+    function delegate(RelayerStateManager.RelayerState calldata _latestState, uint256 _relayerIndex, uint256 _amount)
         external
         override
         noSelfCall
@@ -133,7 +133,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             revert InvalidRelayerIndex();
         }
 
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
 
         RelayerAddress relayerAddress = _latestState.relayers[_relayerIndex];
         _updateRelayerProtocolRewards(relayerAddress);
@@ -151,10 +151,11 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         emit DelegationAdded(relayerAddress, delegatorAddress, _amount);
 
         // Schedule the CDF update
-        _updateCdf_c(_latestState.relayers);
+        uint256[] memory newCdf = _latestState.increaseWeight(_relayerIndex, _amount);
+        _cd_updateLatestRelayerState(_latestState.relayers, newCdf);
     }
 
-    struct TokensToBeTransferred {
+    struct AmountOwed {
         TokenAddress token;
         uint256 amount;
     }
@@ -172,7 +173,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         DelegatorAddress _delegatorAddress,
         TokenAddress _bondToken,
         uint256 _delegation
-    ) internal returns (TokensToBeTransferred memory) {
+    ) internal returns (AmountOwed memory) {
         TADStorage storage ds = getTADStorage();
 
         uint256 rewardsEarned_ = _delegationRewardsEarned(_relayerAddress, _pool, _delegatorAddress);
@@ -186,19 +187,16 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             ds.totalShares[_relayerAddress][_pool] - ds.shares[_relayerAddress][_delegatorAddress][_pool];
         ds.shares[_relayerAddress][_delegatorAddress][_pool] = FP_ZERO;
 
-        return TokensToBeTransferred({
-            token: _pool,
-            amount: _pool == _bondToken ? rewardsEarned_ + _delegation : rewardsEarned_
-        });
+        return AmountOwed({token: _pool, amount: _pool == _bondToken ? rewardsEarned_ + _delegation : rewardsEarned_});
     }
 
     /// @inheritdoc ITADelegation
-    function undelegate(RelayerState calldata _latestState, RelayerAddress _relayerAddress)
-        external
-        override
-        noSelfCall
-    {
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+    function undelegate(
+        RelayerStateManager.RelayerState calldata _latestState,
+        RelayerAddress _relayerAddress,
+        uint256 _relayerIndex
+    ) external override noSelfCall {
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
 
         TADStorage storage ds = getTADStorage();
 
@@ -209,9 +207,9 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
 
         // Burn shares for each pool and calculate rewards
         uint256 length = ds.supportedPools.length;
-        TokensToBeTransferred[] memory tokensToBeTransferred = new TokensToBeTransferred[](length);
+        AmountOwed[] memory amountOwed = new AmountOwed[](length);
         for (uint256 i; i != length;) {
-            tokensToBeTransferred[i] = _processRewards(
+            amountOwed[i] = _processRewards(
                 _relayerAddress, ds.supportedPools[i], DelegatorAddress.wrap(msg.sender), bondToken, delegation_
             );
             unchecked {
@@ -224,12 +222,21 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         delete ds.delegation[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
         emit DelegationRemoved(_relayerAddress, DelegatorAddress.wrap(msg.sender), delegation_);
 
-        // Transfer the rewards and the original stake
+        // Store the rewards and the original stake to be withdrawn after the delay
+        DelegationWithdrawal storage withdrawal =
+            ds.delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+        withdrawal.minWithdrawalTimestamp = block.timestamp + ds.delegationWithdrawDelayInSec;
         for (uint256 i; i != length;) {
-            TokensToBeTransferred memory t = tokensToBeTransferred[i];
+            AmountOwed memory t = amountOwed[i];
             if (t.amount > 0) {
-                _transfer(t.token, msg.sender, t.amount);
-                emit RewardSent(_relayerAddress, DelegatorAddress.wrap(msg.sender), t.token, t.amount);
+                withdrawal.amounts[t.token] += t.amount;
+                emit DelegationWithdrawalCreated(
+                    _relayerAddress,
+                    DelegatorAddress.wrap(msg.sender),
+                    t.token,
+                    t.amount,
+                    withdrawal.minWithdrawalTimestamp
+                );
             }
             unchecked {
                 ++i;
@@ -237,9 +244,15 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         }
 
         // Update the CDF if and only if the relayer is still registered
-        // There can be a case where the relayer is unregistered and the user still has rewards
+        // The delegator should be allowed to undelegate even if the relayer has been removed
         if (_isActiveRelayer(_relayerAddress)) {
-            _updateCdf_c(_latestState.relayers);
+            // Verify the relayer index
+            if (_latestState.relayers[_relayerIndex] != _relayerAddress) {
+                revert InvalidRelayerIndex();
+            }
+
+            uint256[] memory newCdf = _latestState.decreaseWeight(_relayerIndex, delegation_);
+            _cd_updateLatestRelayerState(_latestState.relayers, newCdf);
         }
     }
 
@@ -311,6 +324,35 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
             return (currentValue - delegation_).u256();
         }
         return 0;
+    }
+
+    /// @inheritdoc ITADelegation
+    function withdrawDelegation(RelayerAddress _relayerAddress) external noSelfCall {
+        TokenAddress[] storage supportedPools = getTADStorage().supportedPools;
+        DelegationWithdrawal storage withdrawal =
+            getTADStorage().delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
+
+        if (withdrawal.minWithdrawalTimestamp > block.timestamp) {
+            revert WithdrawalNotReady(withdrawal.minWithdrawalTimestamp);
+        }
+
+        uint256 length = supportedPools.length;
+        for (uint256 i; i != length;) {
+            TokenAddress tokenAddress = supportedPools[i];
+
+            uint256 amount = withdrawal.amounts[tokenAddress];
+            delete withdrawal.amounts[tokenAddress];
+
+            _transfer(tokenAddress, msg.sender, amount);
+
+            emit RewardSent(_relayerAddress, DelegatorAddress.wrap(msg.sender), tokenAddress, amount);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        delete getTADStorage().delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];
     }
 
     /// @inheritdoc ITADelegation

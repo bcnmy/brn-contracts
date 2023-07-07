@@ -32,7 +32,6 @@ const printSelectors = async (
   const abi = contractArtifact.abi;
   const bytecode = contractArtifact.bytecode;
   const target = new ethers.ContractFactory(abi, bytecode);
-  const signatures = Object.keys(target.interface.functions);
 
   const selectors = getSelectors(target.interface);
 

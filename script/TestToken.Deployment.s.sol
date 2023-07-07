@@ -23,6 +23,4 @@ contract TestTokenDeploymentScript is Script {
 
         return token;
     }
-
-    function test() external {}
 }

@@ -23,7 +23,7 @@ contract MinimalApplication is IMinimalApplication, ApplicationBase {
     function allocateMinimalApplicationTransaction(
         RelayerAddress _relayerAddress,
         bytes[] calldata _requests,
-        RelayerState calldata _currentState
+        RelayerStateManager.RelayerState calldata _currentState
     ) external view override returns (bytes[] memory, uint256, uint256) {
         return _allocateTransaction(_relayerAddress, _requests, _currentState);
     }

@@ -4,14 +4,11 @@ pragma solidity 0.8.19;
 
 import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
-import {SafeCast} from "openzeppelin-contracts/utils/math/SafeCast.sol";
 import {Address} from "openzeppelin-contracts/utils/Address.sol";
 
 import {ITAHelpers} from "./interfaces/ITAHelpers.sol";
 import {TARelayerManagementStorage} from "ta-relayer-management/TARelayerManagementStorage.sol";
 import {TADelegationStorage} from "ta-delegation/TADelegationStorage.sol";
-import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
 import {
     Uint256WrapperHelper,
     FixedPointTypeHelper,
@@ -20,25 +17,23 @@ import {
     FP_ONE
 } from "src/library/FixedPointArithmetic.sol";
 import {VersionManager} from "src/library/VersionManager.sol";
-import {RelayerAddress, TokenAddress, RelayerState, RelayerStatus} from "./TATypes.sol";
-import {
-    CDF_PRECISION_MULTIPLIER,
-    BOND_TOKEN_DECIMAL_MULTIPLIER,
-    NATIVE_TOKEN,
-    PERCENTAGE_MULTIPLIER
-} from "./TAConstants.sol";
+import {RelayerAddress, TokenAddress, RelayerStatus} from "./TATypes.sol";
+import {BOND_TOKEN_DECIMAL_MULTIPLIER, NATIVE_TOKEN, PERCENTAGE_MULTIPLIER} from "./TAConstants.sol";
+import {RelayerStateManager} from "./RelayerStateManager.sol";
+import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 
 /// @title TAHelpers
-/// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides varios helper functions.
+/// @dev Common contract inherited by all core modules of the Transaction Allocator. Provides various helper functions.
 abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, ITAHelpers {
     using SafeERC20 for IERC20;
-    using SafeCast for uint256;
     using Address for address payable;
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
-    using U16ArrayHelper for uint16[];
+    using RelayerStateManager for RelayerStateManager.RelayerState;
     using RAArrayHelper for RelayerAddress[];
+    using U256ArrayHelper for uint256[];
 
     ////////////////////////////// Verification Helpers //////////////////////////////
     modifier onlyActiveRelayer(RelayerAddress _relayer) {
@@ -56,45 +51,31 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
         return getRMStorage().relayerInfo[_relayer].status == RelayerStatus.Active;
     }
 
-    /// @dev Hash function used to generate the hash of the relayer state.
-    /// @param _cdfHash The hash of the CDF array
-    /// @param _relayerArrayHash The hash of the relayer array
-    /// @return The hash of the relayer state
-    function _getRelayerStateHash(bytes32 _cdfHash, bytes32 _relayerArrayHash) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(_cdfHash, _relayerArrayHash));
-    }
-
     /// @dev Verifies that the passed relayer state corresponds to the latest/pending state.
     ///      Updates to the Relayer State must take into account already queued updates, hence the verification against the latest state.
     ///      Reverts if the state verification fails.
-    /// @param _cdfHash The hash of the CDF array
-    /// @param _relayersHash The hash of the relayer array
-    function _verifyExternalStateForRelayerStateUpdation(bytes32 _cdfHash, bytes32 _relayersHash) internal view {
-        if (
-            !getRMStorage().relayerStateVersionManager.verifyHashAgainstLatestState(
-                _getRelayerStateHash(_cdfHash, _relayersHash)
-            )
-        ) {
+    /// @param _state The relayer state to be verified
+    function _verifyExternalStateForRelayerStateUpdation(RelayerStateManager.RelayerState calldata _state)
+        internal
+        view
+    {
+        if (!getRMStorage().relayerStateVersionManager.verifyHashAgainstLatestState(_state.hash())) {
             revert InvalidLatestRelayerState();
         }
     }
 
     /// @dev Verifies that the passed relayer state corresponds to the currently active state.
     ///      Reverts if the state verification fails.
-    /// @param _cdfHash The hash of the CDF array
-    /// @param _relayersHash The hash of the relayer array
-    function _verifyExternalStateForTransactionAllocation(bytes32 _cdfHash, bytes32 _relayersHash, uint256 _blockNumber)
-        internal
-        view
-    {
+    /// @param _state The relayer state to be verified
+    /// @param _blockNumber The block number at which the state is to be verified
+    function _verifyExternalStateForTransactionAllocation(
+        RelayerStateManager.RelayerState calldata _state,
+        uint256 _blockNumber
+    ) internal view {
         // The unit of time for the relayer state is the window index.
         uint256 windowIndex = _windowIndex(_blockNumber);
 
-        if (
-            !getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(
-                _getRelayerStateHash(_cdfHash, _relayersHash), windowIndex
-            )
-        ) {
+        if (!getRMStorage().relayerStateVersionManager.verifyHashAgainstActiveState(_state.hash(), windowIndex)) {
             revert InvalidActiveRelayerState();
         }
     }
@@ -117,98 +98,22 @@ abstract contract TAHelpers is TARelayerManagementStorage, TADelegationStorage, 
 
     ////////////////////////////// Relayer State //////////////////////////////
 
-    /// @dev For each relayer in the passed array, return the an array representing the cumulative sum of each relayer's stake and delegation.
-    ///      The array is scaled to fit uint16.
-    /// @param _relayers List of relayers against which the CDF is to be generated
-    /// @return The CDF array
-    function _generateCdfArray_c(RelayerAddress[] calldata _relayers) internal view returns (uint16[] memory) {
-        RMStorage storage rs = getRMStorage();
-        TADStorage storage ds = getTADStorage();
-
-        uint256 length = _relayers.length;
-        uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum;
-
-        // Calculate the total stake sum
-        for (uint256 i; i != length;) {
-            RelayerAddress relayerAddress = _relayers[i];
-            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Scale the values to fit uint16 and get the CDF
-        uint256 sum;
-        for (uint256 i; i != length;) {
-            RelayerAddress relayerAddress = _relayers[i];
-            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
-            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
-            unchecked {
-                ++i;
-            }
-        }
-
-        return cdf;
+    /// @dev Sets the latest relayer state, but does not schedule it for activation.
+    /// @param _relayers The list of relayers in the new state
+    /// @param _cdf The cumulative distribution function of the stake + delegation of relayers in the new state
+    function _cd_updateLatestRelayerState(RelayerAddress[] calldata _relayers, uint256[] memory _cdf) internal {
+        bytes32 newRelayerStateHash = RelayerStateManager.hash(_cdf, _relayers);
+        getRMStorage().relayerStateVersionManager.setLatestState(newRelayerStateHash, _windowIndex(block.number));
+        emit NewRelayerState(newRelayerStateHash, _relayers, _cdf);
     }
 
-    /// @dev For each relayer in the passed array, return the an array representing the cumulative sum of each relayer's stake and delegation.
-    ///      The array is scaled to fit uint16.
-    /// @param _relayers List of relayers against which the CDF is to be generated
-    /// @return The CDF array
-    function _generateCdfArray_m(RelayerAddress[] memory _relayers) internal view returns (uint16[] memory) {
-        RMStorage storage rs = getRMStorage();
-        TADStorage storage ds = getTADStorage();
-
-        uint256 length = _relayers.length;
-        uint16[] memory cdf = new uint16[](length);
-        uint256 totalStakeSum;
-
-        // Scale the values to fit uint16 and get the CDF
-        for (uint256 i; i != length;) {
-            RelayerAddress relayerAddress = _relayers[i];
-            totalStakeSum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
-            unchecked {
-                ++i;
-            }
-        }
-
-        // Scale the values to fit uint16 and get the CDF
-        uint256 sum;
-        for (uint256 i; i != length;) {
-            RelayerAddress relayerAddress = _relayers[i];
-            sum += rs.relayerInfo[relayerAddress].stake + ds.totalDelegation[relayerAddress];
-            cdf[i] = ((sum * CDF_PRECISION_MULTIPLIER) / totalStakeSum).toUint16();
-            unchecked {
-                ++i;
-            }
-        }
-
-        return cdf;
-    }
-
-    /// @dev Given a list of relayers, compute the new CDF and Relayer State, then set the state as the new pending/latest state.
-    ///      The new relayer state is not scheduled for activation.
-    /// @param _relayerAddresses List of relayers against which the CDF is to be generate
-    function _updateCdf_c(RelayerAddress[] calldata _relayerAddresses) internal {
-        uint16[] memory cdf = _generateCdfArray_c(_relayerAddresses);
-        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.cd_hash());
-
-        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
-
-        getRMStorage().relayerStateVersionManager.setLatestState(relayerStateHash, _windowIndex(block.number));
-    }
-
-    /// @dev Given a list of relayers, compute the new CDF and Relayer State, then set the state as the new pending/latest state.
-    ///      The new relayer state is not scheduled for activation.
-    /// @param _relayerAddresses List of relayers against which the CDF is to be generate
-    function _updateCdf_m(RelayerAddress[] memory _relayerAddresses) internal {
-        uint16[] memory cdf = _generateCdfArray_m(_relayerAddresses);
-        bytes32 relayerStateHash = _getRelayerStateHash(cdf.m_hash(), _relayerAddresses.m_hash());
-
-        emit NewRelayerState(relayerStateHash, RelayerState({cdf: cdf, relayers: _relayerAddresses}));
-
-        getRMStorage().relayerStateVersionManager.setLatestState(relayerStateHash, _windowIndex(block.number));
+    /// @dev Sets the latest relayer state, but does not schedule it for activation.
+    /// @param _relayers The list of relayers in the new state
+    /// @param _cdf The cumulative distribution function of the stake + delegation of relayers in the new state
+    function _m_updateLatestRelayerState(RelayerAddress[] memory _relayers, uint256[] memory _cdf) internal {
+        bytes32 newRelayerStateHash = RelayerStateManager.hash(_cdf.m_hash(), _relayers.m_hash());
+        getRMStorage().relayerStateVersionManager.setLatestState(newRelayerStateHash, _windowIndex(block.number));
+        emit NewRelayerState(newRelayerStateHash, _relayers, _cdf);
     }
 
     ////////////////////////////// Delegation ////////////////////////

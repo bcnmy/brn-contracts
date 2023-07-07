@@ -61,8 +61,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
                 relayerIndex: selectedRelayerCdfIndex,
                 relayerGenerationIterationBitmap: relayerGenerationIterations,
                 activeState: latestRelayerState,
-                latestState: latestRelayerState,
-                activeStateToLatestStateMap: _generateActiveStateToLatestStateMap(latestRelayerState)
+                latestState: latestRelayerState
             })
         );
 
@@ -76,7 +75,7 @@ contract WormholeRelayerRefundTest is WormholeTestBase, IBRNWormholeDeliveryProv
     function _allocateTransactions(
         RelayerAddress _relayerAddress,
         bytes[] memory _txns,
-        RelayerState memory _relayerState
+        RelayerStateManager.RelayerState memory _relayerState
     ) internal view override returns (bytes[] memory, uint256, uint256) {
         return ta.allocateWormholeDeliveryVAA(_relayerAddress, _txns, _relayerState);
     }

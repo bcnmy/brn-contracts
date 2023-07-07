@@ -4,15 +4,14 @@ pragma solidity 0.8.19;
 
 import {SafeERC20, IERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {CDF_PRECISION_MULTIPLIER} from "ta-common/TAConstants.sol";
-import {RelayerAddress, RelayerAccountAddress, RelayerState, RelayerStatus, TokenAddress} from "ta-common/TATypes.sol";
+import {RelayerAddress, RelayerAccountAddress, RelayerStatus, TokenAddress} from "ta-common/TATypes.sol";
 import {ITARelayerManagement} from "./interfaces/ITARelayerManagement.sol";
 import {TARelayerManagementGetters} from "./TARelayerManagementGetters.sol";
 import {TATransactionAllocationStorage} from "ta-transaction-allocation/TATransactionAllocationStorage.sol";
 import {VersionManager} from "src/library/VersionManager.sol";
-import {U32ArrayHelper} from "src/library/arrays/U32ArrayHelper.sol";
-import {U16ArrayHelper} from "src/library/arrays/U16ArrayHelper.sol";
+import {U256ArrayHelper} from "src/library/arrays/U256ArrayHelper.sol";
 import {RAArrayHelper} from "src/library/arrays/RAArrayHelper.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 import {
     Uint256WrapperHelper, FixedPointTypeHelper, FixedPointType, FP_ZERO
 } from "src/library/FixedPointArithmetic.sol";
@@ -87,21 +86,21 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     using Uint256WrapperHelper for uint256;
     using FixedPointTypeHelper for FixedPointType;
     using VersionManager for VersionManager.VersionManagerState;
-    using U16ArrayHelper for uint16[];
-    using U32ArrayHelper for uint32[];
+    using U256ArrayHelper for uint256[];
     using RAArrayHelper for RelayerAddress[];
+    using RelayerStateManager for RelayerStateManager.RelayerState;
 
     ////////////////////////// Relayer Registration //////////////////////////
 
     /// @inheritdoc ITARelayerManagement
     function register(
-        RelayerState calldata _latestState,
+        RelayerStateManager.RelayerState calldata _latestState,
         uint256 _stake,
         RelayerAccountAddress[] calldata _accounts,
         string calldata _endpoint,
         uint256 _delegatorPoolPremiumShare
     ) external override noSelfCall {
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
         getRMStorage().totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
         // Register Relayer
@@ -109,8 +108,9 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         _register(relayerAddress, _stake, _accounts, _endpoint, _delegatorPoolPremiumShare);
 
         // Queue Update for Active Relayer List
-        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
-        _updateCdf_m(newActiveRelayers);
+        RelayerStateManager.RelayerState memory newState = _latestState.addNewRelayer(relayerAddress, _stake);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
+
         emit RelayerRegistered(relayerAddress, _endpoint, _accounts, _stake, _delegatorPoolPremiumShare);
     }
 
@@ -124,7 +124,6 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     ) external override {
         RMStorage storage rms = getRMStorage();
 
-        // TODO: Check if this is the right way to protect this function
         if (rms.relayerCount != 0) {
             revert FoundationRelayerAlreadyRegistered();
         }
@@ -132,11 +131,11 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         _register(_foundationRelayerAddress, _stake, _accounts, _endpoint, _delegatorPoolPremiumShare);
 
         // Set Initial Relayer State
-        uint16[] memory cdf = new uint16[](1);
-        cdf[0] = CDF_PRECISION_MULTIPLIER;
-        RelayerAddress[] memory relayers = new RelayerAddress[](1);
-        relayers[0] = _foundationRelayerAddress;
-        rms.relayerStateVersionManager.initialize(keccak256(abi.encodePacked(cdf.m_hash(), relayers.m_hash())));
+        RelayerStateManager.RelayerState memory initialState =
+            RelayerStateManager.RelayerState({cdf: new uint256[](1), relayers: new RelayerAddress[](1)});
+        initialState.cdf[0] = _stake;
+        initialState.relayers[0] = _foundationRelayerAddress;
+        rms.relayerStateVersionManager.initialize(initialState.hash());
     }
 
     /// @notice Updates teh state for registering a relayer
@@ -186,13 +185,13 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     }
 
     /// @inheritdoc ITARelayerManagement
-    function unregister(RelayerState calldata _latestState, uint256 _relayerIndex)
+    function unregister(RelayerStateManager.RelayerState calldata _latestState, uint256 _relayerIndex)
         external
         override
         noSelfCall
         onlyActiveRelayer(RelayerAddress.wrap(msg.sender))
     {
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
 
         if (_latestState.cdf.length == 1) {
             revert CannotUnregisterLastRelayer();
@@ -232,8 +231,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         }
 
         // Update the CDF
-        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_remove(_relayerIndex);
-        _updateCdf_m(newActiveRelayers);
+        RelayerStateManager.RelayerState memory newState = _latestState.removeRelayer(_relayerIndex);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
 
         // Set withdrawal Info
         node.status = RelayerStatus.Exiting;
@@ -268,6 +267,8 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
             revert RelayerJailNotExpired(node.minExitTimestamp);
         }
 
+        delete node.status;
+
         _deleteRelayerAccountAddresses(relayerAddress, _relayerAccountsToRemove);
         _transfer(TokenAddress.wrap(address(rms.bondToken)), msg.sender, node.stake);
         emit Withdraw(relayerAddress, node.stake);
@@ -290,7 +291,11 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
     }
 
     /// @inheritdoc ITARelayerManagement
-    function unjailAndReenter(RelayerState calldata _latestState, uint256 _stake) external override noSelfCall {
+    function unjailAndReenter(RelayerStateManager.RelayerState calldata _latestState, uint256 _stake)
+        external
+        override
+        noSelfCall
+    {
         RMStorage storage rms = getRMStorage();
         RelayerAddress relayerAddress = RelayerAddress.wrap(msg.sender);
         RelayerInfo storage node = rms.relayerInfo[relayerAddress];
@@ -304,7 +309,7 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         if (node.stake + _stake < rms.minimumStakeAmount) {
             revert InsufficientStake(node.stake + _stake, rms.minimumStakeAmount);
         }
-        _verifyExternalStateForRelayerStateUpdation(_latestState.cdf.cd_hash(), _latestState.relayers.cd_hash());
+        _verifyExternalStateForRelayerStateUpdation(_latestState);
         rms.totalUnpaidProtocolRewards = _getLatestTotalUnpaidProtocolRewardsAndUpdateUpdatedTimestamp();
 
         // Transfer stake amount
@@ -313,18 +318,19 @@ contract TARelayerManagement is ITARelayerManagement, TATransactionAllocationSto
         // Update RelayerInfo
         delete node.minExitTimestamp;
         node.status = RelayerStatus.Active;
-        node.stake += _stake;
+        uint256 totalNodeStake = node.stake + _stake;
+        node.stake = totalNodeStake;
         node.rewardShares = node.stake.fp() / _protocolRewardRelayerSharePrice(rms.totalUnpaidProtocolRewards);
 
         // Update Global Counters
         // When jailing, the full stake and reward shares are removed, they need to be added back
         ++rms.relayerCount;
-        rms.totalStake += node.stake;
+        rms.totalStake += totalNodeStake;
         rms.totalProtocolRewardShares = rms.totalProtocolRewardShares + node.rewardShares;
 
         // Schedule CDF Update
-        RelayerAddress[] memory newActiveRelayers = _latestState.relayers.cd_append(relayerAddress);
-        _updateCdf_m(newActiveRelayers);
+        RelayerStateManager.RelayerState memory newState = _latestState.addNewRelayer(relayerAddress, totalNodeStake);
+        _m_updateLatestRelayerState(newState.relayers, newState.cdf);
 
         emit RelayerUnjailedAndReentered(relayerAddress);
     }

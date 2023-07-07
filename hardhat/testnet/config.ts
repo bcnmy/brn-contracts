@@ -20,7 +20,7 @@ const addresses = {
   },
   43113: {
     Token: '0xF9C3e58C6ca8DF57F5BC94c7ecCCABFaE3845068',
-    TAProxy: '0x8a4ac83708C95534cfdC3F00833FFdAB3e8ba997',
+    TAProxy: '0x2AfDB877599B9677f48D87f842d034172400b8F2',
     WormholeDeliveryProvider: '0xFc42BfbbA51B448c2A82e0f8d85064486352D0f7',
     MockWormholeReceiver: '0xB9B32A13C612eC7E6Ad804f9C052992b0131aA3C',
     WormholeCore: '0x7bbcE28e64B3F8b84d876Ab298393c38ad7aac4C',
@@ -75,7 +75,10 @@ const config = {
     wormholeEmitterChainName: wormholeEmitterChainName[sourceChain],
     wormholeCoreAddress: addresses[sourceChain].WormholeCore,
     wormholeRelayerAddress: addresses[sourceChain].WormholeRelayer,
-    txGenerator: new ethers.Wallet(process.env.PRIVATE_KEY!, providers[sourceChain].httpProvider),
+    txGenerator: new ethers.Wallet(
+      process.env.DEPLOYER_PRIVATE_KEY!,
+      providers[sourceChain].httpProvider
+    ),
     ...providers[sourceChain],
     deliveryProvider: BRNWormholeDeliveryProvider__factory.connect(
       addresses[sourceChain].WormholeDeliveryProvider,
@@ -92,8 +95,11 @@ const config = {
     wormholeEmitterChainName: wormholeEmitterChainName[targetChain],
     wormholeCoreAddress: addresses[targetChain].WormholeCore,
     wormholeRelayerAddress: addresses[targetChain].WormholeRelayer,
-    fundingWallet: new ethers.Wallet(process.env.PRIVATE_KEY!, providers[targetChain].httpProvider),
-    fundingAmount: ethers.utils.parseEther('0.5'),
+    fundingWallet: new ethers.Wallet(
+      process.env.DEPLOYER_PRIVATE_KEY!,
+      providers[targetChain].httpProvider
+    ),
+    fundingAmount: ethers.utils.parseEther('1'),
     taDeploymentBlock: 23333519,
     ...providers[targetChain],
     bondToken: ERC20FreeMint__factory.connect(
@@ -119,7 +125,7 @@ const config = {
   },
   transactionsPerGenerationInterval: 2,
   generationIntervalSec: 10,
-  relayerCount: 3,
+  relayerCount: 10,
   inactiveRelayers: [ethers.constants.AddressZero],
   executionGasLimit: 100000,
   wormholePollingIntervalMs: 1000,
