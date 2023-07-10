@@ -18,7 +18,6 @@ abstract contract TATransactionAllocationStorage {
         ////////////////////////// Liveness Records //////////////////////////
         mapping(uint256 epochEndTimestamp => mapping(RelayerAddress => uint256 transactionsSubmitted))
             transactionsSubmitted;
-        mapping(uint256 epochEndTimestamp => uint256) totalTransactionsSubmitted;
         ////////////////////////// Misc //////////////////////////
         mapping(RelayerAddress => uint256 lastTransactionSubmissionWindow) lastTransactionSubmissionWindow;
     }

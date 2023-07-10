@@ -81,7 +81,7 @@ contract TransactionAllocationTest is
 
         assertEq(executionCount, txns.length);
         assertEq(ta.count(), executionCount);
-        assertEq(ta.totalTransactionsSubmitted(), submissionCount);
+        assertEq(ta.totalTransactionsSubmitted(latestRelayerState), submissionCount);
     }
 
     function testCannotCallApplicationDirectly() external {

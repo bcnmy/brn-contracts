@@ -54,8 +54,7 @@ contract RelayerLivenessAndJailingTest is
 
     function testPenalizeActiveRelayerIfInsufficientTransactionAreSubmitted() external {
         RelayerAddress activeRelayer = relayerMainAddress[0];
-        ta.debug_setTotalTransactionsProcessed(1000);
-        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 100);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 1000);
         uint256 totalStake = ta.totalStake();
         uint256 totalPenaly = 0;
 
@@ -101,7 +100,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
 
-        ta.debug_setTotalTransactionsProcessed(540);
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (relayerMainAddress[i] == inactiveRelayer) continue;
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
@@ -152,7 +150,6 @@ contract RelayerLivenessAndJailingTest is
         RelayerAddress inactiveRelayer = relayerMainAddress[0];
         uint256 totalStake = ta.totalStake();
 
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -200,7 +197,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
 
         // Setup to jail all relayers except relayer 0 and relayer 5.
-        ta.debug_setTotalTransactionsProcessed(20000000);
         ta.debug_setTransactionsProcessedByRelayer(activeRelayer0, 10000000);
         ta.debug_setTransactionsProcessedByRelayer(activeRelayer1, 10000000);
         ta.debug_setStakeThresholdForJailing(initialRelayerStake[relayerMainAddress[9]] * 100);
@@ -268,7 +264,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
 
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -323,7 +318,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -375,7 +369,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -452,7 +445,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -480,7 +472,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -509,7 +500,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }

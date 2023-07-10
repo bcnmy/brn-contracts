@@ -157,7 +157,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 )
             ),
             abi.encodeCall(ta.transactionsSubmittedByRelayer, (relayerMainAddress[0])),
-            abi.encodeCall(ta.totalTransactionsSubmitted, ()),
+            abi.encodeCall(ta.totalTransactionsSubmitted, (latestRelayerState)),
             abi.encodeCall(ta.epochLengthInSec, ()),
             abi.encodeCall(ta.epochEndTimestamp, ()),
             abi.encodeCall(ta.livenessZParameter, ()),

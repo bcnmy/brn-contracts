@@ -92,7 +92,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         if (_params.reqs.length != 0) {
             unchecked {
                 ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress] += selectionCount;
-                ts.totalTransactionsSubmitted[epochEndTimestamp_] += selectionCount;
             }
         }
 
@@ -351,11 +350,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         TAStorage storage ta = getTAStorage();
         state.epochEndTimestamp = ta.epochEndTimestamp;
-        state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp];
+        state.totalTransactionsInEpoch = _totalTransactionsSubmitted(_activeRelayerState.relayers);
         state.zScoreSquared = ta.livenessZParameter;
         state.zScoreSquared = state.zScoreSquared * state.zScoreSquared;
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
-        delete ta.totalTransactionsSubmitted[state.epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (state.totalTransactionsInEpoch == 0) {

@@ -7,11 +7,14 @@ import {ITATransactionAllocationGetters} from "./interfaces/ITATransactionAlloca
 import {Guards} from "src/utils/Guards.sol";
 import {RelayerAddress} from "ta-common/TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
+import {TAHelpers} from "ta-common/TAHelpers.sol";
 
 /// @title TATransactionAllocationGetters
 abstract contract TATransactionAllocationGetters is
     ITATransactionAllocationGetters,
     TATransactionAllocationStorage,
+    TAHelpers,
     Guards
 {
     function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress)
@@ -24,8 +27,31 @@ abstract contract TATransactionAllocationGetters is
         return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
     }
 
-    function totalTransactionsSubmitted() external view override noSelfCall returns (uint256) {
-        return getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp];
+    function _totalTransactionsSubmitted(RelayerAddress[] calldata _activeRelayerAddresses)
+        internal
+        view
+        returns (uint256 totalTransactionsSubmitted_)
+    {
+        TAStorage storage ta = getTAStorage();
+        uint256 length = _activeRelayerAddresses.length;
+        uint256 epochEndTimestamp_ = ta.epochEndTimestamp;
+        for (uint256 i; i != length;) {
+            totalTransactionsSubmitted_ += ta.transactionsSubmitted[epochEndTimestamp_][_activeRelayerAddresses[i]];
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function totalTransactionsSubmitted(RelayerStateManager.RelayerState calldata _activeState)
+        external
+        view
+        override
+        noSelfCall
+        returns (uint256)
+    {
+        _verifyExternalStateForTransactionAllocation(_activeState, block.number);
+        return _totalTransactionsSubmitted(_activeState.relayers);
     }
 
     function epochLengthInSec() external view override noSelfCall returns (uint256) {

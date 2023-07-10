@@ -4,12 +4,16 @@ pragma solidity 0.8.19;
 
 import {RelayerAddress} from "ta-common/TATypes.sol";
 import {FixedPointType} from "src/library/FixedPointArithmetic.sol";
+import {RelayerStateManager} from "ta-common/RelayerStateManager.sol";
 
 /// @title ITATransactionAllocationGetters
 interface ITATransactionAllocationGetters {
     function transactionsSubmittedByRelayer(RelayerAddress _relayerAddress) external view returns (uint256);
 
-    function totalTransactionsSubmitted() external view returns (uint256);
+    function totalTransactionsSubmitted(RelayerStateManager.RelayerState calldata _activeState)
+        external
+        view
+        returns (uint256);
 
     function epochLengthInSec() external view returns (uint256);
 
