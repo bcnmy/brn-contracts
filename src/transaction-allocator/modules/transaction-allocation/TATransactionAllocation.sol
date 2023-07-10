@@ -94,14 +94,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                 ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress] += selectionCount;
             }
         }
-
-        // TODO: Check how to update this logic
-        // Validate that the relayer has sent enough gas for the call.
-        // if (gasleft() <= totalGas / 63) {
-        //     assembly {
-        //         invalid()
-        //     }
-        // }
     }
 
     /// @dev Runs the liveness check, activates any pending state and emits the latest relayer state.
