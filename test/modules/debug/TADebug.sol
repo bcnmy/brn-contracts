@@ -69,4 +69,17 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
     {
         return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
     }
+
+    function debug_setWithdrawal(
+        RelayerAddress _relayerAddress,
+        DelegatorAddress _delegatorAddress,
+        TokenAddress[] calldata _tokens,
+        uint256[] calldata _amounts
+    ) external override {
+        require(_tokens.length == _amounts.length, "TADebug: token and amount length mismatch");
+
+        for (uint256 i = 0; i < _amounts.length; i++) {
+            getTADStorage().delegationWithdrawal[_relayerAddress][_delegatorAddress].amounts[_tokens[i]] = _amounts[i];
+        }
+    }
 }

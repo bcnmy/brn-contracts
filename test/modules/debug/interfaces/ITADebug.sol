@@ -36,4 +36,11 @@ interface ITADebug {
         returns (uint256, uint256, FixedPointType);
 
     function debug_setStakeThresholdForJailing(uint256 _amount) external;
+
+    function debug_setWithdrawal(
+        RelayerAddress _relayerAddress,
+        DelegatorAddress _delegatorAddress,
+        TokenAddress[] calldata _tokens,
+        uint256[] calldata _amounts
+    ) external;
 }
