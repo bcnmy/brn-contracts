@@ -24,7 +24,7 @@ abstract contract TATransactionAllocationGetters is
         noSelfCall
         returns (uint256)
     {
-        return getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress];
+        return getTAStorage().transactionsSubmitted[_relayerAddress];
     }
 
     function _totalTransactionsSubmitted(RelayerAddress[] calldata _activeRelayerAddresses)
@@ -34,9 +34,8 @@ abstract contract TATransactionAllocationGetters is
     {
         TAStorage storage ta = getTAStorage();
         uint256 length = _activeRelayerAddresses.length;
-        uint256 epochEndTimestamp_ = ta.epochEndTimestamp;
         for (uint256 i; i != length;) {
-            totalTransactionsSubmitted_ += ta.transactionsSubmitted[epochEndTimestamp_][_activeRelayerAddresses[i]];
+            totalTransactionsSubmitted_ += ta.transactionsSubmitted[_activeRelayerAddresses[i]];
             unchecked {
                 ++i;
             }

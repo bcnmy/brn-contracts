@@ -16,8 +16,7 @@ abstract contract TATransactionAllocationStorage {
         FixedPointType livenessZParameter;
         uint256 stakeThresholdForJailing;
         ////////////////////////// Liveness Records //////////////////////////
-        mapping(uint256 epochEndTimestamp => mapping(RelayerAddress => uint256 transactionsSubmitted))
-            transactionsSubmitted;
+        mapping(RelayerAddress => uint256 transactionsSubmitted) transactionsSubmitted;
         ////////////////////////// Misc //////////////////////////
         mapping(RelayerAddress => uint256 lastTransactionSubmissionWindow) lastTransactionSubmissionWindow;
     }

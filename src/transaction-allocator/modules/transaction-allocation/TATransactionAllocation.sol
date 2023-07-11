@@ -91,7 +91,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Record Liveness Metrics
         if (_params.reqs.length != 0) {
             unchecked {
-                ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress] += selectionCount;
+                ts.transactionsSubmitted[relayerAddress] += selectionCount;
             }
         }
     }
@@ -314,7 +314,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ///////////////////////////////// Liveness ///////////////////////////////
     struct ProcessLivenessCheckMemoryState {
         // Cache to prevent multiple SLOADs
-        uint256 epochEndTimestamp;
         uint256 updatedUnpaidProtocolRewards;
         uint256 stakeThresholdForJailing;
         uint256 totalTransactionsInEpoch;
@@ -341,7 +340,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         ProcessLivenessCheckMemoryState memory state;
 
         TAStorage storage ta = getTAStorage();
-        state.epochEndTimestamp = ta.epochEndTimestamp;
         state.totalTransactionsInEpoch = _totalTransactionsSubmitted(_activeRelayerState.relayers);
         state.zScoreSquared = ta.livenessZParameter;
         state.zScoreSquared = state.zScoreSquared * state.zScoreSquared;
@@ -364,7 +362,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         _postLivenessCheck(state);
 
-        emit LivenessCheckProcessed(state.epochEndTimestamp);
+        emit LivenessCheckProcessed(ta.epochEndTimestamp);
     }
 
     /// @dev Processes the liveness check for the current epoch for a single relayer.
@@ -380,11 +378,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ) internal {
         if (
             _verifyRelayerLiveness(
-                _activeRelayerState,
-                _relayerIndex,
-                _state.epochEndTimestamp,
-                _state.totalTransactionsInEpoch,
-                _state.zScoreSquared
+                _activeRelayerState, _relayerIndex, _state.totalTransactionsInEpoch, _state.zScoreSquared
             )
         ) {
             return;
@@ -643,22 +637,20 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Returns true if the relayer passes the liveness check for the current epoch, else false.
     /// @param _activeState The active relayer state.
     /// @param _relayerIndex The index of the relayer in the active relayer list.
-    /// @param _epochEndTimestamp The end timestamp of the current epoch.
     /// @param _totalTransactionsInEpoch  The total number of transactions in the current epoch.
     /// @param _zScoreSquared A precomputed zScore parameter squared value.
     /// @return True if the relayer passes the liveness check for the current epoch, else false.
     function _verifyRelayerLiveness(
         RelayerStateManager.RelayerState calldata _activeState,
         uint256 _relayerIndex,
-        uint256 _epochEndTimestamp,
         uint256 _totalTransactionsInEpoch,
         FixedPointType _zScoreSquared
     ) internal returns (bool) {
         TAStorage storage ts = getTAStorage();
 
         RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
-        uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
-        delete ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
+        uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[relayerAddress];
+        delete ts.transactionsSubmitted[relayerAddress];
 
         uint256 relayerWeight = _activeState.cdf[_relayerIndex];
 
