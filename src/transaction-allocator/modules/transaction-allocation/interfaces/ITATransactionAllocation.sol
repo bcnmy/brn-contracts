@@ -50,5 +50,5 @@ interface ITATransactionAllocation is ITATransactionAllocationEventsErrors, ITAT
         uint256 _totalStake,
         uint256 _totalTransactions,
         FixedPointType _zScore
-    ) external view returns (FixedPointType);
+    ) external pure returns (FixedPointType);
 }
