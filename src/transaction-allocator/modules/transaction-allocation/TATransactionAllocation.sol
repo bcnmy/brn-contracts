@@ -149,6 +149,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             uint256 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
             uint256 relayersPerWindow = ds.relayersPerWindow;
+            bytes32 windowIndexHash = _windowIndexHash(_blockNumber);
 
             while (_relayerGenerationIterationBitmap != 0) {
                 if (_relayerGenerationIterationBitmap & 1 == 1) {
@@ -157,7 +158,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                     }
 
                     // Verify if correct cdf index has been provided
-                    uint256 r = _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, maxCdfElement);
+                    uint256 r = _randomNumberForCdfSelection(windowIndexHash, relayerGenerationIteration, maxCdfElement);
 
                     if (
                         !(
@@ -169,7 +170,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                         revert RelayerIndexDoesNotPointToSelectedCdfInterval();
                     }
 
-                    selectionCount++;
+                    unchecked {
+                        ++selectionCount;
+                    }
                 }
 
                 unchecked {
@@ -188,18 +191,20 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /// @dev Generates a pseudo random number used for selecting a relayer.
-    /// @param _blockNumber The block number at which the random number needs to be generated.
+    /// @param _windowIndexHash_ The hash of the index of the window for which the random number is being generated.
     /// @param _iter The ith iteration corresponds to the ith relayer being generated
     /// @param _max The modulo value for the random number generation.
-    function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
+    function _randomNumberForCdfSelection(bytes32 _windowIndexHash_, uint256 _iter, uint256 _max)
         internal
-        view
+        pure
         returns (uint256)
     {
-        // The seed for jth iteration is a function of the base seed and j
-        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
-        uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
+        uint256 seed = uint256(keccak256(abi.encodePacked(_windowIndexHash_, _iter)));
         return seed % _max + 1;
+    }
+
+    function _windowIndexHash(uint256 _blockNumber) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked(_windowIndex(_blockNumber)));
     }
 
     /// @dev Executes the transactions, appending necessary data to the calldata for each.
@@ -300,8 +305,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 relayersPerWindow = getRMStorage().relayersPerWindow;
         uint256 relayerCount = _activeState.relayers.length;
 
+        bytes32 windowIndexHash = _windowIndexHash(block.number);
         for (uint256 i = 0; i != relayersPerWindow;) {
-            uint256 randomCdfNumber = _randomNumberForCdfSelection(block.number, i, _activeState.cdf[relayerCount - 1]);
+            uint256 randomCdfNumber =
+                _randomNumberForCdfSelection(windowIndexHash, i, _activeState.cdf[relayerCount - 1]);
             cdfIndex[i] = _activeState.cdf.cd_lowerBound(randomCdfNumber);
             selectedRelayers[i] = _activeState.relayers[cdfIndex[i]];
             unchecked {
