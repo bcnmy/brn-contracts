@@ -38,11 +38,7 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         external
         override
     {
-        getTAStorage().transactionsSubmitted[getTAStorage().epochEndTimestamp][_relayerAddress] = _transactionsProcessed;
-    }
-
-    function debug_setTotalTransactionsProcessed(uint256 _transactionsProcessed) external override {
-        getTAStorage().totalTransactionsSubmitted[getTAStorage().epochEndTimestamp] = _transactionsProcessed;
+        getTAStorage().transactionsSubmitted[_relayerAddress] = _transactionsProcessed;
     }
 
     function debug_setRelayerCount(uint256 _relayerCount) external override {
@@ -72,5 +68,18 @@ contract TADebug is ITADebug, TAHelpers, TATransactionAllocationStorage {
         returns (uint256, uint256, FixedPointType)
     {
         return _getPendingProtocolRewardsData(_relayerAddress, _getLatestTotalUnpaidProtocolRewards());
+    }
+
+    function debug_setWithdrawal(
+        RelayerAddress _relayerAddress,
+        DelegatorAddress _delegatorAddress,
+        TokenAddress[] calldata _tokens,
+        uint256[] calldata _amounts
+    ) external override {
+        require(_tokens.length == _amounts.length, "TADebug: token and amount length mismatch");
+
+        for (uint256 i = 0; i < _amounts.length; i++) {
+            getTADStorage().delegationWithdrawal[_relayerAddress][_delegatorAddress].amounts[_tokens[i]] = _amounts[i];
+        }
     }
 }

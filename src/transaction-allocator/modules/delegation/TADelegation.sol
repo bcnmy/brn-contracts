@@ -304,7 +304,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
         RelayerAddress _relayerAddress,
         TokenAddress _tokenAddress,
         DelegatorAddress _delegatorAddress
-    ) external view noSelfCall returns (uint256) {
+    ) external view override noSelfCall returns (uint256) {
         TADStorage storage ds = getTADStorage();
 
         uint256 protocolDelegationRewards;
@@ -327,7 +327,7 @@ contract TADelegation is TADelegationGetters, TAHelpers, ITADelegation {
     }
 
     /// @inheritdoc ITADelegation
-    function withdrawDelegation(RelayerAddress _relayerAddress) external noSelfCall {
+    function withdrawDelegation(RelayerAddress _relayerAddress) external override noSelfCall {
         TokenAddress[] storage supportedPools = getTADStorage().supportedPools;
         DelegationWithdrawal storage withdrawal =
             getTADStorage().delegationWithdrawal[_relayerAddress][DelegatorAddress.wrap(msg.sender)];

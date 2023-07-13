@@ -91,18 +91,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         // Record Liveness Metrics
         if (_params.reqs.length != 0) {
             unchecked {
-                ts.transactionsSubmitted[epochEndTimestamp_][relayerAddress] += selectionCount;
-                ts.totalTransactionsSubmitted[epochEndTimestamp_] += selectionCount;
+                ts.transactionsSubmitted[relayerAddress] += selectionCount;
             }
         }
-
-        // TODO: Check how to update this logic
-        // Validate that the relayer has sent enough gas for the call.
-        // if (gasleft() <= totalGas / 63) {
-        //     assembly {
-        //         invalid()
-        //     }
-        // }
     }
 
     /// @dev Runs the liveness check, activates any pending state and emits the latest relayer state.
@@ -158,6 +149,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
             uint256 maxCdfElement = _activeState.cdf[_activeState.cdf.length - 1];
             uint256 relayerGenerationIteration;
             uint256 relayersPerWindow = ds.relayersPerWindow;
+            bytes32 windowIndexHash = _windowIndexHash(_blockNumber);
 
             while (_relayerGenerationIterationBitmap != 0) {
                 if (_relayerGenerationIterationBitmap & 1 == 1) {
@@ -166,7 +158,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                     }
 
                     // Verify if correct cdf index has been provided
-                    uint256 r = _randomNumberForCdfSelection(_blockNumber, relayerGenerationIteration, maxCdfElement);
+                    uint256 r = _randomNumberForCdfSelection(windowIndexHash, relayerGenerationIteration, maxCdfElement);
 
                     if (
                         !(
@@ -178,7 +170,9 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
                         revert RelayerIndexDoesNotPointToSelectedCdfInterval();
                     }
 
-                    selectionCount++;
+                    unchecked {
+                        ++selectionCount;
+                    }
                 }
 
                 unchecked {
@@ -197,18 +191,20 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     }
 
     /// @dev Generates a pseudo random number used for selecting a relayer.
-    /// @param _blockNumber The block number at which the random number needs to be generated.
+    /// @param _windowIndexHash_ The hash of the index of the window for which the random number is being generated.
     /// @param _iter The ith iteration corresponds to the ith relayer being generated
     /// @param _max The modulo value for the random number generation.
-    function _randomNumberForCdfSelection(uint256 _blockNumber, uint256 _iter, uint256 _max)
+    function _randomNumberForCdfSelection(bytes32 _windowIndexHash_, uint256 _iter, uint256 _max)
         internal
-        view
+        pure
         returns (uint256)
     {
-        // The seed for jth iteration is a function of the base seed and j
-        uint256 baseSeed = uint256(keccak256(abi.encodePacked(_windowIndex(_blockNumber))));
-        uint256 seed = uint256(keccak256(abi.encodePacked(baseSeed, _iter)));
+        uint256 seed = uint256(keccak256(abi.encodePacked(_windowIndexHash_, _iter)));
         return seed % _max + 1;
+    }
+
+    function _windowIndexHash(uint256 _blockNumber) internal view returns (bytes32) {
+        return keccak256(abi.encodePacked(_windowIndex(_blockNumber)));
     }
 
     /// @dev Executes the transactions, appending necessary data to the calldata for each.
@@ -309,8 +305,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         uint256 relayersPerWindow = getRMStorage().relayersPerWindow;
         uint256 relayerCount = _activeState.relayers.length;
 
+        bytes32 windowIndexHash = _windowIndexHash(block.number);
         for (uint256 i = 0; i != relayersPerWindow;) {
-            uint256 randomCdfNumber = _randomNumberForCdfSelection(block.number, i, _activeState.cdf[relayerCount - 1]);
+            uint256 randomCdfNumber =
+                _randomNumberForCdfSelection(windowIndexHash, i, _activeState.cdf[relayerCount - 1]);
             cdfIndex[i] = _activeState.cdf.cd_lowerBound(randomCdfNumber);
             selectedRelayers[i] = _activeState.relayers[cdfIndex[i]];
             unchecked {
@@ -323,7 +321,6 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ///////////////////////////////// Liveness ///////////////////////////////
     struct ProcessLivenessCheckMemoryState {
         // Cache to prevent multiple SLOADs
-        uint256 epochEndTimestamp;
         uint256 updatedUnpaidProtocolRewards;
         uint256 stakeThresholdForJailing;
         uint256 totalTransactionsInEpoch;
@@ -350,12 +347,10 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
         ProcessLivenessCheckMemoryState memory state;
 
         TAStorage storage ta = getTAStorage();
-        state.epochEndTimestamp = ta.epochEndTimestamp;
-        state.totalTransactionsInEpoch = ta.totalTransactionsSubmitted[state.epochEndTimestamp];
+        state.totalTransactionsInEpoch = _totalTransactionsSubmitted(_activeRelayerState.relayers);
         state.zScoreSquared = ta.livenessZParameter;
         state.zScoreSquared = state.zScoreSquared * state.zScoreSquared;
         state.stakeThresholdForJailing = ta.stakeThresholdForJailing;
-        delete ta.totalTransactionsSubmitted[state.epochEndTimestamp];
 
         // If no transactions were submitted in the epoch, then no need to process liveness check
         if (state.totalTransactionsInEpoch == 0) {
@@ -374,7 +369,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
 
         _postLivenessCheck(state);
 
-        emit LivenessCheckProcessed(state.epochEndTimestamp);
+        emit LivenessCheckProcessed(ta.epochEndTimestamp);
     }
 
     /// @dev Processes the liveness check for the current epoch for a single relayer.
@@ -390,11 +385,7 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     ) internal {
         if (
             _verifyRelayerLiveness(
-                _activeRelayerState,
-                _relayerIndex,
-                _state.epochEndTimestamp,
-                _state.totalTransactionsInEpoch,
-                _state.zScoreSquared
+                _activeRelayerState, _relayerIndex, _state.totalTransactionsInEpoch, _state.zScoreSquared
             )
         ) {
             return;
@@ -653,22 +644,20 @@ contract TATransactionAllocation is ITATransactionAllocation, TAHelpers, TATrans
     /// @dev Returns true if the relayer passes the liveness check for the current epoch, else false.
     /// @param _activeState The active relayer state.
     /// @param _relayerIndex The index of the relayer in the active relayer list.
-    /// @param _epochEndTimestamp The end timestamp of the current epoch.
     /// @param _totalTransactionsInEpoch  The total number of transactions in the current epoch.
     /// @param _zScoreSquared A precomputed zScore parameter squared value.
     /// @return True if the relayer passes the liveness check for the current epoch, else false.
     function _verifyRelayerLiveness(
         RelayerStateManager.RelayerState calldata _activeState,
         uint256 _relayerIndex,
-        uint256 _epochEndTimestamp,
         uint256 _totalTransactionsInEpoch,
         FixedPointType _zScoreSquared
     ) internal returns (bool) {
         TAStorage storage ts = getTAStorage();
 
         RelayerAddress relayerAddress = _activeState.relayers[_relayerIndex];
-        uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
-        delete ts.transactionsSubmitted[_epochEndTimestamp][relayerAddress];
+        uint256 transactionsProcessedByRelayer = ts.transactionsSubmitted[relayerAddress];
+        delete ts.transactionsSubmitted[relayerAddress];
 
         uint256 relayerWeight = _activeState.cdf[_relayerIndex];
 

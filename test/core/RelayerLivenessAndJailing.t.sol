@@ -21,6 +21,7 @@ contract RelayerLivenessAndJailingTest is
     uint256 constant initialApplicationFunds = 10 ether;
 
     mapping(RelayerAddress => uint256) penalty;
+    VerifyRelayerLivenessDifferentialHelper v = new VerifyRelayerLivenessDifferentialHelper();
 
     function setUp() public override {
         if (tx.gasprice == 0) {
@@ -54,8 +55,7 @@ contract RelayerLivenessAndJailingTest is
 
     function testPenalizeActiveRelayerIfInsufficientTransactionAreSubmitted() external {
         RelayerAddress activeRelayer = relayerMainAddress[0];
-        ta.debug_setTotalTransactionsProcessed(1000);
-        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 100);
+        ta.debug_setTransactionsProcessedByRelayer(activeRelayer, 1000);
         uint256 totalStake = ta.totalStake();
         uint256 totalPenaly = 0;
 
@@ -101,7 +101,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
 
-        ta.debug_setTotalTransactionsProcessed(540);
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (relayerMainAddress[i] == inactiveRelayer) continue;
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 10 * (i + 1));
@@ -152,7 +151,6 @@ contract RelayerLivenessAndJailingTest is
         RelayerAddress inactiveRelayer = relayerMainAddress[0];
         uint256 totalStake = ta.totalStake();
 
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -200,7 +198,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
 
         // Setup to jail all relayers except relayer 0 and relayer 5.
-        ta.debug_setTotalTransactionsProcessed(20000000);
         ta.debug_setTransactionsProcessedByRelayer(activeRelayer0, 10000000);
         ta.debug_setTransactionsProcessedByRelayer(activeRelayer1, 10000000);
         ta.debug_setStakeThresholdForJailing(initialRelayerStake[relayerMainAddress[9]] * 100);
@@ -268,7 +265,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 totalStake = ta.totalStake();
         uint256 relayerCount = ta.relayerCount();
 
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -323,7 +319,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -375,7 +370,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -452,7 +446,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -480,7 +473,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 relayerCount = ta.relayerCount();
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -509,7 +501,6 @@ contract RelayerLivenessAndJailingTest is
         uint256 expectedPenalty = _calculatePenalty(initialRelayerStake[inactiveRelayer]);
 
         // Jail the relayer
-        ta.debug_setTotalTransactionsProcessed(5400);
         for (uint256 i = 1; i < relayerCount; ++i) {
             ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 100 * (i + 1));
         }
@@ -544,5 +535,64 @@ contract RelayerLivenessAndJailingTest is
         vm.expectRevert(abi.encodeWithSelector(RelayerNotJailed.selector));
         ta.unjailAndReenter(latestRelayerState, initialRelayerStake[inactiveRelayer]);
         vm.stopPrank();
+    }
+
+    /// forge-config: test.fuzz.runs = 2048
+    function testDifferentialOptimisedVerifyRelayerLivenessAgainstReferenceImplementation(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        uint256 _transactionsDoneByRelayer,
+        uint256 _totalTransactions
+    ) external {
+        vm.assume(_relayerStake > 0);
+        vm.assume(_totalStake > 0);
+        vm.assume(_transactionsDoneByRelayer > 0);
+        vm.assume(_totalTransactions > 0);
+        vm.assume(_relayerStake <= _totalStake);
+        vm.assume(_transactionsDoneByRelayer <= _totalTransactions);
+        vm.assume(_totalStake <= 1_000_000_000 ether);
+        vm.assume(_totalTransactions <= 1_000_000_000);
+
+        assertEq(
+            v.verifyRelayerLivenessReferenceImplementation(
+                _relayerStake, _totalStake, _transactionsDoneByRelayer, _totalTransactions, ta.livenessZParameter()
+            ),
+            v.verifyRelayerLivenessOptimisedImplementation(
+                _relayerStake, _totalStake, _transactionsDoneByRelayer, _totalTransactions, ta.livenessZParameter()
+            )
+        );
+    }
+}
+
+contract VerifyRelayerLivenessDifferentialHelper is TATransactionAllocation {
+    TATransactionAllocation t;
+
+    using Uint256WrapperHelper for uint256;
+
+    constructor() {
+        t = new TATransactionAllocation();
+    }
+
+    function verifyRelayerLivenessReferenceImplementation(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        uint256 _transactionsDoneByRelayer,
+        uint256 _totalTransactions,
+        FixedPointType _zScore
+    ) external view returns (bool) {
+        return _transactionsDoneByRelayer.fp()
+            >= t.calculateMinimumTranasctionsForLiveness(_relayerStake, _totalStake, _totalTransactions, _zScore);
+    }
+
+    function verifyRelayerLivenessOptimisedImplementation(
+        uint256 _relayerStake,
+        uint256 _totalStake,
+        uint256 _transactionsDoneByRelayer,
+        uint256 _totalTransactions,
+        FixedPointType _zScore
+    ) external pure returns (bool) {
+        return _checkRelayerLiveness(
+            _relayerStake, _totalStake, _transactionsDoneByRelayer, _totalTransactions, _zScore * _zScore
+        );
     }
 }

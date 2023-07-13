@@ -1,10 +1,11 @@
 import { config } from './config';
 import { table } from 'table';
 import * as fs from 'fs';
-import { formatEther, formatUnits, parseUnits } from 'ethers/lib/utils';
+import { formatEther } from 'ethers/lib/utils';
 import { uuid } from 'uuidv4';
 import { BigNumber } from 'ethers';
 import { Relayer } from './relayer';
+import { hashToRelayerState } from './state-tracker';
 
 const statusCodeToString: Record<number, string> = {
   0: 'Inactive',
@@ -117,7 +118,20 @@ export class Metrics {
       return '';
     }
 
-    const totalTransactions = await config.transactionAllocator.totalTransactionsSubmitted();
+    const [activeStateHash] = await config.transactionAllocator.relayerStateHash();
+    const activeState = hashToRelayerState[activeStateHash];
+    if (!activeState) {
+      throw new Error(
+        `generateTransactionsTable(): Current state not found for hash ${activeStateHash}`
+      );
+    }
+    let totalTransactions = BigNumber.from(0);
+    try {
+      totalTransactions = await config.transactionAllocator.totalTransactionsSubmitted(activeState);
+    } catch (e) {
+      console.log('Error in fetching total transactions: ', e);
+      return '';
+    }
     const z = await config.transactionAllocator.livenessZParameter();
     const totalStake = await config.transactionAllocator.totalStake();
 

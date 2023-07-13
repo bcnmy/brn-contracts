@@ -276,10 +276,10 @@ contract ProtocolRewardsTest is
         // Setup to penalize relayer 9
         uint256 inactiveRelayerIndex = 9;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
 
         assertEq(
@@ -372,10 +372,10 @@ contract ProtocolRewardsTest is
         // Setup to penalize relayer 9
         uint256 inactiveRelayerIndex = 9;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
         // Unregister the relayer
         RelayerStateManager.RelayerState memory currentState = latestRelayerState;
@@ -440,10 +440,10 @@ contract ProtocolRewardsTest is
         // Setup to jail relayer 0. If relayer 0 is penalized, it will get jailed
         uint256 inactiveRelayerIndex = 0;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
 
         assertEq(
@@ -520,10 +520,10 @@ contract ProtocolRewardsTest is
         // Setup to jail relayer 0. If relayer 0 is penalized, it will get jailed
         uint256 inactiveRelayerIndex = 0;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
         assertEq(
             ta.relayerClaimableProtocolRewards(inactiveRelayer), expectedRelayerRewardsAfter100Sec[inactiveRelayerIndex]
@@ -585,10 +585,10 @@ contract ProtocolRewardsTest is
         // Setup to jail relayer 0. If relayer 0 is penalized, it will get jailed
         uint256 inactiveRelayerIndex = 0;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
 
         _moveForwardToNextEpoch();
@@ -609,10 +609,10 @@ contract ProtocolRewardsTest is
         // Setup to jail relayer 0. If relayer 0 is penalized, it will get jailed
         uint256 inactiveRelayerIndex = 0;
         RelayerAddress inactiveRelayer = relayerMainAddress[inactiveRelayerIndex];
-        ta.debug_setTotalTransactionsProcessed(1000);
+
         for (uint256 i = 0; i < relayerCount; ++i) {
             if (i == inactiveRelayerIndex) continue;
-            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000);
+            ta.debug_setTransactionsProcessedByRelayer(relayerMainAddress[i], 1000 * (i + 1));
         }
 
         uint256 initialJailedRelayerClaimableRewards = ta.relayerClaimableProtocolRewards(inactiveRelayer);

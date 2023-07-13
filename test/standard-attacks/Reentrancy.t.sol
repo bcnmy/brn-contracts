@@ -7,7 +7,7 @@ import "src/utils/Guards.sol";
 import "test/base/TATestBase.sol";
 import "ta-transaction-allocation/interfaces/ITATransactionAllocation.sol";
 
-contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors, Guards {
+contract ReentrancyTest is TATestBase, ITAHelpers, ITATransactionAllocationEventsErrors, Guards {
     bytes[] txns;
     mapping(bytes4 selector => bool) testExecuted;
     mapping(bytes4 selector => bool) selectorExcludedFromTests;
@@ -157,7 +157,7 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 )
             ),
             abi.encodeCall(ta.transactionsSubmittedByRelayer, (relayerMainAddress[0])),
-            abi.encodeCall(ta.totalTransactionsSubmitted, ()),
+            abi.encodeCall(ta.totalTransactionsSubmitted, (latestRelayerState)),
             abi.encodeCall(ta.epochLengthInSec, ()),
             abi.encodeCall(ta.epochEndTimestamp, ()),
             abi.encodeCall(ta.livenessZParameter, ()),
@@ -215,5 +215,43 @@ contract InternalInvocationTest is TATestBase, ITAHelpers, ITATransactionAllocat
                 string.concat("Test not executed for selector: ", vm.toString(selectors[i]))
             );
         }
+    }
+
+    function testShouldPreventReentrancyWhileCallingWithdrawDelegation() external {
+        WithrawDelegationReentrancy reentrancyContract = new WithrawDelegationReentrancy(relayerMainAddress[0],ta);
+        vm.deal(address(ta), 10000 ether);
+        TokenAddress[] memory tokens = new TokenAddress[](1);
+        tokens[0] = NATIVE_TOKEN;
+        uint256[] memory amounts = new uint256[](1);
+        amounts[0] = 1 ether;
+
+        ta.debug_setWithdrawal(
+            relayerMainAddress[0], DelegatorAddress.wrap(address(reentrancyContract)), tokens, amounts
+        );
+
+        reentrancyContract.withdraw();
+
+        assertEq(address(reentrancyContract).balance, amounts[0]);
+    }
+}
+
+contract WithrawDelegationReentrancy {
+    RelayerAddress relayerAddress;
+    ITransactionAllocator ta;
+    uint256 count;
+
+    constructor(RelayerAddress _relayerAddress, ITransactionAllocator _ta) {
+        relayerAddress = _relayerAddress;
+        ta = _ta;
+    }
+
+    receive() external payable {
+        if (count++ < 5) {
+            ITADelegation(msg.sender).withdrawDelegation(relayerAddress);
+        }
+    }
+
+    function withdraw() external {
+        ta.withdrawDelegation(relayerAddress);
     }
 }

@@ -170,62 +170,6 @@ contract DelegationWithProtocolRewardsTest is TATestBase, ITAHelpers, ITADelegat
         _updateLatestStateCdf();
     }
 
-    // uint256 nativeBalanceBefore;
-    // uint256 bicoBalanceBefore;
-    // uint256 totalDelegationBefore;
-    // FixedPointType sharesBicoBefore;
-    // FixedPointType sharesNativeBefore;
-    // FixedPointType totalSharesBicoBefore;
-    // FixedPointType totalSharesNativeBefore;
-    // uint256 claimableRewardsBicoBefore;
-    // uint256 claimableRewardsNativeBefore;
-
-    // function _undelegate(
-    //     RelayerAddress _r,
-    //     DelegatorAddress _d,
-    //     bool _expectNonZeroNativeDelegationReward,
-    //     bool _expectNonZeroBicoDeleagationReward
-    // ) internal {
-    //     nativeBalanceBefore = DelegatorAddress.unwrap(_d).balance;
-    //     bicoBalanceBefore = bico.balanceOf(DelegatorAddress.unwrap(_d));
-    //     totalDelegationBefore = ta.totalDelegation(r);
-    //     sharesBicoBefore = ta.shares(_r, _d, bondTokenAddress);
-    //     sharesNativeBefore = ta.shares(_r, _d, NATIVE_TOKEN);
-    //     totalSharesBicoBefore = ta.totalShares(r, bondTokenAddress);
-    //     totalSharesNativeBefore = ta.totalShares(r, NATIVE_TOKEN);
-    //     claimableRewardsBicoBefore = ta.claimableDelegationRewards(_r, bondTokenAddress, _d);
-    //     claimableRewardsNativeBefore = ta.claimableDelegationRewards(_r, NATIVE_TOKEN, _d);
-
-    //     _prankDA(_d);
-    //     ta.undelegate(latestRelayerState, _r, _findRelayerIndex(_r));
-
-    //     // Shares should be destroyed
-    //     assertEq(ta.shares(_r, _d, bondTokenAddress), FP_ZERO);
-    //     assertEq(ta.shares(_r, _d, NATIVE_TOKEN), FP_ZERO);
-
-    //     // Global counters
-    //     assertEq(ta.totalShares(r, bondTokenAddress), totalSharesBicoBefore - sharesBicoBefore);
-    //     assertEq(ta.totalShares(r, NATIVE_TOKEN), totalSharesNativeBefore - sharesNativeBefore);
-    //     assertEq(ta.totalDelegation(r), totalDelegationBefore - delegation[_d]);
-
-    //     // Check that rewards are credited
-    //     assertTrue(DelegatorAddress.unwrap(_d).balance >= nativeBalanceBefore);
-    //     assertTrue(bico.balanceOf(DelegatorAddress.unwrap(_d)) >= bicoBalanceBefore + delegation[_d]);
-    //     reward[_d][NATIVE_TOKEN] = DelegatorAddress.unwrap(_d).balance - nativeBalanceBefore;
-    //     reward[_d][bondTokenAddress] = bico.balanceOf(DelegatorAddress.unwrap(_d)) - bicoBalanceBefore - delegation[_d];
-    //     assertEq(reward[_d][bondTokenAddress], claimableRewardsBicoBefore, "Claimable BICO Rewards Mismatch");
-    //     assertEq(reward[_d][NATIVE_TOKEN], claimableRewardsNativeBefore, "Claimable Native Rewards Mismatch");
-
-    //     if (_expectNonZeroNativeDelegationReward) {
-    //         assertTrue(reward[_d][NATIVE_TOKEN] > 0);
-    //     }
-    //     if (_expectNonZeroBicoDeleagationReward) {
-    //         assertTrue(reward[_d][bondTokenAddress] > 0);
-    //     }
-
-    //     _updateLatestStateCdf();
-    // }
-
     function testTokenDelegation() external {
         // D0 delegates
         _delegate(r, ridx, d0);
